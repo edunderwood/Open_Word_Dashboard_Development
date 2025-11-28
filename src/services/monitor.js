@@ -31,9 +31,17 @@ async function checkServerHealth() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(`${OPENWORD_SERVER_URL}/health`, {
+// Try multiple endpoints - /health first, then root
+    let response = await fetch(`${OPENWORD_SERVER_URL}/health`, {
       signal: controller.signal,
-    });
+    }).catch(() => null);
+
+    // If /health fails, try root endpoint
+    if (!response || !response.ok) {
+      response = await fetch(OPENWORD_SERVER_URL, {
+        signal: controller.signal,
+      });
+    }
 
     clearTimeout(timeout);
 
