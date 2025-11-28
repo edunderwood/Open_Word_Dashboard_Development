@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>Dashboard</h2>
+        <p>Overview of your OpenWord system</p>
+      </div>
+
+      <!-- System Status Alert -->
+      <div id="systemAlert" class="alert" style="display: none;"></div>
+
+      <!-- Key Stats -->
+      <div class="stats-grid">
+        <div class="stat-card primary">
+          <div class="label">Total Customers</div>
+          <div class="value" id="totalCustomers">-</div>
+          <div class="change" id="newCustomersChange"></div>
+        </div>
+        <div class="stat-card success">
+          <div class="label">Active Customers</div>
+          <div class="value" id="activeCustomers">-</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="label">Trial Customers</div>
+          <div class="value" id="trialCustomers">-</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="label">Payment Issues</div>
+          <div class="value" id="paymentIssues">-</div>
+        </div>
+      </div>
+
+      <!-- Revenue & Usage -->
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h3>Revenue</h3>
+          </div>
+          <div class="stats-grid" style="margin-bottom: 0;">
+            <div>
+              <div class="text-muted mb-2">This Month</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="revenueThisMonth">-</div>
+            </div>
+            <div>
+              <div class="text-muted mb-2">Last Month</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="revenueLastMonth">-</div>
+            </div>
+            <div>
+              <div class="text-muted mb-2">MRR</div>
+              <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);" id="mrr">-</div>
+            </div>
+            <div>
+              <div class="text-muted mb-2">Active Subs</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="activeSubs">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Usage This Month</h3>
+          </div>
+          <div class="stats-grid" style="margin-bottom: 0;">
+            <div>
+              <div class="text-muted mb-2">Characters</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="usageChars">-</div>
+            </div>
+            <div>
+              <div class="text-muted mb-2">Est. Cost</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="usageCost">-</div>
+            </div>
+            <div>
+              <div class="text-muted mb-2">vs Last Month</div>
+              <div style="font-size: 1.5rem; font-weight: 700;" id="usageChange">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plan Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Customers by Plan</h3>
+        </div>
+        <div id="planBreakdown" class="stats-grid" style="margin-bottom: 0;"></div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h3>Recent Signups</h3>
+            <a href="/customers" class="btn btn-sm btn-outline">View All</a>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Plan</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="recentSignups">
+                <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Recent Usage</h3>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Type</th>
+                  <th>Characters</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="recentUsage">
+                <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last Updated -->
+      <p class="text-muted text-center mt-4">
+        Last updated: <span id="lastUpdated">-</span>
+        <button onclick="refreshData()" class="btn btn-sm btn-outline" style="margin-left: 10px;">Refresh</button>
+      </p>
+    </main>
+  </div>
+
+  <script>
+    // Format currency
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-GB', {
+        style: 'currency',
+        currency: 'GBP'
+      }).format(amount);
+    }
+
+    // Format number
+    function formatNumber(num) {
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+      }
+      if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+      }
+      return num.toLocaleString();
+    }
+
+    // Format date
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Get status badge
+    function getStatusBadge(status) {
+      const badges = {
+        active: '<span class="badge badge-success">Active</span>',
+        trialing: '<span class="badge badge-info">Trial</span>',
+        past_due: '<span class="badge badge-warning">Past Due</span>',
+        unpaid: '<span class="badge badge-danger">Unpaid</span>',
+        canceled: '<span class="badge badge-gray">Cancelled</span>',
+      };
+      return badges[status] || `<span class="badge badge-gray">${status}</span>`;
+    }
+
+    // Load dashboard summary
+    async function loadSummary() {
+      try {
+        const response = await fetch('/api/dashboard/summary');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const { customers, planBreakdown, usage } = data.data;
+
+        // Update customer stats
+        document.getElementById('totalCustomers').textContent = customers.total;
+        document.getElementById('activeCustomers').textContent = customers.active;
+        document.getElementById('trialCustomers').textContent = customers.trial;
+        document.getElementById('paymentIssues').textContent = customers.paymentIssues;
+
+        if (customers.newThisMonth > 0) {
+          document.getElementById('newCustomersChange').textContent = `+${customers.newThisMonth} this month`;
+          document.getElementById('newCustomersChange').classList.add('positive');
+        }
+
+        // Show alert if there are payment issues
+        if (customers.paymentIssues > 0) {
+          const alertDiv = document.getElementById('systemAlert');
+          alertDiv.className = 'alert alert-warning';
+          alertDiv.innerHTML = `<strong>Attention:</strong> ${customers.paymentIssues} customer(s) have payment issues that need attention.`;
+          alertDiv.style.display = 'flex';
+        }
+
+        // Update usage stats
+        document.getElementById('usageChars').textContent = formatNumber(usage.thisMonth.characters);
+        document.getElementById('usageCost').textContent = formatCurrency(usage.thisMonth.cost);
+
+        // Calculate change
+        if (usage.lastMonth.characters > 0) {
+          const changePercent = ((usage.thisMonth.characters - usage.lastMonth.characters) / usage.lastMonth.characters * 100).toFixed(0);
+          const changeText = changePercent > 0 ? `+${changePercent}%` : `${changePercent}%`;
+          document.getElementById('usageChange').textContent = changeText;
+          document.getElementById('usageChange').style.color = changePercent > 0 ? 'var(--success)' : 'var(--danger)';
+        }
+
+        // Update plan breakdown
+        const planDiv = document.getElementById('planBreakdown');
+        planDiv.innerHTML = '';
+        Object.entries(planBreakdown).forEach(([plan, count]) => {
+          const planName = plan.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          planDiv.innerHTML += `
+            <div>
+              <div class="text-muted mb-2">${planName}</div>
+              <div style="font-size: 1.5rem; font-weight: 700;">${count}</div>
+            </div>
+          `;
+        });
+
+        document.getElementById('lastUpdated').textContent = formatDate(data.data.timestamp);
+      } catch (error) {
+        console.error('Error loading summary:', error);
+      }
+    }
+
+    // Load revenue data
+    async function loadRevenue() {
+      try {
+        const response = await fetch('/api/dashboard/revenue');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        document.getElementById('revenueThisMonth').textContent = formatCurrency(data.data.revenueThisMonth);
+        document.getElementById('revenueLastMonth').textContent = formatCurrency(data.data.revenueLastMonth);
+        document.getElementById('mrr').textContent = formatCurrency(data.data.mrr);
+        document.getElementById('activeSubs').textContent = data.data.activeSubscriptions;
+      } catch (error) {
+        console.error('Error loading revenue:', error);
+      }
+    }
+
+    // Load recent activity
+    async function loadActivity() {
+      try {
+        const response = await fetch('/api/dashboard/recent-activity?limit=5');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        // Recent signups
+        const signupsTable = document.getElementById('recentSignups');
+        if (data.data.recentSignups.length === 0) {
+          signupsTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent signups</td></tr>';
+        } else {
+          signupsTable.innerHTML = data.data.recentSignups.map(signup => `
+            <tr>
+              <td><a href="/customers/${signup.id}">${signup.name || 'Unnamed'}</a></td>
+              <td>${signup.subscription_plan || '-'}</td>
+              <td>${getStatusBadge(signup.subscription_status)}</td>
+              <td>${formatDate(signup.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Recent usage
+        const usageTable = document.getElementById('recentUsage');
+        if (data.data.recentUsage.length === 0) {
+          usageTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent usage</td></tr>';
+        } else {
+          usageTable.innerHTML = data.data.recentUsage.map(usage => `
+            <tr>
+              <td>${usage.organisations?.name || 'Unknown'}</td>
+              <td>${usage.operation_type}</td>
+              <td>${formatNumber(usage.character_count)}</td>
+              <td>${formatDate(usage.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Error loading activity:', error);
+      }
+    }
+
+    // Refresh all data
+    function refreshData() {
+      loadSummary();
+      loadRevenue();
+      loadActivity();
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshData();
+
+      // Auto-refresh every 5 minutes
+      setInterval(refreshData, 5 * 60 * 1000);
+    });
+  </script>
+</body>
+</html>

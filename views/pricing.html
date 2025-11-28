@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header flex justify-between items-center">
+        <div>
+          <h2>Pricing Tiers</h2>
+          <p>Manage subscription pricing and features</p>
+        </div>
+        <button class="btn btn-primary" onclick="showAddTierModal()">Add Tier</button>
+      </div>
+
+      <!-- Current Pricing from Stripe -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Current Stripe Products</h3>
+          <button class="btn btn-sm btn-outline" onclick="loadStripeProducts()">Refresh from Stripe</button>
+        </div>
+        <div id="stripeProducts" class="text-muted text-center" style="padding: 20px;">
+          Loading Stripe products...
+        </div>
+      </div>
+
+      <!-- Pricing Tiers Table -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Pricing Tiers</h3>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Monthly</th>
+                <th>Yearly</th>
+                <th>Included Chars</th>
+                <th>Overage Rate</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tiersTable">
+              <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pricing Notes -->
+      <div class="card">
+        <h3 style="margin-bottom: 15px;">Notes</h3>
+        <ul style="color: var(--gray-600); line-height: 1.8;">
+          <li>Pricing changes here only update the local database. You must also update Stripe products separately.</li>
+          <li>Use "Sync with Stripe" to pull pricing from existing Stripe products.</li>
+          <li>Deleting a tier will only disable it - historical data is preserved.</li>
+          <li>Overage rate is per 1,000 characters above the included amount.</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit Tier Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="editModalTitle">Edit Pricing Tier</h3>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <form id="editForm" onsubmit="saveTier(event)">
+        <div class="modal-body">
+          <input type="hidden" id="tierId">
+
+          <div class="form-group">
+            <label for="tierName">Name</label>
+            <input type="text" id="tierName" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="tierSlug">Slug (identifier)</label>
+            <input type="text" id="tierSlug" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+          </div>
+
+          <div class="form-group">
+            <label for="tierDescription">Description</label>
+            <textarea id="tierDescription" class="form-input" rows="2"></textarea>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label for="tierMonthly">Monthly Price (GBP)</label>
+              <input type="number" id="tierMonthly" class="form-input" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="tierYearly">Yearly Price (GBP)</label>
+              <input type="number" id="tierYearly" class="form-input" step="0.01" min="0" required>
+            </div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label for="tierIncluded">Included Characters</label>
+              <input type="number" id="tierIncluded" class="form-input" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="tierOverage">Overage Rate (per 1K chars)</label>
+              <input type="number" id="tierOverage" class="form-input" step="0.001" min="0" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="tierFeatures">Features (one per line)</label>
+            <textarea id="tierFeatures" class="form-input" rows="4" placeholder="Unlimited transcription&#10;Multi-language support&#10;API access"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="tierActive" checked>
+              Active (visible to customers)
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sync Stripe Modal -->
+  <div class="modal-overlay" id="syncModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Sync with Stripe Product</h3>
+        <button class="modal-close" onclick="closeSyncModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="syncTierId">
+        <p class="mb-4">Select a Stripe product to sync pricing from:</p>
+        <div id="stripeProductsList">Loading...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeSyncModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let stripeProducts = [];
+
+    // Format currency
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-GB', {
+        style: 'currency',
+        currency: 'GBP'
+      }).format(amount);
+    }
+
+    // Format number
+    function formatNumber(num) {
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+      }
+      if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+      }
+      return num.toLocaleString();
+    }
+
+    // Load pricing tiers
+    async function loadTiers() {
+      try {
+        const response = await fetch('/api/pricing');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const table = document.getElementById('tiersTable');
+        if (data.data.length === 0) {
+          table.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No pricing tiers found. Add one to get started.</td></tr>';
+        } else {
+          table.innerHTML = data.data.map(tier => `
+            <tr>
+              <td>
+                <strong>${tier.name}</strong>
+                <br><small class="text-muted">${tier.slug}</small>
+              </td>
+              <td>${formatCurrency(tier.monthly_price || 0)}</td>
+              <td>${formatCurrency(tier.yearly_price || 0)}</td>
+              <td>${formatNumber(tier.included_characters || 0)}</td>
+              <td>${formatCurrency(tier.overage_rate || 0)}/1K</td>
+              <td>
+                ${tier.is_active
+                  ? '<span class="badge badge-success">Active</span>'
+                  : '<span class="badge badge-gray">Inactive</span>'
+                }
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline" onclick="editTier('${tier.id}')">Edit</button>
+                <button class="btn btn-sm btn-outline" onclick="showSyncModal('${tier.id}')">Sync Stripe</button>
+                ${tier.is_active
+                  ? `<button class="btn btn-sm btn-danger" onclick="deleteTier('${tier.id}')">Disable</button>`
+                  : ''
+                }
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Error loading tiers:', error);
+        document.getElementById('tiersTable').innerHTML =
+          '<tr><td colspan="7" class="text-center text-danger">Error loading pricing tiers</td></tr>';
+      }
+    }
+
+    // Load Stripe products
+    async function loadStripeProducts() {
+      try {
+        const response = await fetch('/api/pricing/stripe/products');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        stripeProducts = data.data;
+        const container = document.getElementById('stripeProducts');
+
+        if (stripeProducts.length === 0) {
+          container.innerHTML = '<p class="text-muted">No active Stripe products found.</p>';
+        } else {
+          container.innerHTML = `
+            <div class="grid grid-3">
+              ${stripeProducts.map(product => `
+                <div style="padding: 15px; background: var(--gray-50); border-radius: 8px;">
+                  <strong>${product.name}</strong>
+                  <p class="text-muted" style="font-size: 0.75rem; margin: 5px 0;">${product.id}</p>
+                  <div style="margin-top: 10px;">
+                    ${product.prices.map(price => `
+                      <div style="font-size: 0.875rem;">
+                        ${formatCurrency(price.unitAmount)}/${price.interval || 'one-time'}
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Error loading Stripe products:', error);
+        document.getElementById('stripeProducts').innerHTML =
+          `<p class="text-danger">Error loading Stripe products: ${error.message}</p>`;
+      }
+    }
+
+    // Show add tier modal
+    function showAddTierModal() {
+      document.getElementById('editModalTitle').textContent = 'Add Pricing Tier';
+      document.getElementById('tierId').value = '';
+      document.getElementById('tierName').value = '';
+      document.getElementById('tierSlug').value = '';
+      document.getElementById('tierDescription').value = '';
+      document.getElementById('tierMonthly').value = '0';
+      document.getElementById('tierYearly').value = '0';
+      document.getElementById('tierIncluded').value = '0';
+      document.getElementById('tierOverage').value = '0';
+      document.getElementById('tierFeatures').value = '';
+      document.getElementById('tierActive').checked = true;
+      document.getElementById('editModal').classList.add('active');
+    }
+
+    // Edit tier
+    async function editTier(id) {
+      try {
+        const response = await fetch(`/api/pricing/${id}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const tier = data.data;
+        document.getElementById('editModalTitle').textContent = 'Edit Pricing Tier';
+        document.getElementById('tierId').value = tier.id;
+        document.getElementById('tierName').value = tier.name || '';
+        document.getElementById('tierSlug').value = tier.slug || '';
+        document.getElementById('tierDescription').value = tier.description || '';
+        document.getElementById('tierMonthly').value = tier.monthly_price || 0;
+        document.getElementById('tierYearly').value = tier.yearly_price || 0;
+        document.getElementById('tierIncluded').value = tier.included_characters || 0;
+        document.getElementById('tierOverage').value = tier.overage_rate || 0;
+        document.getElementById('tierFeatures').value = (tier.features || []).join('\n');
+        document.getElementById('tierActive').checked = tier.is_active;
+        document.getElementById('editModal').classList.add('active');
+      } catch (error) {
+        alert('Error loading tier: ' + error.message);
+      }
+    }
+
+    // Save tier
+    async function saveTier(event) {
+      event.preventDefault();
+
+      const id = document.getElementById('tierId').value;
+      const tier = {
+        name: document.getElementById('tierName').value,
+        slug: document.getElementById('tierSlug').value,
+        description: document.getElementById('tierDescription').value,
+        monthlyPrice: parseFloat(document.getElementById('tierMonthly').value),
+        yearlyPrice: parseFloat(document.getElementById('tierYearly').value),
+        includedCharacters: parseInt(document.getElementById('tierIncluded').value),
+        overageRate: parseFloat(document.getElementById('tierOverage').value),
+        features: document.getElementById('tierFeatures').value.split('\n').filter(f => f.trim()),
+        isActive: document.getElementById('tierActive').checked,
+      };
+
+      try {
+        const url = id ? `/api/pricing/${id}` : '/api/pricing';
+        const method = id ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(tier),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(data.message);
+        closeEditModal();
+        loadTiers();
+      } catch (error) {
+        alert('Error saving tier: ' + error.message);
+      }
+    }
+
+    // Delete (disable) tier
+    async function deleteTier(id) {
+      if (!confirm('Are you sure you want to disable this pricing tier?')) return;
+
+      try {
+        const response = await fetch(`/api/pricing/${id}`, {
+          method: 'DELETE',
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(data.message);
+        loadTiers();
+      } catch (error) {
+        alert('Error deleting tier: ' + error.message);
+      }
+    }
+
+    // Show sync modal
+    function showSyncModal(tierId) {
+      document.getElementById('syncTierId').value = tierId;
+
+      if (stripeProducts.length === 0) {
+        document.getElementById('stripeProductsList').innerHTML =
+          '<p class="text-muted">No Stripe products available. Load them first.</p>';
+      } else {
+        document.getElementById('stripeProductsList').innerHTML = stripeProducts.map(product => `
+          <div style="padding: 10px; background: var(--gray-50); border-radius: 8px; margin-bottom: 10px; cursor: pointer;"
+               onclick="syncWithStripe('${tierId}', '${product.id}')">
+            <strong>${product.name}</strong>
+            <span class="text-muted" style="font-size: 0.75rem;">(${product.id})</span>
+            <div style="margin-top: 5px; font-size: 0.875rem;">
+              ${product.prices.map(p => `${formatCurrency(p.unitAmount)}/${p.interval || 'one-time'}`).join(', ')}
+            </div>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('syncModal').classList.add('active');
+    }
+
+    // Sync with Stripe
+    async function syncWithStripe(tierId, stripeProductId) {
+      try {
+        const response = await fetch(`/api/pricing/${tierId}/sync-stripe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stripeProductId }),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(data.message);
+        closeSyncModal();
+        loadTiers();
+      } catch (error) {
+        alert('Error syncing with Stripe: ' + error.message);
+      }
+    }
+
+    // Close modals
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('active');
+    }
+
+    function closeSyncModal() {
+      document.getElementById('syncModal').classList.remove('active');
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTiers();
+      loadStripeProducts();
+    });
+  </script>
+</body>
+</html>

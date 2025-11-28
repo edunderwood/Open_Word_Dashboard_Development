@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .health-card {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .health-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .health-icon.healthy {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .health-icon.unhealthy {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .health-icon.unknown {
+      background: var(--gray-100);
+      color: var(--gray-500);
+    }
+    .health-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+    .health-info h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .health-info p {
+      font-size: 0.875rem;
+      color: var(--gray-500);
+    }
+    .issue-item {
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .issue-item.critical {
+      background: #fee2e2;
+      border-left: 4px solid #dc2626;
+    }
+    .issue-item.warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+    }
+    .issue-item h4 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .issue-item p {
+      font-size: 0.875rem;
+      color: var(--gray-600);
+    }
+    .history-item {
+      padding: 12px;
+      background: var(--gray-50);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 0.875rem;
+    }
+    .history-item .time {
+      color: var(--gray-500);
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header flex justify-between items-center">
+        <div>
+          <h2>System Monitoring</h2>
+          <p>Real-time health status and alerts</p>
+        </div>
+        <button class="btn btn-primary" onclick="runManualCheck()">Run Check Now</button>
+      </div>
+
+      <!-- Overall Status -->
+      <div id="overallStatus" class="alert" style="display: none;"></div>
+
+      <!-- Health Status Cards -->
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <div class="health-card" id="serverHealth">
+          <div class="health-icon unknown">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            </svg>
+          </div>
+          <div class="health-info">
+            <h4>OpenWord Server</h4>
+            <p>Checking...</p>
+          </div>
+        </div>
+
+        <div class="health-card" id="databaseHealth">
+          <div class="health-icon unknown">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+          </div>
+          <div class="health-info">
+            <h4>Database (Supabase)</h4>
+            <p>Checking...</p>
+          </div>
+        </div>
+
+        <div class="health-card" id="paymentHealth">
+          <div class="health-icon unknown">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+          </div>
+          <div class="health-info">
+            <h4>Payment Status</h4>
+            <p>Checking...</p>
+          </div>
+        </div>
+
+        <div class="health-card" id="usageHealth">
+          <div class="health-icon unknown">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <div class="health-info">
+            <h4>Usage Monitor</h4>
+            <p>Checking...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Issues -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Active Issues</h3>
+          <span class="badge badge-gray" id="issueCount">0 issues</span>
+        </div>
+        <div id="issuesList">
+          <p class="text-muted text-center" style="padding: 20px;">No active issues</p>
+        </div>
+      </div>
+
+      <!-- Recent Checks -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Recent Checks</h3>
+          <button class="btn btn-sm btn-outline" onclick="loadHistory()">Refresh</button>
+        </div>
+        <div id="historyList" style="max-height: 400px; overflow-y: auto;">
+          <p class="text-muted text-center" style="padding: 20px;">Loading history...</p>
+        </div>
+      </div>
+
+      <!-- Last Check Info -->
+      <p class="text-muted text-center mt-4">
+        Last check: <span id="lastCheck">-</span>
+        <br>
+        <small>Automatic checks run every 5 minutes. Email alerts sent to david@firmustech.com</small>
+      </p>
+    </main>
+  </div>
+
+  <script>
+    // Format date
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    }
+
+    // Update health card
+    function updateHealthCard(id, healthy, message) {
+      const card = document.getElementById(id);
+      const icon = card.querySelector('.health-icon');
+      const info = card.querySelector('.health-info p');
+
+      icon.className = `health-icon ${healthy === null ? 'unknown' : healthy ? 'healthy' : 'unhealthy'}`;
+      info.textContent = message;
+    }
+
+    // Load current status
+    async function loadStatus() {
+      try {
+        const response = await fetch('/api/monitoring/status');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const check = data.data.lastCheck;
+        if (!check) {
+          updateHealthCard('serverHealth', null, 'No data yet');
+          updateHealthCard('databaseHealth', null, 'No data yet');
+          updateHealthCard('paymentHealth', null, 'No data yet');
+          updateHealthCard('usageHealth', null, 'No data yet');
+          return;
+        }
+
+        // Update server health
+        updateHealthCard('serverHealth',
+          check.server?.healthy,
+          check.server?.healthy ? 'Online and responding' : `Error: ${check.server?.error || 'Unknown'}`
+        );
+
+        // Update database health
+        updateHealthCard('databaseHealth',
+          check.database?.healthy,
+          check.database?.healthy ? 'Connected' : `Error: ${check.database?.error || 'Unknown'}`
+        );
+
+        // Update payment health
+        const paymentIssues = check.paymentIssues?.count || 0;
+        updateHealthCard('paymentHealth',
+          paymentIssues === 0,
+          paymentIssues === 0 ? 'No payment issues' : `${paymentIssues} customer(s) with issues`
+        );
+
+        // Update usage health
+        const highUsage = check.usageAnomalies?.highUsageOrgs?.length || 0;
+        updateHealthCard('usageHealth',
+          highUsage === 0,
+          highUsage === 0 ? 'Normal usage levels' : `${highUsage} high usage alert(s)`
+        );
+
+        // Update last check time
+        document.getElementById('lastCheck').textContent = formatDate(check.timestamp);
+
+        // Update overall status
+        const allHealthy = check.server?.healthy && check.database?.healthy;
+        const statusDiv = document.getElementById('overallStatus');
+        if (!allHealthy) {
+          statusDiv.className = 'alert alert-danger';
+          statusDiv.innerHTML = '<strong>System Issues Detected!</strong> Check the health status below for details.';
+          statusDiv.style.display = 'flex';
+        } else if (paymentIssues > 0 || highUsage > 0) {
+          statusDiv.className = 'alert alert-warning';
+          statusDiv.innerHTML = '<strong>Warnings:</strong> Some issues require attention.';
+          statusDiv.style.display = 'flex';
+        } else {
+          statusDiv.style.display = 'none';
+        }
+
+      } catch (error) {
+        console.error('Error loading status:', error);
+      }
+    }
+
+    // Load active issues
+    async function loadIssues() {
+      try {
+        const response = await fetch('/api/monitoring/issues');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const issues = data.data;
+        const container = document.getElementById('issuesList');
+        const countBadge = document.getElementById('issueCount');
+
+        countBadge.textContent = `${issues.length} issue${issues.length !== 1 ? 's' : ''}`;
+        countBadge.className = issues.length > 0 ? 'badge badge-danger' : 'badge badge-success';
+
+        if (issues.length === 0) {
+          container.innerHTML = '<p class="text-success text-center" style="padding: 20px;">All systems operational</p>';
+        } else {
+          container.innerHTML = issues.map(issue => `
+            <div class="issue-item ${issue.type}">
+              <h4>${issue.category.toUpperCase()}: ${issue.message}</h4>
+              <p>Detected: ${formatDate(issue.timestamp)}</p>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Error loading issues:', error);
+      }
+    }
+
+    // Load check history
+    async function loadHistory() {
+      try {
+        const response = await fetch('/api/monitoring/history?limit=20');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('historyList');
+
+        if (data.data.length === 0) {
+          container.innerHTML = '<p class="text-muted text-center" style="padding: 20px;">No history available</p>';
+        } else {
+          container.innerHTML = data.data.map(check => {
+            const allHealthy = check.server?.healthy && check.database?.healthy;
+            const hasWarnings = (check.paymentIssues?.count > 0) || (check.usageAnomalies?.highUsageOrgs?.length > 0);
+
+            return `
+              <div class="history-item">
+                <div class="flex justify-between items-center">
+                  <span>
+                    ${allHealthy
+                      ? '<span class="badge badge-success">OK</span>'
+                      : '<span class="badge badge-danger">Issues</span>'
+                    }
+                    ${hasWarnings ? '<span class="badge badge-warning" style="margin-left: 5px;">Warnings</span>' : ''}
+                  </span>
+                  <span class="time">${formatDate(check.timestamp)}</span>
+                </div>
+                <div style="margin-top: 8px; font-size: 0.75rem; color: var(--gray-500);">
+                  Server: ${check.server?.healthy ? 'OK' : 'DOWN'} |
+                  DB: ${check.database?.healthy ? 'OK' : 'ERROR'} |
+                  Payment Issues: ${check.paymentIssues?.count || 0} |
+                  High Usage: ${check.usageAnomalies?.highUsageOrgs?.length || 0}
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch (error) {
+        console.error('Error loading history:', error);
+        document.getElementById('historyList').innerHTML =
+          '<p class="text-danger text-center" style="padding: 20px;">Error loading history</p>';
+      }
+    }
+
+    // Run manual check
+    async function runManualCheck() {
+      try {
+        const btn = document.querySelector('.page-header .btn');
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+
+        const response = await fetch('/api/monitoring/run', { method: 'POST' });
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        alert('Check completed successfully');
+
+        // Refresh all data
+        loadStatus();
+        loadIssues();
+        loadHistory();
+      } catch (error) {
+        alert('Error running check: ' + error.message);
+      } finally {
+        const btn = document.querySelector('.page-header .btn');
+        btn.disabled = false;
+        btn.textContent = 'Run Check Now';
+      }
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStatus();
+      loadIssues();
+      loadHistory();
+
+      // Auto-refresh every minute
+      setInterval(() => {
+        loadStatus();
+        loadIssues();
+      }, 60 * 1000);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>Customers</h2>
+        <p>Manage all OpenWord customers</p>
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="card">
+        <div class="search-bar">
+          <input
+            type="text"
+            id="searchInput"
+            class="form-input"
+            placeholder="Search by name or organisation key..."
+            onkeyup="handleSearch(event)"
+          >
+          <select id="statusFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="trialing">Trial</option>
+            <option value="paused">Paused</option>
+            <option value="past_due">Past Due</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="canceled">Cancelled</option>
+          </select>
+          <select id="planFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
+            <option value="">All Plans</option>
+            <option value="pay_as_you_go">Pay As You Go</option>
+            <option value="standard">Standard</option>
+            <option value="professional">Professional</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Customer Table -->
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Organisation</th>
+                <th>Key</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customersTable">
+              <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+          <div class="pagination-info" id="paginationInfo">Showing 0 of 0</div>
+          <div class="pagination-buttons">
+            <button class="btn btn-sm btn-outline" id="prevBtn" onclick="prevPage()" disabled>Previous</button>
+            <button class="btn btn-sm btn-outline" id="nextBtn" onclick="nextPage()" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Customer Detail Modal -->
+  <div class="modal-overlay" id="customerModal">
+    <div class="modal" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 id="modalTitle">Customer Details</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        Loading...
+      </div>
+      <div class="modal-footer" id="modalFooter">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Usage Modal -->
+  <div class="modal-overlay" id="usageModal">
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3 id="usageModalTitle">Customer Usage</h3>
+        <button class="modal-close" onclick="closeUsageModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="usageModalBody">
+        Loading...
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeUsageModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentPage = 1;
+    let totalPages = 1;
+    let searchTimeout = null;
+
+    // Format currency
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-GB', {
+        style: 'currency',
+        currency: 'GBP'
+      }).format(amount);
+    }
+
+    // Format number
+    function formatNumber(num) {
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+      }
+      if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+      }
+      return num.toLocaleString();
+    }
+
+    // Format date
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    }
+
+    // Get status badge
+    function getStatusBadge(customer) {
+      if (customer.is_paused) {
+        return '<span class="badge badge-warning">Paused</span>';
+      }
+      const status = customer.subscription_status;
+      const badges = {
+        active: '<span class="badge badge-success">Active</span>',
+        trialing: '<span class="badge badge-info">Trial</span>',
+        past_due: '<span class="badge badge-warning">Past Due</span>',
+        unpaid: '<span class="badge badge-danger">Unpaid</span>',
+        canceled: '<span class="badge badge-gray">Cancelled</span>',
+      };
+      return badges[status] || `<span class="badge badge-gray">${status || 'Unknown'}</span>`;
+    }
+
+    // Handle search with debounce
+    function handleSearch(event) {
+      clearTimeout(searchTimeout);
+      if (event.key === 'Enter') {
+        loadCustomers();
+      } else {
+        searchTimeout = setTimeout(() => {
+          loadCustomers();
+        }, 500);
+      }
+    }
+
+    // Load customers
+    async function loadCustomers() {
+      const search = document.getElementById('searchInput').value;
+      const status = document.getElementById('statusFilter').value;
+      const plan = document.getElementById('planFilter').value;
+
+      try {
+        const params = new URLSearchParams({
+          page: currentPage,
+          limit: 20,
+        });
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+        if (plan) params.append('plan', plan);
+
+        const response = await fetch(`/api/customers?${params}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const { data: customers, pagination } = data;
+        totalPages = pagination.pages;
+
+        // Update table
+        const table = document.getElementById('customersTable');
+        if (customers.length === 0) {
+          table.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No customers found</td></tr>';
+        } else {
+          table.innerHTML = customers.map(customer => `
+            <tr>
+              <td>
+                <strong>${customer.name || 'Unnamed'}</strong>
+              </td>
+              <td><code>${customer.organisation_key || '-'}</code></td>
+              <td>${(customer.subscription_plan || '-').replace(/_/g, ' ')}</td>
+              <td>${getStatusBadge(customer)}</td>
+              <td>${formatDate(customer.created_at)}</td>
+              <td>
+                <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View</button>
+                <button class="btn btn-sm btn-outline" onclick="viewUsage('${customer.id}', '${customer.name}')">Usage</button>
+                ${customer.is_paused
+                  ? `<button class="btn btn-sm btn-success" onclick="unpauseCustomer('${customer.id}')">Unpause</button>`
+                  : `<button class="btn btn-sm btn-warning" onclick="pauseCustomer('${customer.id}')">Pause</button>`
+                }
+              </td>
+            </tr>
+          `).join('');
+        }
+
+        // Update pagination
+        document.getElementById('paginationInfo').textContent =
+          `Showing ${customers.length} of ${pagination.total} (Page ${pagination.page} of ${pagination.pages})`;
+        document.getElementById('prevBtn').disabled = pagination.page <= 1;
+        document.getElementById('nextBtn').disabled = pagination.page >= pagination.pages;
+      } catch (error) {
+        console.error('Error loading customers:', error);
+        document.getElementById('customersTable').innerHTML =
+          '<tr><td colspan="6" class="text-center text-danger">Error loading customers</td></tr>';
+      }
+    }
+
+    // Pagination
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        loadCustomers();
+      }
+    }
+
+    function nextPage() {
+      if (currentPage < totalPages) {
+        currentPage++;
+        loadCustomers();
+      }
+    }
+
+    // View customer details
+    async function viewCustomer(id) {
+      document.getElementById('customerModal').classList.add('active');
+      document.getElementById('modalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
+
+      try {
+        const response = await fetch(`/api/customers/${id}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const customer = data.data;
+        document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
+
+        document.getElementById('modalBody').innerHTML = `
+          <div class="grid grid-2" style="gap: 30px;">
+            <div>
+              <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Organisation Info</h4>
+              <p><strong>Name:</strong> ${customer.name || '-'}</p>
+              <p><strong>Key:</strong> <code>${customer.organisation_key || '-'}</code></p>
+              <p><strong>Created:</strong> ${formatDate(customer.created_at)}</p>
+              <p><strong>User ID:</strong> <code style="font-size: 0.75rem;">${customer.user_id || '-'}</code></p>
+            </div>
+            <div>
+              <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Subscription</h4>
+              <p><strong>Plan:</strong> ${(customer.subscription_plan || '-').replace(/_/g, ' ')}</p>
+              <p><strong>Status:</strong> ${getStatusBadge(customer)}</p>
+              <p><strong>Stripe Customer:</strong> <code style="font-size: 0.75rem;">${customer.stripe_customer_id || '-'}</code></p>
+              ${customer.trial_ends_at ? `<p><strong>Trial Ends:</strong> ${formatDate(customer.trial_ends_at)}</p>` : ''}
+            </div>
+          </div>
+          ${customer.stripe ? `
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+              <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Stripe Details</h4>
+              <div class="grid grid-2">
+                <p><strong>Period:</strong> ${formatDate(customer.stripe.currentPeriodStart)} - ${formatDate(customer.stripe.currentPeriodEnd)}</p>
+                <p><strong>Cancel at Period End:</strong> ${customer.stripe.cancelAtPeriodEnd ? 'Yes' : 'No'}</p>
+                ${customer.stripe.trialEnd ? `<p><strong>Trial End:</strong> ${formatDate(customer.stripe.trialEnd)}</p>` : ''}
+              </div>
+            </div>
+          ` : ''}
+          ${customer.is_paused ? `
+            <div class="alert alert-warning mt-4">
+              <strong>Account Paused</strong>
+              <p style="margin-top: 5px;">Paused on: ${formatDate(customer.paused_at)}</p>
+              <p>Reason: ${customer.pause_reason || 'No reason provided'}</p>
+            </div>
+          ` : ''}
+        `;
+
+        // Update footer with actions
+        document.getElementById('modalFooter').innerHTML = `
+          ${customer.subscription_status === 'trialing' ?
+            `<button class="btn btn-warning" onclick="endTrial('${customer.id}')">End Trial</button>` : ''
+          }
+          ${customer.stripe_subscription_id && customer.subscription_status === 'active' ?
+            `<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>` : ''
+          }
+          <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        `;
+      } catch (error) {
+        console.error('Error loading customer:', error);
+        document.getElementById('modalBody').innerHTML =
+          `<div class="alert alert-danger">Error loading customer: ${error.message}</div>`;
+      }
+    }
+
+    // View usage
+    async function viewUsage(id, name) {
+      document.getElementById('usageModal').classList.add('active');
+      document.getElementById('usageModalTitle').textContent = `Usage: ${name || 'Customer'}`;
+      document.getElementById('usageModalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
+
+      try {
+        const response = await fetch(`/api/customers/${id}/usage?period=month`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const usage = data.data;
+
+        document.getElementById('usageModalBody').innerHTML = `
+          <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+              <div class="label">Total Characters</div>
+              <div class="value">${formatNumber(usage.totalCharacters)}</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Estimated Cost</div>
+              <div class="value">${formatCurrency(usage.totalCost)}</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Transcription</div>
+              <div class="value">${formatNumber(usage.transcriptionChars)}</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Translation</div>
+              <div class="value">${formatNumber(usage.translationChars)}</div>
+            </div>
+          </div>
+
+          <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Usage by Language</h4>
+          <div class="grid grid-3" style="margin-bottom: 20px;">
+            ${Object.entries(usage.byLanguage).map(([lang, chars]) => `
+              <div style="padding: 10px; background: var(--gray-50); border-radius: 8px;">
+                <strong>${lang}</strong>: ${formatNumber(chars)}
+              </div>
+            `).join('') || '<div class="text-muted">No language data</div>'}
+          </div>
+
+          <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Daily Usage</h4>
+          <div class="table-container" style="max-height: 200px; overflow-y: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Characters</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(usage.byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => `
+                  <tr>
+                    <td>${formatDate(date)}</td>
+                    <td>${formatNumber(data.characters)}</td>
+                    <td>${formatCurrency(data.cost)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="3" class="text-center text-muted">No daily data</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-4 text-muted text-center">
+            Period: ${usage.period} | Records: ${usage.records}
+          </div>
+        `;
+      } catch (error) {
+        console.error('Error loading usage:', error);
+        document.getElementById('usageModalBody').innerHTML =
+          `<div class="alert alert-danger">Error loading usage: ${error.message}</div>`;
+      }
+    }
+
+    // Pause customer
+    async function pauseCustomer(id) {
+      const reason = prompt('Enter reason for pausing (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/pause`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Customer paused successfully');
+        loadCustomers();
+      } catch (error) {
+        alert('Error pausing customer: ' + error.message);
+      }
+    }
+
+    // Unpause customer
+    async function unpauseCustomer(id) {
+      if (!confirm('Are you sure you want to unpause this customer?')) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/unpause`, {
+          method: 'POST',
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Customer unpaused successfully');
+        loadCustomers();
+      } catch (error) {
+        alert('Error unpausing customer: ' + error.message);
+      }
+    }
+
+    // End trial
+    async function endTrial(id) {
+      if (!confirm('Are you sure you want to end this customer\'s trial? They will be charged immediately.')) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/end-trial`, {
+          method: 'POST',
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Trial ended successfully. New status: ' + data.data.newStatus);
+        closeModal();
+        loadCustomers();
+      } catch (error) {
+        alert('Error ending trial: ' + error.message);
+      }
+    }
+
+    // Cancel subscription
+    async function cancelSubscription(id) {
+      const immediately = confirm('Cancel immediately? Click OK for immediate, Cancel for end of billing period.');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/cancel-subscription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ immediately }),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(data.message);
+        closeModal();
+        loadCustomers();
+      } catch (error) {
+        alert('Error cancelling subscription: ' + error.message);
+      }
+    }
+
+    // Close modals
+    function closeModal() {
+      document.getElementById('customerModal').classList.remove('active');
+    }
+
+    function closeUsageModal() {
+      document.getElementById('usageModal').classList.remove('active');
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+
+    // Load customers on page load
+    document.addEventListener('DOMContentLoaded', loadCustomers);
+  </script>
+</body>
+</html>
