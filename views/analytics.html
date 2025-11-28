@@ -525,6 +525,7 @@
 
                 const data = result.data;
                 const services = data.openwordServices || [];
+                const metrics = data.metrics || {};
 
                 container.innerHTML = `
                     <div class="metric-row">
@@ -535,6 +536,103 @@
                         <span class="metric-label">OpenWord Services</span>
                         <span class="metric-value">${services.length}</span>
                     </div>
+                    ${metrics.cpu ? `
+                        <div class="section-divider">
+                            <div class="section-title">CPU Usage (24h)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Current</span>
+                                <span class="metric-value">${metrics.cpu.current}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Average</span>
+                                <span class="metric-value">${metrics.cpu.avg}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Peak</span>
+                                <span class="metric-value ${parseFloat(metrics.cpu.max) > 80 ? 'warning' : ''}">${metrics.cpu.max}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${metrics.memory ? `
+                        <div class="section-divider">
+                            <div class="section-title">Memory Usage (24h)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Current</span>
+                                <span class="metric-value">${metrics.memory.current}${metrics.memory.limit ? ` / ${metrics.memory.limit}` : ''}</span>
+                            </div>
+                            ${metrics.memory.usagePercent ? `
+                                <div class="metric-row">
+                                    <span class="metric-label">Usage</span>
+                                    <span class="metric-value ${parseFloat(metrics.memory.usagePercent) > 80 ? 'error' : parseFloat(metrics.memory.usagePercent) > 60 ? 'warning' : 'success'}">
+                                        ${metrics.memory.usagePercent}
+                                    </span>
+                                </div>
+                            ` : ''}
+                            <div class="metric-row">
+                                <span class="metric-label">Peak</span>
+                                <span class="metric-value">${metrics.memory.max}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${metrics.http ? `
+                        <div class="section-divider">
+                            <div class="section-title">HTTP Requests (24h)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Total Requests</span>
+                                <span class="metric-value">${formatNumber(metrics.http.totalRequests)}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg/Hour</span>
+                                <span class="metric-value">${formatNumber(metrics.http.avgPerHour)}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Peak/Hour</span>
+                                <span class="metric-value">${formatNumber(metrics.http.peakPerHour)}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${metrics.latency ? `
+                        <div class="section-divider">
+                            <div class="section-title">Response Latency (24h)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Average</span>
+                                <span class="metric-value ${parseInt(metrics.latency.avg) > 500 ? 'warning' : 'success'}">${metrics.latency.avg}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Peak</span>
+                                <span class="metric-value ${parseInt(metrics.latency.max) > 2000 ? 'error' : parseInt(metrics.latency.max) > 1000 ? 'warning' : ''}">${metrics.latency.max}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${metrics.bandwidth ? `
+                        <div class="section-divider">
+                            <div class="section-title">Bandwidth (24h)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Total</span>
+                                <span class="metric-value">${metrics.bandwidth.total}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg/Hour</span>
+                                <span class="metric-value">${metrics.bandwidth.avgPerHour}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Peak</span>
+                                <span class="metric-value">${metrics.bandwidth.peak}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${data.warnings && data.warnings.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Alerts</div>
+                            ${data.warnings.map(w => `
+                                <div class="alert-box ${w.level}" style="padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;
+                                    background: ${w.level === 'critical' ? 'rgba(239,68,68,0.1)' : w.level === 'warning' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)'};
+                                    border-left: 3px solid ${w.level === 'critical' ? 'var(--danger)' : w.level === 'warning' ? 'var(--warning)' : 'var(--primary)'};">
+                                    ${w.message}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
                     ${services.length > 0 ? `
                         <div class="section-divider">
                             <div class="section-title">OpenWord Services</div>
@@ -546,9 +644,15 @@
                                             <span class="service-status ${s.status}">${s.status}</span>
                                         </div>
                                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                            Type: ${s.type || 'N/A'} |
+                                            Type: ${s.type || 'N/A'}${s.region ? ` | Region: ${s.region}` : ''}${s.plan ? ` | Plan: ${s.plan}` : ''} |
                                             ${s.url ? `<a href="${s.url}" target="_blank" style="color: var(--primary);">View →</a>` : 'No URL'}
                                         </div>
+                                        ${s.deployStats ? `
+                                            <div style="font-size: 0.8rem; margin-top: 0.5rem;">
+                                                Recent deploys: <span style="color: var(--success);">${s.deployStats.successful} success</span> /
+                                                <span style="color: var(--danger);">${s.deployStats.failed} failed</span>
+                                            </div>
+                                        ` : ''}
                                         ${s.recentDeploys && s.recentDeploys.length > 0 ? `
                                             <div class="deploy-list">
                                                 <div class="section-title">Recent Deploys</div>
