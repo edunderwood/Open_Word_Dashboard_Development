@@ -349,7 +349,7 @@ router.post('/:id/end-trial', async (req, res) => {
 
 /**
  * GET /api/customers/:id/session-stats
- * Get customer session/streaming statistics
+ * Get customer session/streaming statistics from streaming_sessions table
  */
 router.get('/:id/session-stats', async (req, res) => {
   try {
@@ -380,14 +380,35 @@ router.get('/:id/session-stats', async (req, res) => {
       }
     }
 
-    // Get all services for this organisation with session data
-    const { data: services, error: svcError } = await supabase
-      .from('services')
-      .select('id, service_id, name, status, started_at, ended_at, created_at')
+    // Get streaming sessions from the streaming_sessions table
+    const { data: sessions, error: sessError } = await supabase
+      .from('streaming_sessions')
+      .select('*')
       .eq('organisation_id', id)
-      .order('started_at', { ascending: false, nullsFirst: false });
+      .order('started_at', { ascending: false })
+      .limit(50);
 
-    if (svcError) throw svcError;
+    if (sessError) {
+      console.error('Error fetching streaming sessions:', sessError);
+      // If table doesn't exist yet, return empty stats
+      if (sessError.code === '42P01') {
+        return res.json({
+          success: true,
+          data: {
+            lastLogin,
+            lastStreamingSession: null,
+            sessionStats: {
+              totalSessions: 0,
+              avgSessionDurationMinutes: 0,
+              avgSessionDurationFormatted: '0 min',
+              last10Sessions: [],
+              note: 'streaming_sessions table not yet created - run migration'
+            },
+          },
+        });
+      }
+      throw sessError;
+    }
 
     // Calculate session statistics
     let lastStreamingSession = null;
@@ -395,33 +416,37 @@ router.get('/:id/session-stats', async (req, res) => {
     let totalSessions = 0;
     const sessionDurations = [];
 
-    // Find completed sessions (have both started_at and ended_at)
-    const completedSessions = services?.filter(s => s.started_at && s.ended_at) || [];
-
-    // Get the most recent session (started_at, regardless of completion)
-    const mostRecentSession = services?.find(s => s.started_at);
-    if (mostRecentSession) {
+    // Get the most recent session
+    if (sessions && sessions.length > 0) {
+      const mostRecent = sessions[0];
       lastStreamingSession = {
-        startedAt: mostRecentSession.started_at,
-        endedAt: mostRecentSession.ended_at,
-        serviceName: mostRecentSession.name,
-        status: mostRecentSession.status,
+        startedAt: mostRecent.started_at,
+        endedAt: mostRecent.ended_at,
+        durationMinutes: mostRecent.duration_minutes,
+        status: mostRecent.status,
+        charactersTranscribed: mostRecent.characters_transcribed,
+        charactersTranslated: mostRecent.characters_translated,
+        sourceLanguage: mostRecent.source_language,
+        languagesUsed: mostRecent.languages_used,
       };
     }
 
-    // Calculate durations for completed sessions
-    completedSessions.forEach(session => {
-      const start = new Date(session.started_at);
-      const end = new Date(session.ended_at);
-      const durationMinutes = (end - start) / (1000 * 60);
+    // Get completed sessions with duration
+    const completedSessions = sessions?.filter(s =>
+      s.status === 'completed' && s.duration_minutes && s.duration_minutes > 0
+    ) || [];
 
+    // Build session list for stats
+    completedSessions.forEach(session => {
       // Only count sessions with reasonable duration (1 min to 12 hours)
-      if (durationMinutes > 1 && durationMinutes < 720) {
+      if (session.duration_minutes >= 1 && session.duration_minutes <= 720) {
         sessionDurations.push({
-          durationMinutes,
+          durationMinutes: session.duration_minutes,
           startedAt: session.started_at,
           endedAt: session.ended_at,
-          serviceName: session.name,
+          charactersTranscribed: session.characters_transcribed || 0,
+          charactersTranslated: session.characters_translated || 0,
+          languagesUsed: session.languages_used || [],
         });
         totalSessions++;
       }
@@ -434,6 +459,10 @@ router.get('/:id/session-stats', async (req, res) => {
       avgSessionDuration = totalDuration / last10Sessions.length;
     }
 
+    // Calculate total characters for last 10 sessions
+    const totalTranscribed = last10Sessions.reduce((sum, s) => sum + (s.charactersTranscribed || 0), 0);
+    const totalTranslated = last10Sessions.reduce((sum, s) => sum + (s.charactersTranslated || 0), 0);
+
     res.json({
       success: true,
       data: {
@@ -443,6 +472,8 @@ router.get('/:id/session-stats', async (req, res) => {
           totalSessions,
           avgSessionDurationMinutes: Math.round(avgSessionDuration * 10) / 10,
           avgSessionDurationFormatted: formatDuration(avgSessionDuration),
+          totalCharactersTranscribed: totalTranscribed,
+          totalCharactersTranslated: totalTranslated,
           last10Sessions: last10Sessions.map(s => ({
             ...s,
             durationFormatted: formatDuration(s.durationMinutes),
