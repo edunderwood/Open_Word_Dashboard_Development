@@ -4,10 +4,15 @@
  */
 
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { getDeepgramAnalytics } from '../services/deepgram-analytics.js';
 import { getRenderAnalytics } from '../services/render-analytics.js';
 import { getGoogleAnalytics } from '../services/google-analytics.js';
 import { getVercelAnalytics } from '../services/vercel-analytics.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -15,17 +20,20 @@ const router = express.Router();
  * Middleware to check authentication
  */
 function requireAuth(req, res, next) {
-  if (!req.session?.user) {
+  if (req.session && req.session.authenticated) {
+    return next();
+  }
+  if (req.xhr || req.headers.accept?.includes('application/json')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  next();
+  res.redirect('/login');
 }
 
 /**
  * GET /analytics - Get analytics page
  */
 router.get('/', requireAuth, (req, res) => {
-  res.render('analytics', { user: req.session.user });
+  res.sendFile(path.join(__dirname, '../../views/analytics.html'));
 });
 
 /**
