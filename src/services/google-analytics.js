@@ -12,14 +12,33 @@ const GOOGLE_PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID;
 
 /**
  * Get authenticated Google client
+ * Supports credentials from environment variable (JSON string) or default credentials
  */
 async function getAuthClient() {
-  // Try to use application default credentials or service account
+  const scopes = [
+    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/monitoring.read',
+  ];
+
+  // Check for credentials in environment variable (JSON string)
+  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+
+  if (credentialsJson) {
+    try {
+      const credentials = JSON.parse(credentialsJson);
+      const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes,
+      });
+      return auth.getClient();
+    } catch (parseError) {
+      throw new Error(`Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: ${parseError.message}`);
+    }
+  }
+
+  // Fall back to default credentials (file-based or ADC)
   const auth = new google.auth.GoogleAuth({
-    scopes: [
-      'https://www.googleapis.com/auth/cloud-platform',
-      'https://www.googleapis.com/auth/monitoring.read',
-    ],
+    scopes,
   });
 
   return auth.getClient();
