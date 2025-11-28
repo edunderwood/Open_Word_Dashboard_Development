@@ -108,10 +108,8 @@ export async function getTranslationMetrics(days = 7) {
       filter: 'metric.type="serviceruntime.googleapis.com/api/request_count" AND resource.labels.service="translate.googleapis.com"',
       'interval.startTime': startTime.toISOString(),
       'interval.endTime': endTime.toISOString(),
-      aggregation: {
-        alignmentPeriod: '86400s', // 1 day
-        perSeriesAligner: 'ALIGN_SUM',
-      },
+      'aggregation.alignmentPeriod': '86400s',
+      'aggregation.perSeriesAligner': 'ALIGN_SUM',
     });
 
     // Query for Translation API character count
@@ -120,10 +118,8 @@ export async function getTranslationMetrics(days = 7) {
       filter: 'metric.type="translate.googleapis.com/character_count"',
       'interval.startTime': startTime.toISOString(),
       'interval.endTime': endTime.toISOString(),
-      aggregation: {
-        alignmentPeriod: '86400s',
-        perSeriesAligner: 'ALIGN_SUM',
-      },
+      'aggregation.alignmentPeriod': '86400s',
+      'aggregation.perSeriesAligner': 'ALIGN_SUM',
     });
 
     // Query for error count
@@ -132,10 +128,8 @@ export async function getTranslationMetrics(days = 7) {
       filter: 'metric.type="serviceruntime.googleapis.com/api/request_count" AND resource.labels.service="translate.googleapis.com" AND metric.labels.response_code_class!="2xx"',
       'interval.startTime': startTime.toISOString(),
       'interval.endTime': endTime.toISOString(),
-      aggregation: {
-        alignmentPeriod: '86400s',
-        perSeriesAligner: 'ALIGN_SUM',
-      },
+      'aggregation.alignmentPeriod': '86400s',
+      'aggregation.perSeriesAligner': 'ALIGN_SUM',
     });
 
     return {
