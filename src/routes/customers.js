@@ -52,9 +52,27 @@ router.get('/', async (req, res) => {
 
     if (error) throw error;
 
+    // Fetch last login for each customer (batch fetch auth users)
+    const customersWithLogin = await Promise.all(
+      customers.map(async (customer) => {
+        let lastLogin = null;
+        if (customer.user_id) {
+          try {
+            const { data: authUser } = await supabase.auth.admin.getUserById(customer.user_id);
+            if (authUser?.user) {
+              lastLogin = authUser.user.last_sign_in_at;
+            }
+          } catch (err) {
+            // Silently fail for individual auth lookups
+          }
+        }
+        return { ...customer, last_login: lastLogin };
+      })
+    );
+
     res.json({
       success: true,
-      data: customers,
+      data: customersWithLogin,
       pagination: {
         page,
         limit,
@@ -328,6 +346,130 @@ router.post('/:id/end-trial', async (req, res) => {
     res.status(500).json({ error: 'Failed to end trial' });
   }
 });
+
+/**
+ * GET /api/customers/:id/session-stats
+ * Get customer session/streaming statistics
+ */
+router.get('/:id/session-stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get customer with user_id for auth lookup
+    const { data: customer, error: custError } = await supabase
+      .from('organisations')
+      .select('id, user_id, name')
+      .eq('id', id)
+      .single();
+
+    if (custError) throw custError;
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Get last login from auth.users via admin API
+    let lastLogin = null;
+    if (customer.user_id) {
+      try {
+        const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(customer.user_id);
+        if (!authError && authUser?.user) {
+          lastLogin = authUser.user.last_sign_in_at;
+        }
+      } catch (authErr) {
+        console.error('Error fetching auth user:', authErr);
+      }
+    }
+
+    // Get all services for this organisation with session data
+    const { data: services, error: svcError } = await supabase
+      .from('services')
+      .select('id, service_id, name, status, started_at, ended_at, created_at')
+      .eq('organisation_id', id)
+      .order('started_at', { ascending: false, nullsFirst: false });
+
+    if (svcError) throw svcError;
+
+    // Calculate session statistics
+    let lastStreamingSession = null;
+    let avgSessionDuration = 0;
+    let totalSessions = 0;
+    const sessionDurations = [];
+
+    // Find completed sessions (have both started_at and ended_at)
+    const completedSessions = services?.filter(s => s.started_at && s.ended_at) || [];
+
+    // Get the most recent session (started_at, regardless of completion)
+    const mostRecentSession = services?.find(s => s.started_at);
+    if (mostRecentSession) {
+      lastStreamingSession = {
+        startedAt: mostRecentSession.started_at,
+        endedAt: mostRecentSession.ended_at,
+        serviceName: mostRecentSession.name,
+        status: mostRecentSession.status,
+      };
+    }
+
+    // Calculate durations for completed sessions
+    completedSessions.forEach(session => {
+      const start = new Date(session.started_at);
+      const end = new Date(session.ended_at);
+      const durationMinutes = (end - start) / (1000 * 60);
+
+      // Only count sessions with reasonable duration (1 min to 12 hours)
+      if (durationMinutes > 1 && durationMinutes < 720) {
+        sessionDurations.push({
+          durationMinutes,
+          startedAt: session.started_at,
+          endedAt: session.ended_at,
+          serviceName: session.name,
+        });
+        totalSessions++;
+      }
+    });
+
+    // Calculate average of last 10 sessions
+    const last10Sessions = sessionDurations.slice(0, 10);
+    if (last10Sessions.length > 0) {
+      const totalDuration = last10Sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+      avgSessionDuration = totalDuration / last10Sessions.length;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        lastLogin,
+        lastStreamingSession,
+        sessionStats: {
+          totalSessions,
+          avgSessionDurationMinutes: Math.round(avgSessionDuration * 10) / 10,
+          avgSessionDurationFormatted: formatDuration(avgSessionDuration),
+          last10Sessions: last10Sessions.map(s => ({
+            ...s,
+            durationFormatted: formatDuration(s.durationMinutes),
+          })),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching session stats:', error);
+    res.status(500).json({ error: 'Failed to fetch session stats' });
+  }
+});
+
+/**
+ * Helper function to format duration in minutes to human readable
+ */
+function formatDuration(minutes) {
+  if (!minutes || minutes <= 0) return '0 min';
+
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  return `${mins} min`;
+}
 
 /**
  * POST /api/customers/:id/cancel-subscription

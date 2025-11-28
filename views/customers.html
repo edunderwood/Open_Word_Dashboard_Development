@@ -109,12 +109,13 @@
                 <th>Key</th>
                 <th>Plan</th>
                 <th>Status</th>
+                <th>Last Login</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="customersTable">
-              <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+              <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -252,7 +253,7 @@
         // Update table
         const table = document.getElementById('customersTable');
         if (customers.length === 0) {
-          table.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No customers found</td></tr>';
+          table.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No customers found</td></tr>';
         } else {
           table.innerHTML = customers.map(customer => `
             <tr>
@@ -262,6 +263,7 @@
               <td><code>${customer.organisation_key || '-'}</code></td>
               <td>${(customer.subscription_plan || '-').replace(/_/g, ' ')}</td>
               <td>${getStatusBadge(customer)}</td>
+              <td>${customer.last_login ? formatDateTime(customer.last_login) : '<span class="text-muted">Never</span>'}</td>
               <td>${formatDate(customer.created_at)}</td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View</button>
@@ -302,18 +304,39 @@
       }
     }
 
+    // Format date with time
+    function formatDateTime(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
     // View customer details
     async function viewCustomer(id) {
       document.getElementById('customerModal').classList.add('active');
       document.getElementById('modalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
 
       try {
-        const response = await fetch(`/api/customers/${id}`);
-        const data = await response.json();
+        // Fetch customer details and session stats in parallel
+        const [customerResponse, sessionResponse] = await Promise.all([
+          fetch(`/api/customers/${id}`),
+          fetch(`/api/customers/${id}/session-stats`)
+        ]);
 
-        if (!data.success) throw new Error(data.error);
+        const customerData = await customerResponse.json();
+        const sessionData = await sessionResponse.json();
 
-        const customer = data.data;
+        if (!customerData.success) throw new Error(customerData.error);
+
+        const customer = customerData.data;
+        const sessionStats = sessionData.success ? sessionData.data : null;
+
         document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
 
         document.getElementById('modalBody').innerHTML = `
@@ -333,6 +356,53 @@
               ${customer.trial_ends_at ? `<p><strong>Trial Ends:</strong> ${formatDate(customer.trial_ends_at)}</p>` : ''}
             </div>
           </div>
+
+          <!-- Activity Stats Section -->
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Activity & Streaming Stats</h4>
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 15px;">
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Last Login</div>
+                <div class="value" style="font-size: 0.9rem;">${sessionStats?.lastLogin ? formatDateTime(sessionStats.lastLogin) : 'Never'}</div>
+              </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Last Streaming Session</div>
+                <div class="value" style="font-size: 0.9rem;">${sessionStats?.lastStreamingSession?.startedAt ? formatDateTime(sessionStats.lastStreamingSession.startedAt) : 'Never'}</div>
+                ${sessionStats?.lastStreamingSession?.status === 'active' ? '<span class="badge badge-success" style="margin-top: 5px;">Currently Active</span>' : ''}
+              </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Avg Session (Last 10)</div>
+                <div class="value" style="font-size: 0.9rem;">${sessionStats?.sessionStats?.avgSessionDurationFormatted || '0 min'}</div>
+                <div style="font-size: 0.7rem; color: var(--gray-500);">${sessionStats?.sessionStats?.totalSessions || 0} total sessions</div>
+              </div>
+            </div>
+            ${sessionStats?.sessionStats?.last10Sessions?.length > 0 ? `
+              <div style="margin-top: 15px;">
+                <h5 style="margin-bottom: 10px; color: var(--gray-500); font-size: 0.7rem; text-transform: uppercase;">Recent Sessions</h5>
+                <div class="table-container" style="max-height: 150px; overflow-y: auto;">
+                  <table style="font-size: 0.85rem;">
+                    <thead>
+                      <tr>
+                        <th>Started</th>
+                        <th>Ended</th>
+                        <th>Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${sessionStats.sessionStats.last10Sessions.map(s => `
+                        <tr>
+                          <td>${formatDateTime(s.startedAt)}</td>
+                          <td>${formatDateTime(s.endedAt)}</td>
+                          <td><strong>${s.durationFormatted}</strong></td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
           ${customer.stripe ? `
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
               <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Stripe Details</h4>
