@@ -4,15 +4,39 @@
  */
 
 import { google } from 'googleapis';
+import { readFileSync, existsSync } from 'fs';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const GOOGLE_PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID;
+// Render secret file paths
+const RENDER_CREDENTIALS_FILE = '/etc/secrets/GOOGLE_APPLICATION_CREDENTIALS_JSON';
+const RENDER_PROJECT_ID_FILE = '/etc/secrets/GOOGLE_CLOUD_PROJECT_ID';
+
+/**
+ * Get Google Cloud Project ID from secret file or environment variable
+ */
+function getProjectId() {
+  // First check Render secret file
+  if (existsSync(RENDER_PROJECT_ID_FILE)) {
+    try {
+      return readFileSync(RENDER_PROJECT_ID_FILE, 'utf8').trim();
+    } catch (err) {
+      console.error('Error reading project ID from secret file:', err.message);
+    }
+  }
+  // Fall back to environment variable
+  return process.env.GOOGLE_CLOUD_PROJECT_ID;
+}
+
+const GOOGLE_PROJECT_ID = getProjectId();
 
 /**
  * Get authenticated Google client
- * Supports credentials from environment variable (JSON string) or default credentials
+ * Supports credentials from:
+ * 1. Render secret file (/etc/secrets/GOOGLE_APPLICATION_CREDENTIALS_JSON)
+ * 2. Environment variable (JSON string)
+ * 3. Default credentials (ADC)
  */
 async function getAuthClient() {
   const scopes = [
@@ -20,7 +44,23 @@ async function getAuthClient() {
     'https://www.googleapis.com/auth/monitoring.read',
   ];
 
-  // Check for credentials in environment variable (JSON string)
+  // Option 1: Check for Render secret file
+  if (existsSync(RENDER_CREDENTIALS_FILE)) {
+    try {
+      const fileContents = readFileSync(RENDER_CREDENTIALS_FILE, 'utf8');
+      const credentials = JSON.parse(fileContents);
+      const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes,
+      });
+      console.log('Using Google credentials from Render secret file');
+      return auth.getClient();
+    } catch (parseError) {
+      console.error('Failed to parse credentials from secret file:', parseError.message);
+    }
+  }
+
+  // Option 2: Check for credentials in environment variable (JSON string)
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 
   if (credentialsJson) {
@@ -30,13 +70,15 @@ async function getAuthClient() {
         credentials,
         scopes,
       });
+      console.log('Using Google credentials from environment variable');
       return auth.getClient();
     } catch (parseError) {
       throw new Error(`Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: ${parseError.message}`);
     }
   }
 
-  // Fall back to default credentials (file-based or ADC)
+  // Option 3: Fall back to default credentials (file-based or ADC)
+  console.log('Using default Google credentials (ADC)');
   const auth = new google.auth.GoogleAuth({
     scopes,
   });
