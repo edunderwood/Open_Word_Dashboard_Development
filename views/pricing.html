@@ -59,21 +59,10 @@
     <main class="main-content">
       <div class="page-header flex justify-between items-center">
         <div>
-          <h2>Pricing Tiers</h2>
-          <p>Manage subscription pricing and features</p>
+          <h2>Subscription Pricing</h2>
+          <p>Manage subscription tiers and pricing</p>
         </div>
         <button class="btn btn-primary" onclick="showAddTierModal()">Add Tier</button>
-      </div>
-
-      <!-- Current Pricing from Stripe -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Current Stripe Products</h3>
-          <button class="btn btn-sm btn-outline" onclick="loadStripeProducts()">Refresh from Stripe</button>
-        </div>
-        <div id="stripeProducts" class="text-muted text-center" style="padding: 20px;">
-          Loading Stripe products...
-        </div>
       </div>
 
       <!-- Pricing Tiers Table -->
@@ -85,30 +74,40 @@
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Monthly</th>
-                <th>Yearly</th>
-                <th>Included Chars</th>
-                <th>Overage Rate</th>
+                <th>Plan</th>
+                <th>Monthly Fee</th>
+                <th>Usage Rate</th>
+                <th>Min Monthly</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="tiersTable">
-              <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+              <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
+      <!-- Current Stripe Products -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Stripe Products</h3>
+          <button class="btn btn-sm btn-outline" onclick="loadStripeProducts()">Refresh from Stripe</button>
+        </div>
+        <div id="stripeProducts" class="text-muted text-center" style="padding: 20px;">
+          Loading Stripe products...
+        </div>
+      </div>
+
       <!-- Pricing Notes -->
       <div class="card">
-        <h3 style="margin-bottom: 15px;">Notes</h3>
+        <h3 style="margin-bottom: 15px;">Pricing Model</h3>
         <ul style="color: var(--gray-600); line-height: 1.8;">
-          <li>Pricing changes here only update the local database. You must also update Stripe products separately.</li>
-          <li>Use "Sync with Stripe" to pull pricing from existing Stripe products.</li>
-          <li>Deleting a tier will only disable it - historical data is preserved.</li>
-          <li>Overage rate is per 1,000 characters above the included amount.</li>
+          <li><strong>Monthly Fee:</strong> Fixed monthly subscription cost</li>
+          <li><strong>Usage Rate:</strong> Per-character rate (e.g., £0.000048 = £48 per million characters)</li>
+          <li><strong>Minimum Monthly:</strong> Minimum charge per month (for pay-as-you-go plans)</li>
+          <li>Changes here update the <code>subscription_pricing</code> table used by the main OpenWord system</li>
         </ul>
       </div>
     </main>
@@ -125,51 +124,52 @@
         <div class="modal-body">
           <input type="hidden" id="tierId">
 
-          <div class="form-group">
-            <label for="tierName">Name</label>
-            <input type="text" id="tierName" class="form-input" required>
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label for="planName">Plan Name (identifier)</label>
+              <input type="text" id="planName" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+            </div>
+            <div class="form-group">
+              <label for="displayName">Display Name</label>
+              <input type="text" id="displayName" class="form-input" required>
+            </div>
+          </div>
+
+          <div class="grid grid-3">
+            <div class="form-group">
+              <label for="monthlyFee">Monthly Fee (£)</label>
+              <input type="number" id="monthlyFee" class="form-input" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="usageRate">Usage Rate (per char)</label>
+              <input type="number" id="usageRate" class="form-input" step="0.000001" min="0" required>
+              <small class="text-muted">e.g., 0.000048</small>
+            </div>
+            <div class="form-group">
+              <label for="minimumMonthlyFee">Min Monthly (£)</label>
+              <input type="number" id="minimumMonthlyFee" class="form-input" step="0.01" min="0" required>
+            </div>
           </div>
 
           <div class="form-group">
-            <label for="tierSlug">Slug (identifier)</label>
-            <input type="text" id="tierSlug" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
-          </div>
-
-          <div class="form-group">
-            <label for="tierDescription">Description</label>
-            <textarea id="tierDescription" class="form-input" rows="2"></textarea>
+            <label for="features">Features (one per line)</label>
+            <textarea id="features" class="form-input" rows="5" placeholder="25 Source languages&#10;Translation to over 100 languages&#10;Unlimited clients"></textarea>
           </div>
 
           <div class="grid grid-2">
             <div class="form-group">
-              <label for="tierMonthly">Monthly Price (GBP)</label>
-              <input type="number" id="tierMonthly" class="form-input" step="0.01" min="0" required>
+              <label for="stripeMonthlyPriceId">Stripe Monthly Price ID</label>
+              <input type="text" id="stripeMonthlyPriceId" class="form-input" placeholder="price_xxx">
             </div>
             <div class="form-group">
-              <label for="tierYearly">Yearly Price (GBP)</label>
-              <input type="number" id="tierYearly" class="form-input" step="0.01" min="0" required>
+              <label for="stripeUsagePriceId">Stripe Usage Price ID</label>
+              <input type="text" id="stripeUsagePriceId" class="form-input" placeholder="price_xxx">
             </div>
-          </div>
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label for="tierIncluded">Included Characters</label>
-              <input type="number" id="tierIncluded" class="form-input" min="0" required>
-            </div>
-            <div class="form-group">
-              <label for="tierOverage">Overage Rate (per 1K chars)</label>
-              <input type="number" id="tierOverage" class="form-input" step="0.001" min="0" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="tierFeatures">Features (one per line)</label>
-            <textarea id="tierFeatures" class="form-input" rows="4" placeholder="Unlimited transcription&#10;Multi-language support&#10;API access"></textarea>
           </div>
 
           <div class="form-group">
             <label>
-              <input type="checkbox" id="tierActive" checked>
+              <input type="checkbox" id="isActive" checked>
               Active (visible to customers)
             </label>
           </div>
@@ -179,24 +179,6 @@
           <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- Sync Stripe Modal -->
-  <div class="modal-overlay" id="syncModal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3>Sync with Stripe Product</h3>
-        <button class="modal-close" onclick="closeSyncModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="syncTierId">
-        <p class="mb-4">Select a Stripe product to sync pricing from:</p>
-        <div id="stripeProductsList">Loading...</div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeSyncModal()">Cancel</button>
-      </div>
     </div>
   </div>
 
@@ -211,15 +193,10 @@
       }).format(amount);
     }
 
-    // Format number
-    function formatNumber(num) {
-      if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-      }
-      if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-      }
-      return num.toLocaleString();
+    // Format usage rate
+    function formatUsageRate(rate) {
+      const perMillion = rate * 1000000;
+      return `£${perMillion.toFixed(2)}/M chars`;
     }
 
     // Load pricing tiers
@@ -232,18 +209,20 @@
 
         const table = document.getElementById('tiersTable');
         if (data.data.length === 0) {
-          table.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No pricing tiers found. Add one to get started.</td></tr>';
+          table.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No pricing tiers found.</td></tr>';
         } else {
           table.innerHTML = data.data.map(tier => `
             <tr>
               <td>
-                <strong>${tier.name}</strong>
-                <br><small class="text-muted">${tier.slug}</small>
+                <strong>${tier.display_name}</strong>
+                <br><small class="text-muted">${tier.plan_name}</small>
               </td>
-              <td>${formatCurrency(tier.monthly_price || 0)}</td>
-              <td>${formatCurrency(tier.yearly_price || 0)}</td>
-              <td>${formatNumber(tier.included_characters || 0)}</td>
-              <td>${formatCurrency(tier.overage_rate || 0)}/1K</td>
+              <td>${formatCurrency(tier.monthly_fee || 0)}</td>
+              <td>
+                ${formatUsageRate(tier.usage_rate || 0)}
+                <br><small class="text-muted">£${tier.usage_rate}/char</small>
+              </td>
+              <td>${formatCurrency(tier.minimum_monthly_fee || 0)}</td>
               <td>
                 ${tier.is_active
                   ? '<span class="badge badge-success">Active</span>'
@@ -252,7 +231,6 @@
               </td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="editTier('${tier.id}')">Edit</button>
-                <button class="btn btn-sm btn-outline" onclick="showSyncModal('${tier.id}')">Sync Stripe</button>
                 ${tier.is_active
                   ? `<button class="btn btn-sm btn-danger" onclick="deleteTier('${tier.id}')">Disable</button>`
                   : ''
@@ -264,7 +242,7 @@
       } catch (error) {
         console.error('Error loading tiers:', error);
         document.getElementById('tiersTable').innerHTML =
-          '<tr><td colspan="7" class="text-center text-danger">Error loading pricing tiers</td></tr>';
+          '<tr><td colspan="6" class="text-center text-danger">Error loading pricing tiers</td></tr>';
       }
     }
 
@@ -285,13 +263,15 @@
           container.innerHTML = `
             <div class="grid grid-3">
               ${stripeProducts.map(product => `
-                <div style="padding: 15px; background: var(--gray-50); border-radius: 8px;">
+                <div style="padding: 15px; background: var(--gray-50); border-radius: 8px; text-align: left;">
                   <strong>${product.name}</strong>
                   <p class="text-muted" style="font-size: 0.75rem; margin: 5px 0;">${product.id}</p>
-                  <div style="margin-top: 10px;">
+                  <div style="margin-top: 10px; font-size: 0.875rem;">
                     ${product.prices.map(price => `
-                      <div style="font-size: 0.875rem;">
+                      <div style="margin-bottom: 4px;">
                         ${formatCurrency(price.unitAmount)}/${price.interval || 'one-time'}
+                        ${price.usageType === 'metered' ? '<span class="badge badge-info" style="font-size: 0.6rem;">metered</span>' : ''}
+                        <br><small class="text-muted">${price.id}</small>
                       </div>
                     `).join('')}
                   </div>
@@ -311,15 +291,16 @@
     function showAddTierModal() {
       document.getElementById('editModalTitle').textContent = 'Add Pricing Tier';
       document.getElementById('tierId').value = '';
-      document.getElementById('tierName').value = '';
-      document.getElementById('tierSlug').value = '';
-      document.getElementById('tierDescription').value = '';
-      document.getElementById('tierMonthly').value = '0';
-      document.getElementById('tierYearly').value = '0';
-      document.getElementById('tierIncluded').value = '0';
-      document.getElementById('tierOverage').value = '0';
-      document.getElementById('tierFeatures').value = '';
-      document.getElementById('tierActive').checked = true;
+      document.getElementById('planName').value = '';
+      document.getElementById('planName').disabled = false;
+      document.getElementById('displayName').value = '';
+      document.getElementById('monthlyFee').value = '0';
+      document.getElementById('usageRate').value = '0.000048';
+      document.getElementById('minimumMonthlyFee').value = '0';
+      document.getElementById('features').value = '';
+      document.getElementById('stripeMonthlyPriceId').value = '';
+      document.getElementById('stripeUsagePriceId').value = '';
+      document.getElementById('isActive').checked = true;
       document.getElementById('editModal').classList.add('active');
     }
 
@@ -334,15 +315,16 @@
         const tier = data.data;
         document.getElementById('editModalTitle').textContent = 'Edit Pricing Tier';
         document.getElementById('tierId').value = tier.id;
-        document.getElementById('tierName').value = tier.name || '';
-        document.getElementById('tierSlug').value = tier.slug || '';
-        document.getElementById('tierDescription').value = tier.description || '';
-        document.getElementById('tierMonthly').value = tier.monthly_price || 0;
-        document.getElementById('tierYearly').value = tier.yearly_price || 0;
-        document.getElementById('tierIncluded').value = tier.included_characters || 0;
-        document.getElementById('tierOverage').value = tier.overage_rate || 0;
-        document.getElementById('tierFeatures').value = (tier.features || []).join('\n');
-        document.getElementById('tierActive').checked = tier.is_active;
+        document.getElementById('planName').value = tier.plan_name || '';
+        document.getElementById('planName').disabled = true; // Can't change plan_name after creation
+        document.getElementById('displayName').value = tier.display_name || '';
+        document.getElementById('monthlyFee').value = tier.monthly_fee || 0;
+        document.getElementById('usageRate').value = tier.usage_rate || 0;
+        document.getElementById('minimumMonthlyFee').value = tier.minimum_monthly_fee || 0;
+        document.getElementById('features').value = (tier.features || []).join('\n');
+        document.getElementById('stripeMonthlyPriceId').value = tier.stripe_monthly_price_id || '';
+        document.getElementById('stripeUsagePriceId').value = tier.stripe_usage_price_id || '';
+        document.getElementById('isActive').checked = tier.is_active;
         document.getElementById('editModal').classList.add('active');
       } catch (error) {
         alert('Error loading tier: ' + error.message);
@@ -355,15 +337,15 @@
 
       const id = document.getElementById('tierId').value;
       const tier = {
-        name: document.getElementById('tierName').value,
-        slug: document.getElementById('tierSlug').value,
-        description: document.getElementById('tierDescription').value,
-        monthlyPrice: parseFloat(document.getElementById('tierMonthly').value),
-        yearlyPrice: parseFloat(document.getElementById('tierYearly').value),
-        includedCharacters: parseInt(document.getElementById('tierIncluded').value),
-        overageRate: parseFloat(document.getElementById('tierOverage').value),
-        features: document.getElementById('tierFeatures').value.split('\n').filter(f => f.trim()),
-        isActive: document.getElementById('tierActive').checked,
+        planName: document.getElementById('planName').value,
+        displayName: document.getElementById('displayName').value,
+        monthlyFee: parseFloat(document.getElementById('monthlyFee').value),
+        usageRate: parseFloat(document.getElementById('usageRate').value),
+        minimumMonthlyFee: parseFloat(document.getElementById('minimumMonthlyFee').value),
+        features: document.getElementById('features').value.split('\n').filter(f => f.trim()),
+        stripeMonthlyPriceId: document.getElementById('stripeMonthlyPriceId').value || null,
+        stripeUsagePriceId: document.getElementById('stripeUsagePriceId').value || null,
+        isActive: document.getElementById('isActive').checked,
       };
 
       try {
@@ -402,60 +384,13 @@
         alert(data.message);
         loadTiers();
       } catch (error) {
-        alert('Error deleting tier: ' + error.message);
+        alert('Error disabling tier: ' + error.message);
       }
     }
 
-    // Show sync modal
-    function showSyncModal(tierId) {
-      document.getElementById('syncTierId').value = tierId;
-
-      if (stripeProducts.length === 0) {
-        document.getElementById('stripeProductsList').innerHTML =
-          '<p class="text-muted">No Stripe products available. Load them first.</p>';
-      } else {
-        document.getElementById('stripeProductsList').innerHTML = stripeProducts.map(product => `
-          <div style="padding: 10px; background: var(--gray-50); border-radius: 8px; margin-bottom: 10px; cursor: pointer;"
-               onclick="syncWithStripe('${tierId}', '${product.id}')">
-            <strong>${product.name}</strong>
-            <span class="text-muted" style="font-size: 0.75rem;">(${product.id})</span>
-            <div style="margin-top: 5px; font-size: 0.875rem;">
-              ${product.prices.map(p => `${formatCurrency(p.unitAmount)}/${p.interval || 'one-time'}`).join(', ')}
-            </div>
-          </div>
-        `).join('');
-      }
-
-      document.getElementById('syncModal').classList.add('active');
-    }
-
-    // Sync with Stripe
-    async function syncWithStripe(tierId, stripeProductId) {
-      try {
-        const response = await fetch(`/api/pricing/${tierId}/sync-stripe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stripeProductId }),
-        });
-
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error);
-
-        alert(data.message);
-        closeSyncModal();
-        loadTiers();
-      } catch (error) {
-        alert('Error syncing with Stripe: ' + error.message);
-      }
-    }
-
-    // Close modals
+    // Close modal
     function closeEditModal() {
       document.getElementById('editModal').classList.remove('active');
-    }
-
-    function closeSyncModal() {
-      document.getElementById('syncModal').classList.remove('active');
     }
 
     // Logout

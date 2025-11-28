@@ -1,5 +1,6 @@
 /**
  * Pricing Management Routes
+ * Uses existing subscription_pricing table from main OpenWord system
  */
 
 import express from 'express';
@@ -10,14 +11,14 @@ const router = express.Router();
 
 /**
  * GET /api/pricing
- * Get all pricing tiers
+ * Get all pricing tiers from subscription_pricing table
  */
 router.get('/', async (req, res) => {
   try {
     const { data: tiers, error } = await supabase
-      .from('pricing_tiers')
+      .from('subscription_pricing')
       .select('*')
-      .order('sort_order', { ascending: true });
+      .order('monthly_fee', { ascending: true });
 
     if (error) throw error;
 
@@ -40,7 +41,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const { data: tier, error } = await supabase
-      .from('pricing_tiers')
+      .from('subscription_pricing')
       .select('*')
       .eq('id', id)
       .single();
@@ -69,30 +70,30 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      name,
-      description,
-      monthlyPrice,
-      yearlyPrice,
-      includedCharacters,
-      overageRate,
+      displayName,
+      monthlyFee,
+      usageRate,
+      minimumMonthlyFee,
       features,
       isActive,
+      stripeMonthlyPriceId,
+      stripeUsagePriceId,
     } = req.body;
 
     // Build update object with only provided fields
     const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (monthlyPrice !== undefined) updateData.monthly_price = monthlyPrice;
-    if (yearlyPrice !== undefined) updateData.yearly_price = yearlyPrice;
-    if (includedCharacters !== undefined) updateData.included_characters = includedCharacters;
-    if (overageRate !== undefined) updateData.overage_rate = overageRate;
+    if (displayName !== undefined) updateData.display_name = displayName;
+    if (monthlyFee !== undefined) updateData.monthly_fee = monthlyFee;
+    if (usageRate !== undefined) updateData.usage_rate = usageRate;
+    if (minimumMonthlyFee !== undefined) updateData.minimum_monthly_fee = minimumMonthlyFee;
     if (features !== undefined) updateData.features = features;
     if (isActive !== undefined) updateData.is_active = isActive;
+    if (stripeMonthlyPriceId !== undefined) updateData.stripe_monthly_price_id = stripeMonthlyPriceId;
+    if (stripeUsagePriceId !== undefined) updateData.stripe_usage_price_id = stripeUsagePriceId;
     updateData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
-      .from('pricing_tiers')
+      .from('subscription_pricing')
       .update(updateData)
       .eq('id', id)
       .select()
@@ -100,7 +101,7 @@ router.put('/:id', async (req, res) => {
 
     if (error) throw error;
 
-    console.log(`💰 Pricing tier updated: ${data.name} (${id})`);
+    console.log(`💰 Pricing tier updated: ${data.display_name} (${id})`);
 
     res.json({
       success: true,
@@ -120,33 +121,31 @@ router.put('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      name,
-      slug,
-      description,
-      monthlyPrice,
-      yearlyPrice,
-      includedCharacters,
-      overageRate,
+      planName,
+      displayName,
+      monthlyFee,
+      usageRate,
+      minimumMonthlyFee,
       features,
-      sortOrder,
+      stripeMonthlyPriceId,
+      stripeUsagePriceId,
     } = req.body;
 
-    if (!name || !slug) {
-      return res.status(400).json({ error: 'Name and slug are required' });
+    if (!planName || !displayName) {
+      return res.status(400).json({ error: 'Plan name and display name are required' });
     }
 
     const { data, error } = await supabase
-      .from('pricing_tiers')
+      .from('subscription_pricing')
       .insert({
-        name,
-        slug,
-        description,
-        monthly_price: monthlyPrice || 0,
-        yearly_price: yearlyPrice || 0,
-        included_characters: includedCharacters || 0,
-        overage_rate: overageRate || 0,
+        plan_name: planName,
+        display_name: displayName,
+        monthly_fee: monthlyFee || 0,
+        usage_rate: usageRate || 0.000048,
+        minimum_monthly_fee: minimumMonthlyFee || 0,
         features: features || [],
-        sort_order: sortOrder || 999,
+        stripe_monthly_price_id: stripeMonthlyPriceId,
+        stripe_usage_price_id: stripeUsagePriceId,
         is_active: true,
       })
       .select()
@@ -154,7 +153,7 @@ router.post('/', async (req, res) => {
 
     if (error) throw error;
 
-    console.log(`💰 New pricing tier created: ${name}`);
+    console.log(`💰 New pricing tier created: ${displayName}`);
 
     res.json({
       success: true,
@@ -176,30 +175,38 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     // Check if any customers are using this tier
-    const { count: customerCount } = await supabase
-      .from('organisations')
-      .select('*', { count: 'exact', head: true })
-      .eq('pricing_tier_id', id);
+    const { data: tier } = await supabase
+      .from('subscription_pricing')
+      .select('plan_name')
+      .eq('id', id)
+      .single();
 
-    if (customerCount > 0) {
-      return res.status(400).json({
-        error: `Cannot delete tier - ${customerCount} customer(s) are using it`,
-      });
+    if (tier) {
+      const { count: customerCount } = await supabase
+        .from('organisations')
+        .select('*', { count: 'exact', head: true })
+        .eq('subscription_plan', tier.plan_name);
+
+      if (customerCount > 0) {
+        return res.status(400).json({
+          error: `Cannot delete tier - ${customerCount} customer(s) are using it`,
+        });
+      }
     }
 
     // Soft delete by setting inactive
     const { error } = await supabase
-      .from('pricing_tiers')
+      .from('subscription_pricing')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;
 
-    console.log(`💰 Pricing tier deleted: ${id}`);
+    console.log(`💰 Pricing tier disabled: ${id}`);
 
     res.json({
       success: true,
-      message: 'Pricing tier deleted successfully',
+      message: 'Pricing tier disabled successfully',
     });
   } catch (error) {
     console.error('Error deleting pricing tier:', error);
@@ -225,9 +232,10 @@ router.get('/stripe/products', async (req, res) => {
         description: product.description,
         prices: productPrices.map(p => ({
           id: p.id,
-          unitAmount: p.unit_amount / 100,
+          unitAmount: p.unit_amount ? p.unit_amount / 100 : 0,
           currency: p.currency,
           interval: p.recurring?.interval,
+          usageType: p.recurring?.usage_type,
         })),
       };
     });
@@ -244,52 +252,34 @@ router.get('/stripe/products', async (req, res) => {
 
 /**
  * POST /api/pricing/:id/sync-stripe
- * Sync pricing tier with Stripe product
+ * Link pricing tier with Stripe price IDs
  */
 router.post('/:id/sync-stripe', async (req, res) => {
   try {
     const { id } = req.params;
-    const { stripeProductId } = req.body;
+    const { stripeMonthlyPriceId, stripeUsagePriceId } = req.body;
 
-    if (!stripeProductId) {
-      return res.status(400).json({ error: 'Stripe product ID required' });
+    const updateData = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (stripeMonthlyPriceId) {
+      updateData.stripe_monthly_price_id = stripeMonthlyPriceId;
+    }
+    if (stripeUsagePriceId) {
+      updateData.stripe_usage_price_id = stripeUsagePriceId;
     }
 
-    // Get Stripe product details
-    const product = await stripe.products.retrieve(stripeProductId);
-    const prices = await stripe.prices.list({
-      product: stripeProductId,
-      active: true,
-    });
-
-    // Find monthly and yearly prices
-    let monthlyPrice = 0;
-    let yearlyPrice = 0;
-
-    prices.data.forEach(price => {
-      if (price.recurring?.interval === 'month') {
-        monthlyPrice = price.unit_amount / 100;
-      } else if (price.recurring?.interval === 'year') {
-        yearlyPrice = price.unit_amount / 100;
-      }
-    });
-
-    // Update local tier
     const { data, error } = await supabase
-      .from('pricing_tiers')
-      .update({
-        stripe_product_id: stripeProductId,
-        monthly_price: monthlyPrice,
-        yearly_price: yearlyPrice,
-        updated_at: new Date().toISOString(),
-      })
+      .from('subscription_pricing')
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
 
-    console.log(`💰 Pricing tier synced with Stripe: ${data.name}`);
+    console.log(`💰 Pricing tier synced with Stripe: ${data.display_name}`);
 
     res.json({
       success: true,
