@@ -133,6 +133,135 @@ function formatDate(date) {
 }
 
 /**
+ * Calculate performance stats from request data
+ */
+function calculatePerformanceStats(requests) {
+  if (!requests || requests.length === 0) {
+    return null;
+  }
+
+  // Extract duration data from requests
+  const durations = requests
+    .filter(r => r.duration && r.duration > 0)
+    .map(r => r.duration);
+
+  if (durations.length === 0) {
+    return null;
+  }
+
+  // Sort for percentile calculations
+  durations.sort((a, b) => a - b);
+
+  const sum = durations.reduce((a, b) => a + b, 0);
+  const avg = sum / durations.length;
+  const min = durations[0];
+  const max = durations[durations.length - 1];
+  const p50 = durations[Math.floor(durations.length * 0.5)];
+  const p95 = durations[Math.floor(durations.length * 0.95)];
+
+  return {
+    avgDurationSec: avg.toFixed(2),
+    minDurationSec: min.toFixed(2),
+    maxDurationSec: max.toFixed(2),
+    p50DurationSec: p50.toFixed(2),
+    p95DurationSec: p95.toFixed(2),
+    sampleSize: durations.length,
+  };
+}
+
+/**
+ * Calculate capacity analysis and warnings
+ */
+function calculateCapacityAnalysis(usage, balances) {
+  const warnings = [];
+  const metrics = {};
+
+  // Deepgram limits for Pay-as-you-go/Growth plans
+  const CONCURRENT_STREAM_LIMIT = 50;
+  const CONCURRENT_PRERECORDED_LIMIT = 100;
+
+  // Calculate daily usage patterns
+  if (usage.results && usage.results.length > 0) {
+    const dailyRequests = usage.results.map(d => d.requests || 0);
+    const dailyHours = usage.results.map(d => d.hours || 0);
+
+    const avgDailyRequests = dailyRequests.reduce((a, b) => a + b, 0) / dailyRequests.length;
+    const maxDailyRequests = Math.max(...dailyRequests);
+    const avgDailyHours = dailyHours.reduce((a, b) => a + b, 0) / dailyHours.length;
+    const maxDailyHours = Math.max(...dailyHours);
+
+    metrics.avgDailyRequests = avgDailyRequests.toFixed(1);
+    metrics.maxDailyRequests = maxDailyRequests;
+    metrics.avgDailyHours = avgDailyHours.toFixed(2);
+    metrics.maxDailyHours = maxDailyHours.toFixed(2);
+
+    // Estimate peak concurrent sessions (assuming avg session ~10 min, peak hour = 20% of daily)
+    const avgSessionMinutes = (avgDailyHours * 60) / (avgDailyRequests || 1);
+    const estimatedPeakConcurrent = Math.ceil((maxDailyRequests * 0.2) / (60 / avgSessionMinutes));
+
+    metrics.avgSessionMinutes = avgSessionMinutes.toFixed(1);
+    metrics.estimatedPeakConcurrent = estimatedPeakConcurrent;
+    metrics.concurrentLimit = CONCURRENT_STREAM_LIMIT;
+    metrics.capacityUsedPercent = ((estimatedPeakConcurrent / CONCURRENT_STREAM_LIMIT) * 100).toFixed(1);
+
+    // Capacity warnings
+    if (estimatedPeakConcurrent > CONCURRENT_STREAM_LIMIT * 0.8) {
+      warnings.push({
+        level: 'critical',
+        message: `Peak concurrent streams (${estimatedPeakConcurrent}) approaching limit of ${CONCURRENT_STREAM_LIMIT}. Consider upgrading to Enterprise plan.`,
+      });
+    } else if (estimatedPeakConcurrent > CONCURRENT_STREAM_LIMIT * 0.5) {
+      warnings.push({
+        level: 'warning',
+        message: `Peak concurrent streams at ${metrics.capacityUsedPercent}% of limit. Monitor during high-usage events.`,
+      });
+    }
+
+    // Usage trend warning
+    if (dailyRequests.length >= 7) {
+      const recentAvg = dailyRequests.slice(-7).reduce((a, b) => a + b, 0) / 7;
+      const olderAvg = dailyRequests.slice(0, 7).reduce((a, b) => a + b, 0) / 7;
+      if (olderAvg > 0 && recentAvg > olderAvg * 1.5) {
+        warnings.push({
+          level: 'info',
+          message: `Usage increased ${((recentAvg / olderAvg - 1) * 100).toFixed(0)}% in recent week. Plan for capacity accordingly.`,
+        });
+      }
+    }
+  }
+
+  // Balance warnings
+  if (balances.balances && balances.balances.length > 0) {
+    const totalBalance = balances.balances.reduce((sum, b) => sum + (b.amount || 0), 0);
+    metrics.totalBalance = totalBalance.toFixed(2);
+
+    // Estimate days remaining based on usage
+    if (usage.results && usage.results.length > 0) {
+      const totalCost = usage.results.reduce((sum, d) => sum + (d.total_amount || 0), 0);
+      const avgDailyCost = totalCost / usage.results.length;
+      if (avgDailyCost > 0) {
+        const daysRemaining = totalBalance / avgDailyCost;
+        metrics.estimatedDaysRemaining = Math.floor(daysRemaining);
+
+        if (daysRemaining < 30) {
+          warnings.push({
+            level: 'warning',
+            message: `Balance will last approximately ${Math.floor(daysRemaining)} days at current usage rate.`,
+          });
+        } else if (daysRemaining < 90) {
+          warnings.push({
+            level: 'info',
+            message: `Balance estimated to last ${Math.floor(daysRemaining)} days.`,
+          });
+        }
+      }
+    }
+  }
+
+  return { metrics, warnings };
+}
+
+/**
  * Get comprehensive analytics for dashboard
  */
 export async function getDeepgramAnalytics(days = 30) {
@@ -140,10 +269,11 @@ export async function getDeepgramAnalytics(days = 30) {
   const startDate = formatDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
 
   try {
-    const [usage, balances, project] = await Promise.all([
+    const [usage, balances, project, requests] = await Promise.all([
       getUsageSummary(startDate, endDate).catch(e => ({ error: e.message })),
       getBalances().catch(e => ({ error: e.message })),
       getProject().catch(e => ({ error: e.message })),
+      getUsageRequests(startDate, endDate, 100).catch(e => ({ error: e.message })),
     ]);
 
     // Calculate totals from usage data
@@ -159,6 +289,12 @@ export async function getDeepgramAnalytics(days = 30) {
       });
     }
 
+    // Calculate performance stats from individual requests
+    const performanceStats = calculatePerformanceStats(requests.requests || requests);
+
+    // Calculate capacity analysis
+    const capacityAnalysis = calculateCapacityAnalysis(usage, balances);
+
     return {
       success: true,
       data: {
@@ -168,6 +304,9 @@ export async function getDeepgramAnalytics(days = 30) {
           totalRequests,
           totalCost: totalCost.toFixed(4),
         },
+        performance: performanceStats,
+        capacity: capacityAnalysis.metrics,
+        warnings: capacityAnalysis.warnings,
         dailyUsage: usage.results || [],
         balances: balances.balances || [],
         project: project.project_id ? project : null,

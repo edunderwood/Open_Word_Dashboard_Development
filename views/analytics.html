@@ -387,6 +387,76 @@
                                     </span>
                                 </div>
                             `).join('')}
+                            ${data.capacity?.estimatedDaysRemaining ? `
+                                <div class="metric-row">
+                                    <span class="metric-label">Est. Days Remaining</span>
+                                    <span class="metric-value ${data.capacity.estimatedDaysRemaining > 90 ? 'success' : data.capacity.estimatedDaysRemaining > 30 ? 'warning' : 'error'}">
+                                        ${data.capacity.estimatedDaysRemaining} days
+                                    </span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    ${data.capacity ? `
+                        <div class="section-divider">
+                            <div class="section-title">Capacity & Performance</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg Session Duration</span>
+                                <span class="metric-value">${data.capacity.avgSessionMinutes || '0'} min</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg Daily Requests</span>
+                                <span class="metric-value">${data.capacity.avgDailyRequests || '0'}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Peak Daily Requests</span>
+                                <span class="metric-value">${data.capacity.maxDailyRequests || '0'}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Est. Peak Concurrent</span>
+                                <span class="metric-value ${parseFloat(data.capacity.capacityUsedPercent) > 80 ? 'error' : parseFloat(data.capacity.capacityUsedPercent) > 50 ? 'warning' : 'success'}">
+                                    ${data.capacity.estimatedPeakConcurrent || '0'} / ${data.capacity.concurrentLimit || '50'}
+                                </span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Capacity Used</span>
+                                <span class="metric-value ${parseFloat(data.capacity.capacityUsedPercent) > 80 ? 'error' : parseFloat(data.capacity.capacityUsedPercent) > 50 ? 'warning' : 'success'}">
+                                    ${data.capacity.capacityUsedPercent || '0'}%
+                                </span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${data.performance ? `
+                        <div class="section-divider">
+                            <div class="section-title">Session Duration Stats (Last ${data.performance.sampleSize} sessions)</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Average</span>
+                                <span class="metric-value">${data.performance.avgDurationSec}s</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">P50 (Median)</span>
+                                <span class="metric-value">${data.performance.p50DurationSec}s</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">P95</span>
+                                <span class="metric-value">${data.performance.p95DurationSec}s</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Min / Max</span>
+                                <span class="metric-value">${data.performance.minDurationSec}s / ${data.performance.maxDurationSec}s</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${data.warnings && data.warnings.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Alerts</div>
+                            ${data.warnings.map(w => `
+                                <div class="alert-box ${w.level}" style="padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;
+                                    background: ${w.level === 'critical' ? 'rgba(239,68,68,0.1)' : w.level === 'warning' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)'};
+                                    border-left: 3px solid ${w.level === 'critical' ? 'var(--danger)' : w.level === 'warning' ? 'var(--warning)' : 'var(--primary)'};">
+                                    ${w.message}
+                                </div>
+                            `).join('')}
                         </div>
                     ` : ''}
                     ${data.errors.usage ? `
