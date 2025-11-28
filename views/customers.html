@@ -517,6 +517,16 @@
 
     // Pause customer
     async function pauseCustomer(id) {
+      // First confirmation
+      if (!confirm('Are you sure you want to PAUSE this customer?\n\nThis will temporarily suspend their access to the service.')) {
+        return;
+      }
+
+      // Second confirmation
+      if (!confirm('Please confirm again: PAUSE this customer account?\n\nClick OK to proceed or Cancel to abort.')) {
+        return;
+      }
+
       const reason = prompt('Enter reason for pausing (optional):');
 
       try {
@@ -577,7 +587,20 @@
 
     // Cancel subscription
     async function cancelSubscription(id) {
-      const immediately = confirm('Cancel immediately? Click OK for immediate, Cancel for end of billing period.');
+      // First confirmation
+      if (!confirm('Are you sure you want to CANCEL this subscription?\n\nThis action cannot be easily undone and will affect the customer\'s billing.')) {
+        return;
+      }
+
+      // Second confirmation with type check
+      const confirmText = prompt('To confirm cancellation, please type "CANCEL" (all caps):');
+      if (confirmText !== 'CANCEL') {
+        alert('Cancellation aborted. You must type "CANCEL" exactly to proceed.');
+        return;
+      }
+
+      // Ask about timing
+      const immediately = confirm('Cancel IMMEDIATELY?\n\n• Click OK to cancel immediately (customer loses access now)\n• Click Cancel to cancel at end of billing period (customer keeps access until then)');
 
       try {
         const response = await fetch(`/api/customers/${id}/cancel-subscription`, {
