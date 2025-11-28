@@ -126,11 +126,18 @@ export async function getUsageFields(startDate, endDate) {
 }
 
 /**
+ * Format date as YYYY-MM-DD for Deepgram API
+ */
+function formatDate(date) {
+  return date.toISOString().split('T')[0];
+}
+
+/**
  * Get comprehensive analytics for dashboard
  */
 export async function getDeepgramAnalytics(days = 30) {
-  const endDate = new Date().toISOString();
-  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const endDate = formatDate(new Date());
+  const startDate = formatDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
 
   try {
     const [usage, balances, project] = await Promise.all([
