@@ -10,9 +10,10 @@
   <div class="login-container">
     <div class="login-card">
       <h1>OpenWord Dashboard</h1>
-      <p>Sign in to access the admin panel</p>
+      <p>Sign in with your OpenWord account</p>
 
       <div id="error" class="login-error" style="display: none;"></div>
+      <div id="success" class="alert alert-success" style="display: none;"></div>
 
       <form id="loginForm">
         <div class="form-group">
@@ -22,7 +23,7 @@
             id="email"
             name="email"
             class="form-input"
-            placeholder="admin@example.com"
+            placeholder="your@email.com"
             required
             autocomplete="email"
           >
@@ -45,17 +46,67 @@
           Sign In
         </button>
       </form>
+
+      <div style="margin-top: 20px; text-align: center;">
+        <a href="#" onclick="showForgotPassword()" style="color: var(--gray-500); font-size: 0.875rem;">Forgot password?</a>
+      </div>
+
+      <!-- Forgot Password Form (hidden by default) -->
+      <div id="forgotPasswordForm" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+        <h3 style="font-size: 1rem; margin-bottom: 15px;">Reset Password</h3>
+        <div class="form-group">
+          <label for="resetEmail">Email</label>
+          <input
+            type="email"
+            id="resetEmail"
+            class="form-input"
+            placeholder="your@email.com"
+            required
+          >
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="sendResetEmail()" id="resetBtn">
+          Send Reset Link
+        </button>
+        <button type="button" class="btn btn-outline" onclick="hideForgotPassword()" style="margin-left: 10px;">
+          Cancel
+        </button>
+      </div>
+
+      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--gray-200); text-align: center;">
+        <p style="color: var(--gray-500); font-size: 0.75rem;">
+          Use your OpenWord account credentials.<br>
+          Contact an administrator if you need access.
+        </p>
+      </div>
     </div>
   </div>
 
   <script>
     const form = document.getElementById('loginForm');
     const errorDiv = document.getElementById('error');
+    const successDiv = document.getElementById('success');
     const loginBtn = document.getElementById('loginBtn');
+
+    function showError(message) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      successDiv.style.display = 'none';
+    }
+
+    function showSuccess(message) {
+      successDiv.textContent = message;
+      successDiv.style.display = 'block';
+      errorDiv.style.display = 'none';
+    }
+
+    function hideMessages() {
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorDiv.style.display = 'none';
+      hideMessages();
       loginBtn.disabled = true;
       loginBtn.textContent = 'Signing in...';
 
@@ -79,12 +130,57 @@
           throw new Error(data.error || 'Login failed');
         }
       } catch (error) {
-        errorDiv.textContent = error.message;
-        errorDiv.style.display = 'block';
+        showError(error.message);
         loginBtn.disabled = false;
         loginBtn.textContent = 'Sign In';
       }
     });
+
+    function showForgotPassword() {
+      document.getElementById('forgotPasswordForm').style.display = 'block';
+      document.getElementById('resetEmail').value = document.getElementById('email').value;
+    }
+
+    function hideForgotPassword() {
+      document.getElementById('forgotPasswordForm').style.display = 'none';
+    }
+
+    async function sendResetEmail() {
+      const email = document.getElementById('resetEmail').value;
+      const resetBtn = document.getElementById('resetBtn');
+
+      if (!email) {
+        showError('Please enter your email address');
+        return;
+      }
+
+      resetBtn.disabled = true;
+      resetBtn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch('/auth/forgot-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          showSuccess('Password reset email sent! Check your inbox.');
+          hideForgotPassword();
+        } else {
+          throw new Error(data.error || 'Failed to send reset email');
+        }
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        resetBtn.disabled = false;
+        resetBtn.textContent = 'Send Reset Link';
+      }
+    }
   </script>
 </body>
 </html>

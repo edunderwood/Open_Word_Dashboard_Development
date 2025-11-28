@@ -1,24 +1,30 @@
 /**
- * Authentication Routes
+ * Authentication Routes - Using Supabase Auth
  */
 
 import express from 'express';
-import bcrypt from 'bcryptjs';
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const router = express.Router();
 
-// Admin credentials (in production, store hashed password in env)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'david@firmustech.com';
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+// Create Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-// If no hash set, create default (change this in production!)
-const DEFAULT_PASSWORD = 'admin123'; // Change this!
+// Service role client for admin checks
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 /**
  * POST /auth/login
+ * Login with Supabase credentials
  */
 router.post('/login', async (req, res) => {
   try {
@@ -28,38 +34,48 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    // Check email
-    if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    // Authenticate with Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.log(`❌ Login failed for ${email}: ${error.message}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check password
-    let isValid = false;
+    // Check if user is an admin
+    const { data: adminUser, error: adminError } = await supabaseAdmin
+      .from('dashboard_admins')
+      .select('*')
+      .eq('user_id', data.user.id)
+      .eq('is_active', true)
+      .single();
 
-    if (ADMIN_PASSWORD_HASH) {
-      // Use bcrypt to compare
-      isValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-    } else {
-      // Fallback to default password (for initial setup)
-      isValid = password === DEFAULT_PASSWORD;
-      if (isValid) {
-        console.log('⚠️ Using default password - please set ADMIN_PASSWORD_HASH in .env');
-        console.log('   Generate hash with: node -e "const bcrypt = require(\'bcryptjs\'); console.log(bcrypt.hashSync(\'yourpassword\', 10))"');
-      }
-    }
-
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (adminError || !adminUser) {
+      console.log(`❌ User ${email} is not a dashboard admin`);
+      return res.status(403).json({ error: 'Access denied. You are not authorized to access this dashboard.' });
     }
 
     // Set session
     req.session.authenticated = true;
+    req.session.userId = data.user.id;
     req.session.email = email;
+    req.session.role = adminUser.role;
     req.session.loginTime = new Date().toISOString();
+    req.session.accessToken = data.session.access_token;
 
-    console.log(`✅ Admin logged in: ${email}`);
+    console.log(`✅ Admin logged in: ${email} (${adminUser.role})`);
 
-    res.json({ success: true, message: 'Login successful' });
+    res.json({
+      success: true,
+      message: 'Login successful',
+      user: {
+        email: email,
+        role: adminUser.role,
+      }
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
@@ -86,6 +102,7 @@ router.get('/status', (req, res) => {
     res.json({
       authenticated: true,
       email: req.session.email,
+      role: req.session.role,
       loginTime: req.session.loginTime
     });
   } else {
@@ -94,40 +111,31 @@ router.get('/status', (req, res) => {
 });
 
 /**
- * POST /auth/change-password
+ * POST /auth/forgot-password
+ * Send password reset email
  */
-router.post('/change-password', async (req, res) => {
-  if (!req.session || !req.session.authenticated) {
-    return res.status(401).json({ error: 'Not authenticated' });
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.DASHBOARD_URL || 'https://open-word-dashboard-development.onrender.com'}/reset-password`,
+    });
+
+    if (error) {
+      console.error('Password reset error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: 'Password reset email sent' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to send reset email' });
   }
-
-  const { currentPassword, newPassword } = req.body;
-
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'Current and new password required' });
-  }
-
-  // Verify current password
-  let isValid = false;
-  if (ADMIN_PASSWORD_HASH) {
-    isValid = await bcrypt.compare(currentPassword, ADMIN_PASSWORD_HASH);
-  } else {
-    isValid = currentPassword === DEFAULT_PASSWORD;
-  }
-
-  if (!isValid) {
-    return res.status(401).json({ error: 'Current password is incorrect' });
-  }
-
-  // Generate new hash
-  const newHash = await bcrypt.hash(newPassword, 10);
-
-  res.json({
-    success: true,
-    message: 'Password hash generated. Add this to your .env file:',
-    hash: newHash,
-    envLine: `ADMIN_PASSWORD_HASH=${newHash}`
-  });
 });
 
 export default router;
