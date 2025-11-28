@@ -18,6 +18,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import customersRoutes from './routes/customers.js';
 import pricingRoutes from './routes/pricing.js';
 import monitoringRoutes from './routes/monitoring.js';
+import analyticsRoutes from './routes/analytics.js';
 
 // Import services
 import { startMonitoring } from './services/monitor.js';
@@ -78,6 +79,7 @@ app.use('/api/dashboard', requireAuth, dashboardRoutes);
 app.use('/api/customers', requireAuth, customersRoutes);
 app.use('/api/pricing', requireAuth, pricingRoutes);
 app.use('/api/monitoring', requireAuth, monitoringRoutes);
+app.use('/analytics', analyticsRoutes);
 
 // Page routes
 app.get('/login', (req, res) => {
@@ -140,6 +142,7 @@ app.listen(PORT, () => {
 ║   - Customers:   http://localhost:${PORT}/customers          ║
 ║   - Pricing:     http://localhost:${PORT}/pricing            ║
 ║   - Monitoring:  http://localhost:${PORT}/monitoring         ║
+║   - Analytics:   http://localhost:${PORT}/analytics          ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
 

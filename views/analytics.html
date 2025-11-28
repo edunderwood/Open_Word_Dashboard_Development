@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Analytics - OpenWord Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .analytics-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .analytics-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .analytics-card h3 .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .deepgram-icon { background: #13EF93; color: #000; }
+        .render-icon { background: #46E3B7; color: #000; }
+        .google-icon { background: #4285F4; color: #fff; }
+        .vercel-icon { background: #000; color: #fff; }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .metric-value.success { color: var(--success); }
+        .metric-value.warning { color: var(--warning); }
+        .metric-value.error { color: var(--danger); }
+
+        .service-list {
+            margin-top: 1rem;
+        }
+
+        .service-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .service-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .service-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .service-status {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .service-status.running { background: var(--success); color: #fff; }
+        .service-status.suspended { background: var(--warning); color: #000; }
+        .service-status.ready { background: var(--success); color: #fff; }
+        .service-status.error { background: var(--danger); color: #fff; }
+
+        .deploy-list {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .deploy-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner::before {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.75rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            padding: 1rem;
+            color: var(--danger);
+            font-size: 0.9rem;
+        }
+
+        .refresh-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .refresh-controls select {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        .last-updated {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-left: auto;
+        }
+
+        .cost-highlight {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .section-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 1rem 0;
+            padding-top: 1rem;
+        }
+
+        .section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>OpenWord</h2>
+            <span class="badge">Admin</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/dashboard"><span class="icon">📊</span> Dashboard</a></li>
+            <li><a href="/customers"><span class="icon">👥</span> Customers</a></li>
+            <li><a href="/pricing"><span class="icon">💰</span> Pricing</a></li>
+            <li><a href="/monitoring"><span class="icon">🔍</span> Monitoring</a></li>
+            <li><a href="/analytics" class="active"><span class="icon">📈</span> Analytics</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header class="page-header">
+            <h1>Service Analytics</h1>
+            <p>Monitor usage and performance across all external services</p>
+        </header>
+
+        <div class="refresh-controls">
+            <label>Time Period:</label>
+            <select id="days-select">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn btn-primary" onclick="refreshAllAnalytics()">
+                Refresh All
+            </button>
+            <span class="last-updated" id="last-updated"></span>
+        </div>
+
+        <div class="analytics-grid">
+            <!-- Deepgram Analytics -->
+            <div class="analytics-card">
+                <h3>
+                    <span class="icon deepgram-icon">🎤</span>
+                    Deepgram (Speech-to-Text)
+                </h3>
+                <div id="deepgram-content">
+                    <div class="loading-spinner">Loading Deepgram analytics...</div>
+                </div>
+            </div>
+
+            <!-- Google Cloud Translation Analytics -->
+            <div class="analytics-card">
+                <h3>
+                    <span class="icon google-icon">🌐</span>
+                    Google Cloud Translation
+                </h3>
+                <div id="google-content">
+                    <div class="loading-spinner">Loading Google analytics...</div>
+                </div>
+            </div>
+
+            <!-- Render Analytics -->
+            <div class="analytics-card">
+                <h3>
+                    <span class="icon render-icon">⚡</span>
+                    Render (Server Hosting)
+                </h3>
+                <div id="render-content">
+                    <div class="loading-spinner">Loading Render analytics...</div>
+                </div>
+            </div>
+
+            <!-- Vercel Analytics -->
+            <div class="analytics-card">
+                <h3>
+                    <span class="icon vercel-icon">▲</span>
+                    Vercel (Client Hosting)
+                </h3>
+                <div id="vercel-content">
+                    <div class="loading-spinner">Loading Vercel analytics...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentDays = 30;
+
+        document.getElementById('days-select').addEventListener('change', (e) => {
+            currentDays = parseInt(e.target.value);
+            refreshAllAnalytics();
+        });
+
+        function updateLastUpdated() {
+            document.getElementById('last-updated').textContent =
+                `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        async function loadDeepgramAnalytics() {
+            const container = document.getElementById('deepgram-content');
+            try {
+                const response = await fetch(`/analytics/deepgram?days=${currentDays}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    container.innerHTML = `<div class="error-message">${result.error || 'Failed to load Deepgram analytics'}</div>`;
+                    return;
+                }
+
+                const data = result.data;
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Total Audio Hours</span>
+                        <span class="metric-value">${data.summary.totalHours} hrs</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Total Requests</span>
+                        <span class="metric-value">${formatNumber(data.summary.totalRequests)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Total Cost</span>
+                        <span class="metric-value cost-highlight">$${data.summary.totalCost}</span>
+                    </div>
+                    ${data.balances.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Account Balance</div>
+                            ${data.balances.map(b => `
+                                <div class="metric-row">
+                                    <span class="metric-label">${b.balance_id || 'Credit'}</span>
+                                    <span class="metric-value ${b.amount > 10 ? 'success' : 'warning'}">
+                                        $${(b.amount || 0).toFixed(2)}
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    ${data.errors.usage ? `
+                        <div class="error-message" style="margin-top: 1rem;">
+                            Usage API Error: ${data.errors.usage}
+                        </div>
+                    ` : ''}
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadGoogleAnalytics() {
+            const container = document.getElementById('google-content');
+            try {
+                const response = await fetch(`/analytics/google?days=${currentDays}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    container.innerHTML = `<div class="error-message">${result.error || 'Failed to load Google analytics'}</div>`;
+                    return;
+                }
+
+                const data = result.data;
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Translation Requests</span>
+                        <span class="metric-value">${formatNumber(data.summary.totalRequests)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Characters Translated</span>
+                        <span class="metric-value">${formatNumber(data.summary.totalCharacters)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Error Rate</span>
+                        <span class="metric-value ${parseFloat(data.summary.errorRate) > 5 ? 'error' : 'success'}">
+                            ${data.summary.errorRate}%
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Estimated Cost</span>
+                        <span class="metric-value cost-highlight">$${data.summary.estimatedCostUSD}</span>
+                    </div>
+                    ${data.errors.metrics ? `
+                        <div class="error-message" style="margin-top: 1rem;">
+                            Metrics API Error: ${data.errors.metrics}
+                        </div>
+                    ` : ''}
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadRenderAnalytics() {
+            const container = document.getElementById('render-content');
+            try {
+                const response = await fetch('/analytics/render');
+                const result = await response.json();
+
+                if (!result.success) {
+                    container.innerHTML = `<div class="error-message">${result.error || 'Failed to load Render analytics'}</div>`;
+                    return;
+                }
+
+                const data = result.data;
+                const services = data.openwordServices || [];
+
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Total Services</span>
+                        <span class="metric-value">${data.totalServices}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">OpenWord Services</span>
+                        <span class="metric-value">${services.length}</span>
+                    </div>
+                    ${services.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">OpenWord Services</div>
+                            <div class="service-list">
+                                ${services.map(s => `
+                                    <div class="service-item">
+                                        <div class="service-header">
+                                            <span class="service-name">${s.name || 'Unknown'}</span>
+                                            <span class="service-status ${s.status}">${s.status}</span>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                            Type: ${s.type || 'N/A'} |
+                                            ${s.url ? `<a href="${s.url}" target="_blank" style="color: var(--primary);">View →</a>` : 'No URL'}
+                                        </div>
+                                        ${s.recentDeploys && s.recentDeploys.length > 0 ? `
+                                            <div class="deploy-list">
+                                                <div class="section-title">Recent Deploys</div>
+                                                ${s.recentDeploys.slice(0, 3).map(d => `
+                                                    <div class="deploy-item">
+                                                        <span>${d.deploy?.commit?.message?.slice(0, 40) || 'No message'}...</span>
+                                                        <span>${formatDate(d.deploy?.createdAt)}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadVercelAnalytics() {
+            const container = document.getElementById('vercel-content');
+            try {
+                const response = await fetch('/analytics/vercel');
+                const result = await response.json();
+
+                if (!result.success) {
+                    container.innerHTML = `<div class="error-message">${result.error || 'Failed to load Vercel analytics'}</div>`;
+                    return;
+                }
+
+                const data = result.data;
+                const projects = data.openwordProjects || [];
+
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Total Projects</span>
+                        <span class="metric-value">${data.totalProjects}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">OpenWord Projects</span>
+                        <span class="metric-value">${projects.length}</span>
+                    </div>
+                    ${projects.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">OpenWord Projects</div>
+                            <div class="service-list">
+                                ${projects.map(p => `
+                                    <div class="service-item">
+                                        <div class="service-header">
+                                            <span class="service-name">${p.name || 'Unknown'}</span>
+                                            ${p.deploymentStats ? `
+                                                <span class="service-status ${parseFloat(p.deploymentStats.successRate) > 90 ? 'ready' : 'warning'}">
+                                                    ${p.deploymentStats.successRate}% success
+                                                </span>
+                                            ` : ''}
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                            Framework: ${p.framework || 'N/A'} |
+                                            ${p.domains && p.domains.length > 0 ?
+                                                p.domains.map(d => `<a href="https://${d.name}" target="_blank" style="color: var(--primary);">${d.name}</a>`).join(', ')
+                                                : 'No domains'}
+                                        </div>
+                                        ${p.deploymentStats ? `
+                                            <div style="font-size: 0.85rem; margin-top: 0.5rem;">
+                                                <span style="color: var(--success);">${p.deploymentStats.successful} successful</span> /
+                                                <span style="color: var(--danger);">${p.deploymentStats.failed} failed</span>
+                                                ${p.deploymentStats.avgBuildTimeSeconds > 0 ? `
+                                                    | Avg build: ${p.deploymentStats.avgBuildTimeSeconds}s
+                                                ` : ''}
+                                            </div>
+                                        ` : ''}
+                                        ${p.recentDeployments && p.recentDeployments.length > 0 ? `
+                                            <div class="deploy-list">
+                                                <div class="section-title">Recent Deployments</div>
+                                                ${p.recentDeployments.slice(0, 3).map(d => `
+                                                    <div class="deploy-item">
+                                                        <span class="service-status ${d.state?.toLowerCase()}" style="font-size: 0.7rem;">
+                                                            ${d.state}
+                                                        </span>
+                                                        <span>${d.meta?.slice(0, 35) || 'No commit message'}...</span>
+                                                        <span>${formatDate(d.createdAt)}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${data.errors?.usage ? `
+                        <div class="error-message" style="margin-top: 1rem;">
+                            Usage API not available (requires Team/Pro plan)
+                        </div>
+                    ` : ''}
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+            }
+        }
+
+        function refreshAllAnalytics() {
+            // Show loading state
+            document.getElementById('deepgram-content').innerHTML = '<div class="loading-spinner">Loading Deepgram analytics...</div>';
+            document.getElementById('google-content').innerHTML = '<div class="loading-spinner">Loading Google analytics...</div>';
+            document.getElementById('render-content').innerHTML = '<div class="loading-spinner">Loading Render analytics...</div>';
+            document.getElementById('vercel-content').innerHTML = '<div class="loading-spinner">Loading Vercel analytics...</div>';
+
+            // Load all analytics in parallel
+            Promise.all([
+                loadDeepgramAnalytics(),
+                loadGoogleAnalytics(),
+                loadRenderAnalytics(),
+                loadVercelAnalytics()
+            ]).then(() => {
+                updateLastUpdated();
+            });
+        }
+
+        // Initial load
+        refreshAllAnalytics();
+
+        // Auto-refresh every 5 minutes
+        setInterval(refreshAllAnalytics, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
