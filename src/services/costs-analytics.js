@@ -188,11 +188,17 @@ async function getSupabaseCosts() {
     };
   } catch (error) {
     // Fall back to estimate
-    const { count: totalOrgs } = await supabase
-      .from('organisations')
-      .select('*', { count: 'exact', head: true }).catch(() => ({ count: 0 }));
+    let totalOrgs = 0;
+    try {
+      const result = await supabase
+        .from('organisations')
+        .select('*', { count: 'exact', head: true });
+      totalOrgs = result.count || 0;
+    } catch (e) {
+      totalOrgs = 0;
+    }
 
-    const estimatedOnProTier = (totalOrgs || 0) > 50;
+    const estimatedOnProTier = totalOrgs > 50;
     const costUSD = estimatedOnProTier ? 25 : 0;
 
     return {
