@@ -10,6 +10,7 @@ import { getDeepgramAnalytics } from '../services/deepgram-analytics.js';
 import { getRenderAnalytics } from '../services/render-analytics.js';
 import { getGoogleAnalytics } from '../services/google-analytics.js';
 import { getVercelAnalytics } from '../services/vercel-analytics.js';
+import { getSupabaseAnalytics } from '../services/supabase-analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,22 @@ router.get('/google', requireAuth, async (req, res) => {
 router.get('/vercel', requireAuth, async (req, res) => {
   try {
     const analytics = await getVercelAnalytics();
+    res.json(analytics);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /analytics/supabase - Get Supabase database analytics
+ */
+router.get('/supabase', requireAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const analytics = await getSupabaseAnalytics(days);
     res.json(analytics);
   } catch (error) {
     res.status(500).json({

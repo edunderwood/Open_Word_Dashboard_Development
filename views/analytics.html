@@ -48,6 +48,7 @@
         .render-icon { background: #46E3B7; color: #000; }
         .google-icon { background: #4285F4; color: #fff; }
         .vercel-icon { background: #000; color: #fff; }
+        .supabase-icon { background: #3ECF8E; color: #fff; }
 
         .metric-row {
             display: flex;
@@ -233,6 +234,14 @@
             </a>
           </li>
           <li>
+            <a href="/costs">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Costs
+            </a>
+          </li>
+          <li>
             <a href="/monitoring">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -316,6 +325,17 @@
                 </h3>
                 <div id="vercel-content">
                     <div class="loading-spinner">Loading Vercel analytics...</div>
+                </div>
+            </div>
+
+            <!-- Supabase Analytics -->
+            <div class="analytics-card">
+                <h3>
+                    <span class="icon supabase-icon">⚡</span>
+                    Supabase (Database)
+                </h3>
+                <div id="supabase-content">
+                    <div class="loading-spinner">Loading Supabase analytics...</div>
                 </div>
             </div>
         </div>
@@ -770,19 +790,117 @@
             }
         }
 
+        async function loadSupabaseAnalytics() {
+            const container = document.getElementById('supabase-content');
+            try {
+                const response = await fetch(`/analytics/supabase?days=${currentDays}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    container.innerHTML = `<div class="error-message">${result.error || 'Failed to load Supabase analytics'}</div>`;
+                    return;
+                }
+
+                const data = result.data;
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Total Organisations</span>
+                        <span class="metric-value">${data.summary.totalOrganisations}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Active Organisations</span>
+                        <span class="metric-value ${data.summary.activeOrganisations > 0 ? 'success' : 'warning'}">${data.summary.activeOrganisations}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">New (${currentDays}d)</span>
+                        <span class="metric-value">${data.summary.newOrganisations}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Total Services</span>
+                        <span class="metric-value">${data.summary.totalServices}</span>
+                    </div>
+                    <div class="section-divider">
+                        <div class="section-title">Usage (${currentDays} days)</div>
+                        <div class="metric-row">
+                            <span class="metric-label">Total Characters</span>
+                            <span class="metric-value">${formatNumber(data.usage.totalCharacters)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Transcript Characters</span>
+                            <span class="metric-value">${formatNumber(data.usage.transcriptChars)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Translation Characters</span>
+                            <span class="metric-value">${formatNumber(data.usage.translationChars)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Avg Daily Characters</span>
+                            <span class="metric-value">${formatNumber(data.usage.avgDailyCharacters)}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Last 24h Records</span>
+                            <span class="metric-value ${data.usage.last24hRecords > 0 ? 'success' : 'warning'}">${data.usage.last24hRecords}</span>
+                        </div>
+                    </div>
+                    ${data.topLanguages && data.topLanguages.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Top Languages</div>
+                            ${data.topLanguages.slice(0, 5).map(l => `
+                                <div class="metric-row">
+                                    <span class="metric-label">${l.language}</span>
+                                    <span class="metric-value">${formatNumber(l.characters)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    ${data.summary.totalFeedback > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Feedback</div>
+                            <div class="metric-row">
+                                <span class="metric-label">Total Feedback</span>
+                                <span class="metric-value">${data.summary.totalFeedback}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg Rating</span>
+                                <span class="metric-value ${parseFloat(data.summary.avgRating) >= 4 ? 'success' : parseFloat(data.summary.avgRating) >= 3 ? 'warning' : 'error'}">
+                                    ${data.summary.avgRating}/5
+                                </span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${data.warnings && data.warnings.length > 0 ? `
+                        <div class="section-divider">
+                            <div class="section-title">Alerts</div>
+                            ${data.warnings.map(w => `
+                                <div class="alert-box ${w.level}" style="padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;
+                                    background: ${w.level === 'critical' ? 'rgba(239,68,68,0.1)' : w.level === 'warning' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)'};
+                                    border-left: 3px solid ${w.level === 'critical' ? 'var(--danger)' : w.level === 'warning' ? 'var(--warning)' : 'var(--primary)'};">
+                                    ${w.message}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+            }
+        }
+
         function refreshAllAnalytics() {
             // Show loading state
             document.getElementById('deepgram-content').innerHTML = '<div class="loading-spinner">Loading Deepgram analytics...</div>';
             document.getElementById('google-content').innerHTML = '<div class="loading-spinner">Loading Google analytics...</div>';
             document.getElementById('render-content').innerHTML = '<div class="loading-spinner">Loading Render analytics...</div>';
             document.getElementById('vercel-content').innerHTML = '<div class="loading-spinner">Loading Vercel analytics...</div>';
+            document.getElementById('supabase-content').innerHTML = '<div class="loading-spinner">Loading Supabase analytics...</div>';
 
             // Load all analytics in parallel
             Promise.all([
                 loadDeepgramAnalytics(),
                 loadGoogleAnalytics(),
                 loadRenderAnalytics(),
-                loadVercelAnalytics()
+                loadVercelAnalytics(),
+                loadSupabaseAnalytics()
             ]).then(() => {
                 updateLastUpdated();
             });

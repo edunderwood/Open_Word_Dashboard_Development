@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Costs & Revenue - OpenWord Admin</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .costs-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1200px) {
+            .costs-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .costs-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .costs-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .costs-card h3 .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .costs-icon { background: #ef4444; color: #fff; }
+        .revenue-icon { background: #22c55e; color: #fff; }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1000px) {
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .summary-card .label {
+            font-size: 0.85rem;
+            color: var(--gray-500);
+            margin-bottom: 0.5rem;
+        }
+
+        .summary-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .summary-card .value.cost { color: #ef4444; }
+        .summary-card .value.revenue { color: #22c55e; }
+        .summary-card .value.profit { color: #3b82f6; }
+        .summary-card .value.loss { color: #ef4444; }
+
+        .summary-card .subtitle {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+
+        .cost-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .cost-item:last-child {
+            border-bottom: none;
+        }
+
+        .cost-item .name {
+            font-weight: 500;
+        }
+
+        .cost-item .details {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+
+        .cost-item .amount {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .cost-item .amount.cost { color: #ef4444; }
+        .cost-item .amount.revenue { color: #22c55e; }
+
+        .total-row {
+            background: var(--gray-50);
+            margin: 1rem -1.5rem -1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0 0 12px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        .total-row .amount {
+            font-size: 1.25rem;
+        }
+
+        .profit-summary {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px solid #3b82f6;
+        }
+
+        .profit-summary.loss {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-color: #ef4444;
+        }
+
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--gray-500);
+        }
+
+        .loading-spinner::before {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--gray-200);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.75rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            padding: 1rem;
+            color: var(--danger);
+            font-size: 0.9rem;
+        }
+
+        .last-updated {
+            color: var(--gray-500);
+            font-size: 0.85rem;
+            margin-left: auto;
+        }
+
+        .refresh-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .note {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            font-style: italic;
+            margin-top: 0.5rem;
+        }
+
+        .currency-badge {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            background: var(--gray-200);
+            color: var(--gray-600);
+            margin-left: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/costs" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Costs
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+          <li>
+            <a href="/analytics">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              Analytics
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>Costs & Revenue</h2>
+        <p>Monthly costs breakdown and revenue comparison</p>
+      </div>
+
+      <div class="refresh-controls">
+        <button class="btn btn-primary" onclick="loadCostsData()">Refresh</button>
+        <span class="last-updated" id="last-updated"></span>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-cards" id="summary-cards">
+        <div class="loading-spinner">Loading summary...</div>
+      </div>
+
+      <!-- Costs and Revenue Breakdown -->
+      <div class="costs-container">
+        <!-- Costs Card -->
+        <div class="costs-card">
+          <h3>
+            <span class="icon costs-icon">💰</span>
+            Monthly Costs
+          </h3>
+          <div id="costs-content">
+            <div class="loading-spinner">Loading costs...</div>
+          </div>
+        </div>
+
+        <!-- Revenue Card -->
+        <div class="costs-card">
+          <h3>
+            <span class="icon revenue-icon">📈</span>
+            Monthly Revenue
+          </h3>
+          <div id="revenue-content">
+            <div class="loading-spinner">Loading revenue...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function formatCurrency(amount, currency = 'GBP') {
+      const symbol = currency === 'GBP' ? '£' : '$';
+      return `${symbol}${parseFloat(amount).toFixed(2)}`;
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toString();
+    }
+
+    async function loadCostsData() {
+      try {
+        // Show loading state
+        document.getElementById('summary-cards').innerHTML = '<div class="loading-spinner">Loading summary...</div>';
+        document.getElementById('costs-content').innerHTML = '<div class="loading-spinner">Loading costs...</div>';
+        document.getElementById('revenue-content').innerHTML = '<div class="loading-spinner">Loading revenue...</div>';
+
+        const response = await fetch('/costs/summary');
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load costs data');
+        }
+
+        const data = result.data;
+        renderSummary(data);
+        renderCosts(data.costs);
+        renderRevenue(data.revenue);
+
+        document.getElementById('last-updated').textContent =
+          `Last updated: ${new Date().toLocaleTimeString()}`;
+
+      } catch (error) {
+        document.getElementById('summary-cards').innerHTML =
+          `<div class="error-message">Error: ${error.message}</div>`;
+        document.getElementById('costs-content').innerHTML =
+          `<div class="error-message">Error: ${error.message}</div>`;
+        document.getElementById('revenue-content').innerHTML =
+          `<div class="error-message">Error: ${error.message}</div>`;
+      }
+    }
+
+    function renderSummary(data) {
+      const summary = data.summary;
+      const isProfit = summary.profit >= 0;
+
+      document.getElementById('summary-cards').innerHTML = `
+        <div class="summary-card">
+          <div class="label">Total Costs</div>
+          <div class="value cost">${formatCurrency(summary.totalCosts, 'USD')}</div>
+          <div class="subtitle">This month</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Total Revenue</div>
+          <div class="value revenue">${formatCurrency(summary.totalRevenue, 'GBP')}</div>
+          <div class="subtitle">Stripe + Usage</div>
+        </div>
+        <div class="summary-card ${isProfit ? '' : 'profit-summary loss'}">
+          <div class="label">${isProfit ? 'Net Profit' : 'Net Loss'}</div>
+          <div class="value ${isProfit ? 'profit' : 'loss'}">${formatCurrency(Math.abs(summary.profit), 'GBP')}</div>
+          <div class="subtitle">${summary.profitMargin}% margin</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">MRR</div>
+          <div class="value revenue">${formatCurrency(data.revenue.mrr, 'GBP')}</div>
+          <div class="subtitle">${data.revenue.activeSubscriptions} subscriptions</div>
+        </div>
+      `;
+    }
+
+    function renderCosts(costs) {
+      const services = [
+        costs.deepgram,
+        costs.googleTranslate,
+        costs.supabase,
+        costs.render,
+        costs.vercel
+      ];
+
+      let html = '';
+
+      services.forEach(service => {
+        html += `
+          <div class="cost-item">
+            <div>
+              <div class="name">${service.name}</div>
+              <div class="details">
+                ${service.tier ? `Tier: ${service.tier}` : ''}
+                ${service.hours ? `Hours: ${service.hours}` : ''}
+                ${service.requests ? `Requests: ${formatNumber(service.requests)}` : ''}
+                ${service.error ? `<span style="color: var(--danger);">Error: ${service.error}</span>` : ''}
+              </div>
+            </div>
+            <div class="amount cost">
+              ${formatCurrency(service.cost, service.currency || 'USD')}
+              <span class="currency-badge">${service.currency || 'USD'}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+        <div class="total-row">
+          <span>Total Monthly Costs</span>
+          <span class="amount cost">${formatCurrency(costs.total, 'USD')}</span>
+        </div>
+      `;
+
+      html += `
+        <p class="note">
+          Note: Render and Vercel costs are estimates based on typical plans.
+          Supabase cost depends on whether you're on Free or Pro tier.
+        </p>
+      `;
+
+      document.getElementById('costs-content').innerHTML = html;
+    }
+
+    function renderRevenue(revenue) {
+      let html = `
+        <div class="cost-item">
+          <div>
+            <div class="name">Stripe Payments</div>
+            <div class="details">Subscription payments this month</div>
+          </div>
+          <div class="amount revenue">
+            ${formatCurrency(revenue.stripeRevenue, 'GBP')}
+            <span class="currency-badge">GBP</span>
+          </div>
+        </div>
+        <div class="cost-item">
+          <div>
+            <div class="name">Usage-Based Revenue</div>
+            <div class="details">Character usage charges</div>
+          </div>
+          <div class="amount revenue">
+            ${formatCurrency(revenue.usageRevenue, 'GBP')}
+            <span class="currency-badge">GBP</span>
+          </div>
+        </div>
+        <div class="cost-item">
+          <div>
+            <div class="name">Monthly Recurring Revenue</div>
+            <div class="details">${revenue.activeSubscriptions} active subscriptions</div>
+          </div>
+          <div class="amount revenue">
+            ${formatCurrency(revenue.mrr, 'GBP')}
+            <span class="currency-badge">GBP</span>
+          </div>
+        </div>
+        <div class="total-row">
+          <span>Total Monthly Revenue</span>
+          <span class="amount revenue">${formatCurrency(revenue.total, 'GBP')}</span>
+        </div>
+      `;
+
+      document.getElementById('revenue-content').innerHTML = html;
+    }
+
+    // Initial load
+    loadCostsData();
+
+    // Auto-refresh every 5 minutes
+    setInterval(loadCostsData, 5 * 60 * 1000);
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+  </script>
+</body>
+</html>
