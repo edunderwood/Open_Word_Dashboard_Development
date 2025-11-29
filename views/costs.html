@@ -373,8 +373,8 @@
       document.getElementById('summary-cards').innerHTML = `
         <div class="summary-card">
           <div class="label">Total Costs</div>
-          <div class="value cost">${formatCurrency(summary.totalCosts, 'USD')}</div>
-          <div class="subtitle">This month</div>
+          <div class="value cost">${formatCurrency(summary.totalCosts, 'GBP')}</div>
+          <div class="subtitle">($${summary.totalCostsUSD?.toFixed(2) || '0.00'} USD)</div>
         </div>
         <div class="summary-card">
           <div class="label">Total Revenue</div>
@@ -406,20 +406,22 @@
       let html = '';
 
       services.forEach(service => {
+        const usdAmount = service.costUSD ? ` ($${service.costUSD.toFixed(2)})` : '';
         html += `
           <div class="cost-item">
             <div>
               <div class="name">${service.name}</div>
               <div class="details">
-                ${service.tier ? `Tier: ${service.tier}` : ''}
-                ${service.hours ? `Hours: ${service.hours}` : ''}
-                ${service.requests ? `Requests: ${formatNumber(service.requests)}` : ''}
-                ${service.error ? `<span style="color: var(--danger);">Error: ${service.error}</span>` : ''}
+                ${service.tier ? `<strong>Plan:</strong> ${service.tier}` : ''}
+                ${service.hours ? ` | Hours: ${service.hours}` : ''}
+                ${service.requests ? ` | Requests: ${formatNumber(service.requests)}` : ''}
+                ${service.error ? `<br><span style="color: var(--danger);">Error: ${service.error}</span>` : ''}
               </div>
             </div>
             <div class="amount cost">
-              ${formatCurrency(service.cost, service.currency || 'USD')}
-              <span class="currency-badge">${service.currency || 'USD'}</span>
+              ${formatCurrency(service.cost, 'GBP')}
+              <span class="currency-badge">GBP</span>
+              <div style="font-size: 0.75rem; color: var(--gray-500);">${usdAmount}</div>
             </div>
           </div>
         `;
@@ -428,14 +430,13 @@
       html += `
         <div class="total-row">
           <span>Total Monthly Costs</span>
-          <span class="amount cost">${formatCurrency(costs.total, 'USD')}</span>
+          <span class="amount cost">${formatCurrency(costs.total, 'GBP')} <small style="color: var(--gray-500);">($${costs.totalUSD?.toFixed(2) || '0.00'})</small></span>
         </div>
       `;
 
       html += `
         <p class="note">
-          Note: Render and Vercel costs are estimates based on typical plans.
-          Supabase cost depends on whether you're on Free or Pro tier.
+          Exchange rate: 1 USD = £0.79 GBP. Add RENDER_API_KEY, VERCEL_TOKEN, and SUPABASE_ACCESS_TOKEN to .env for actual plan info.
         </p>
       `;
 

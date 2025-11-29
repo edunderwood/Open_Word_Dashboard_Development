@@ -1,12 +1,16 @@
 /**
  * Costs Analytics Service
  * Aggregates costs from all service providers and compares with revenue
+ * All costs displayed in GBP (Sterling)
  */
 
 import { getDeepgramAnalytics } from './deepgram-analytics.js';
 import { getGoogleAnalytics } from './google-analytics.js';
 import stripe from './stripe.js';
 import supabase from './supabase.js';
+
+// USD to GBP exchange rate (approximate - could be fetched from API for accuracy)
+const USD_TO_GBP = 0.79;
 
 /**
  * Get current month date range
@@ -29,24 +33,26 @@ async function getDeepgramCosts() {
     const analytics = await getDeepgramAnalytics(daysInMonth);
 
     if (!analytics.success) {
-      return { error: analytics.error, cost: 0 };
+      return { error: analytics.error, cost: 0, costUSD: 0 };
     }
 
-    const cost = parseFloat(analytics.data?.summary?.totalCost) || 0;
+    const costUSD = parseFloat(analytics.data?.summary?.totalCost) || 0;
     const hours = parseFloat(analytics.data?.summary?.totalHours) || 0;
     const balance = analytics.data?.balances?.[0]?.amount || 0;
 
     return {
-      cost,
+      cost: costUSD * USD_TO_GBP,
+      costUSD,
       hours,
       balance,
+      tier: 'Pay-as-you-go',
       details: {
-        costPerHour: hours > 0 ? (cost / hours).toFixed(4) : '0',
+        costPerHour: hours > 0 ? (costUSD / hours).toFixed(4) : '0',
         requests: analytics.data?.summary?.totalRequests || 0
       }
     };
   } catch (error) {
-    return { error: error.message, cost: 0 };
+    return { error: error.message, cost: 0, costUSD: 0 };
   }
 }
 
@@ -61,38 +67,47 @@ async function getGoogleTranslateCosts() {
     const analytics = await getGoogleAnalytics(daysInMonth);
 
     if (!analytics.success) {
-      return { error: analytics.error, cost: 0 };
+      return { error: analytics.error, cost: 0, costUSD: 0 };
     }
 
-    const cost = parseFloat(analytics.data?.summary?.estimatedCostUSD) || 0;
+    const costUSD = parseFloat(analytics.data?.summary?.estimatedCostUSD) || 0;
     const requests = analytics.data?.summary?.totalRequests || 0;
     const bytes = analytics.data?.summary?.totalBytes || 0;
 
     return {
-      cost,
+      cost: costUSD * USD_TO_GBP,
+      costUSD,
       requests,
       bytes,
+      tier: 'Pay-as-you-go',
       details: {
         avgLatencyMs: analytics.data?.summary?.avgLatencyMs || '0',
         errorRate: analytics.data?.summary?.errorRate || '0'
       }
     };
   } catch (error) {
-    return { error: error.message, cost: 0 };
+    return { error: error.message, cost: 0, costUSD: 0 };
   }
 }
 
 /**
- * Get Supabase costs (estimated based on plan)
- * Note: Supabase doesn't have a billing API, so this is based on plan limits
+ * Get Supabase costs by querying the Management API
+ * Returns organization subscription plan information
  */
 async function getSupabaseCosts() {
   try {
-    // Supabase free tier limits
-    const SUPABASE_FREE_TIER_COST = 0; // Free tier
-    const SUPABASE_PRO_COST = 25; // $25/month for Pro
+    const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
+    const SUPABASE_ORG_ID = process.env.SUPABASE_ORG_ID;
 
-    // Check database size and usage
+    // Supabase plan pricing (USD per month)
+    const SUPABASE_PLAN_COSTS = {
+      'free': 0,
+      'pro': 25,
+      'team': 599,
+      'enterprise': 0 // Custom pricing
+    };
+
+    // Get database usage stats
     const { count: totalOrgs } = await supabase
       .from('organisations')
       .select('*', { count: 'exact', head: true });
@@ -101,75 +116,247 @@ async function getSupabaseCosts() {
       .from('translation_usage')
       .select('*', { count: 'exact', head: true });
 
-    // Estimate if we're on free or pro tier based on usage
-    // Free tier: 500MB database, 2GB bandwidth, 50K monthly active users
-    const estimatedOnProTier = (totalOrgs || 0) > 50 || (totalUsageRecords || 0) > 100000;
+    if (!SUPABASE_ACCESS_TOKEN || !SUPABASE_ORG_ID) {
+      // Estimate based on usage if no API credentials
+      const estimatedOnProTier = (totalOrgs || 0) > 50 || (totalUsageRecords || 0) > 100000;
+      const costUSD = estimatedOnProTier ? 25 : 0;
 
-    const cost = estimatedOnProTier ? SUPABASE_PRO_COST : SUPABASE_FREE_TIER_COST;
+      return {
+        cost: costUSD * USD_TO_GBP,
+        costUSD: costUSD,
+        tier: estimatedOnProTier ? 'Pro (estimated)' : 'Free (estimated)',
+        details: {
+          note: 'Add SUPABASE_ACCESS_TOKEN and SUPABASE_ORG_ID to .env for actual plan info',
+          totalOrganisations: totalOrgs || 0,
+          totalUsageRecords: totalUsageRecords || 0
+        }
+      };
+    }
+
+    // Query Supabase Management API for organization subscription
+    const response = await fetch(`https://api.supabase.com/v1/organizations/${SUPABASE_ORG_ID}/billing/subscription`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      // Try alternative endpoint
+      const orgResponse = await fetch(`https://api.supabase.com/v1/organizations/${SUPABASE_ORG_ID}`, {
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (orgResponse.ok) {
+        const orgData = await orgResponse.json();
+        const plan = orgData.subscription_tier || orgData.plan || 'free';
+        const planCostUSD = SUPABASE_PLAN_COSTS[plan.toLowerCase()] || 0;
+
+        return {
+          cost: planCostUSD * USD_TO_GBP,
+          costUSD: planCostUSD,
+          tier: plan.charAt(0).toUpperCase() + plan.slice(1),
+          details: {
+            orgId: SUPABASE_ORG_ID,
+            orgName: orgData.name || 'Unknown',
+            totalOrganisations: totalOrgs || 0,
+            totalUsageRecords: totalUsageRecords || 0
+          }
+        };
+      }
+
+      throw new Error(`Supabase API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const plan = data.tier || data.plan || 'free';
+    const planCostUSD = SUPABASE_PLAN_COSTS[plan.toLowerCase()] || 0;
 
     return {
-      cost,
-      tier: estimatedOnProTier ? 'Pro' : 'Free',
+      cost: planCostUSD * USD_TO_GBP,
+      costUSD: planCostUSD,
+      tier: plan.charAt(0).toUpperCase() + plan.slice(1),
       details: {
+        orgId: SUPABASE_ORG_ID,
+        plan: plan,
         totalOrganisations: totalOrgs || 0,
         totalUsageRecords: totalUsageRecords || 0
       }
     };
   } catch (error) {
-    return { error: error.message, cost: 0 };
+    // Fall back to estimate
+    const { count: totalOrgs } = await supabase
+      .from('organisations')
+      .select('*', { count: 'exact', head: true }).catch(() => ({ count: 0 }));
+
+    const estimatedOnProTier = (totalOrgs || 0) > 50;
+    const costUSD = estimatedOnProTier ? 25 : 0;
+
+    return {
+      error: error.message,
+      cost: costUSD * USD_TO_GBP,
+      costUSD: costUSD,
+      tier: estimatedOnProTier ? 'Pro (estimated)' : 'Free (estimated)'
+    };
   }
 }
 
 /**
- * Get Render costs (estimated based on services)
- * Note: Render doesn't have a public billing API
+ * Get Render costs by querying the Render API
+ * Returns actual service plans and estimated costs
  */
 async function getRenderCosts() {
   try {
-    // Render pricing estimates
-    const RENDER_FREE_TIER = 0;
-    const RENDER_STARTER = 7; // $7/month for starter
-    const RENDER_STANDARD = 25; // $25/month for standard
+    const RENDER_API_KEY = process.env.RENDER_API_KEY;
 
-    // OpenWord uses:
-    // - 1 Web Service (Control Panel) - Standard ($25/month assumed)
-    // - 1 Web Service (Dashboard) - Starter ($7/month assumed)
-    const estimatedCost = RENDER_STANDARD + RENDER_STARTER;
+    // Render plan pricing (USD per month)
+    const RENDER_PLAN_COSTS = {
+      'free': 0,
+      'starter': 7,
+      'starter_plus': 14,
+      'standard': 25,
+      'standard_plus': 50,
+      'pro': 85,
+      'pro_plus': 175,
+      'pro_max': 225,
+      'pro_ultra': 450
+    };
+
+    if (!RENDER_API_KEY) {
+      // Fall back to estimates if no API key
+      return {
+        cost: 32 * USD_TO_GBP, // Estimated: Standard + Starter
+        costUSD: 32,
+        tier: 'Estimated (no API key)',
+        details: {
+          note: 'Add RENDER_API_KEY to .env for actual plan info',
+          services: [
+            { name: 'OpenWord Control Panel', plan: 'Standard (estimated)', costUSD: 25 },
+            { name: 'OpenWord Dashboard', plan: 'Starter (estimated)', costUSD: 7 }
+          ]
+        }
+      };
+    }
+
+    // Query Render API for services
+    const response = await fetch('https://api.render.com/v1/services?limit=50', {
+      headers: {
+        'Authorization': `Bearer ${RENDER_API_KEY}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Render API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const services = data || [];
+
+    let totalCostUSD = 0;
+    const serviceDetails = [];
+
+    for (const item of services) {
+      const service = item.service || item;
+      const planType = service.serviceDetails?.plan || service.plan || 'free';
+      const planCost = RENDER_PLAN_COSTS[planType.toLowerCase()] || 0;
+
+      totalCostUSD += planCost;
+      serviceDetails.push({
+        name: service.name || 'Unknown Service',
+        type: service.type || 'unknown',
+        plan: planType,
+        costUSD: planCost,
+        status: service.suspended === 'suspended' ? 'suspended' : 'active'
+      });
+    }
 
     return {
-      cost: estimatedCost,
+      cost: totalCostUSD * USD_TO_GBP,
+      costUSD: totalCostUSD,
+      tier: `${services.length} service(s)`,
       details: {
-        services: [
-          { name: 'OpenWord Control Panel', plan: 'Standard', cost: RENDER_STANDARD },
-          { name: 'OpenWord Dashboard', plan: 'Starter', cost: RENDER_STARTER }
-        ]
+        services: serviceDetails
       }
     };
   } catch (error) {
-    return { error: error.message, cost: 0 };
+    return {
+      error: error.message,
+      cost: 32 * USD_TO_GBP, // Fallback estimate
+      costUSD: 32,
+      tier: 'Estimated (API error)'
+    };
   }
 }
 
 /**
- * Get Vercel costs (estimated based on usage)
- * Note: Vercel free tier is generous for most use cases
+ * Get Vercel costs by querying the Vercel API
+ * Returns team/user plan information
  */
 async function getVercelCosts() {
   try {
-    // Vercel Hobby tier is free, Pro is $20/month
-    const VERCEL_FREE_TIER = 0;
-    const VERCEL_PRO = 20;
+    const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+    const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
 
-    // Assume free tier for now (can be upgraded)
+    // Vercel plan pricing (USD per month per seat)
+    const VERCEL_PLAN_COSTS = {
+      'hobby': 0,
+      'pro': 20,
+      'enterprise': 0 // Custom pricing
+    };
+
+    if (!VERCEL_TOKEN) {
+      return {
+        cost: 0,
+        costUSD: 0,
+        tier: 'Hobby (Free) - estimated',
+        details: {
+          note: 'Add VERCEL_TOKEN to .env for actual plan info'
+        }
+      };
+    }
+
+    // Query Vercel API for user/team info
+    let endpoint = 'https://api.vercel.com/v2/user';
+    if (VERCEL_TEAM_ID) {
+      endpoint = `https://api.vercel.com/v2/teams/${VERCEL_TEAM_ID}`;
+    }
+
+    const response = await fetch(endpoint, {
+      headers: {
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vercel API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const billing = data.billing || data.user?.billing || {};
+    const plan = billing.plan || data.plan || 'hobby';
+    const planCostUSD = VERCEL_PLAN_COSTS[plan.toLowerCase()] || 0;
+
     return {
-      cost: VERCEL_FREE_TIER,
-      tier: 'Hobby (Free)',
+      cost: planCostUSD * USD_TO_GBP,
+      costUSD: planCostUSD,
+      tier: plan.charAt(0).toUpperCase() + plan.slice(1),
       details: {
-        note: 'Using Vercel Hobby tier for client hosting'
+        teamId: VERCEL_TEAM_ID || 'Personal account',
+        plan: plan
       }
     };
   } catch (error) {
-    return { error: error.message, cost: 0 };
+    return {
+      error: error.message,
+      cost: 0,
+      costUSD: 0,
+      tier: 'Hobby (Free) - estimated'
+    };
   }
 }
 
@@ -246,6 +433,7 @@ async function getMonthlyRevenue() {
 
 /**
  * Get comprehensive costs and revenue analysis
+ * All costs converted to GBP (Sterling)
  */
 export async function getCostsAnalytics() {
   try {
@@ -259,16 +447,23 @@ export async function getCostsAnalytics() {
       getMonthlyRevenue()
     ]);
 
-    // Calculate totals
-    const totalCosts =
+    // Calculate totals (all costs are already in GBP)
+    const totalCostsGBP =
       (deepgram.cost || 0) +
       (googleTranslate.cost || 0) +
       (supabaseCosts.cost || 0) +
       (render.cost || 0) +
       (vercel.cost || 0);
 
+    const totalCostsUSD =
+      (deepgram.costUSD || 0) +
+      (googleTranslate.costUSD || 0) +
+      (supabaseCosts.costUSD || 0) +
+      (render.costUSD || 0) +
+      (vercel.costUSD || 0);
+
     const totalRevenue = (revenue.totalRevenue || 0) + (revenue.usageRevenue || 0);
-    const profit = totalRevenue - totalCosts;
+    const profit = totalRevenue - totalCostsGBP;
     const profitMargin = totalRevenue > 0 ? ((profit / totalRevenue) * 100).toFixed(1) : 0;
 
     return {
@@ -278,34 +473,40 @@ export async function getCostsAnalytics() {
           deepgram: {
             name: 'Deepgram (Speech-to-Text)',
             cost: deepgram.cost || 0,
-            currency: 'USD',
+            costUSD: deepgram.costUSD || 0,
+            currency: 'GBP',
             ...deepgram
           },
           googleTranslate: {
             name: 'Google Cloud Translation',
             cost: googleTranslate.cost || 0,
-            currency: 'USD',
+            costUSD: googleTranslate.costUSD || 0,
+            currency: 'GBP',
             ...googleTranslate
           },
           supabase: {
             name: 'Supabase (Database)',
             cost: supabaseCosts.cost || 0,
-            currency: 'USD',
+            costUSD: supabaseCosts.costUSD || 0,
+            currency: 'GBP',
             ...supabaseCosts
           },
           render: {
             name: 'Render (Server Hosting)',
             cost: render.cost || 0,
-            currency: 'USD',
+            costUSD: render.costUSD || 0,
+            currency: 'GBP',
             ...render
           },
           vercel: {
             name: 'Vercel (Client Hosting)',
             cost: vercel.cost || 0,
-            currency: 'USD',
+            costUSD: vercel.costUSD || 0,
+            currency: 'GBP',
             ...vercel
           },
-          total: totalCosts
+          total: totalCostsGBP,
+          totalUSD: totalCostsUSD
         },
         revenue: {
           stripeRevenue: revenue.totalRevenue || 0,
@@ -316,11 +517,14 @@ export async function getCostsAnalytics() {
           currency: 'GBP'
         },
         summary: {
-          totalCosts,
+          totalCosts: totalCostsGBP,
+          totalCostsUSD: totalCostsUSD,
           totalRevenue,
           profit,
           profitMargin,
-          isProfit: profit >= 0
+          isProfit: profit >= 0,
+          currency: 'GBP',
+          exchangeRate: USD_TO_GBP
         },
         errors: {
           deepgram: deepgram.error,
