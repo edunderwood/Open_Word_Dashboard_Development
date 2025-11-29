@@ -341,6 +341,13 @@
             return num.toString();
         }
 
+        function formatBytes(bytes) {
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return bytes + ' B';
+        }
+
         function formatDate(dateStr) {
             if (!dateStr) return 'N/A';
             return new Date(dateStr).toLocaleDateString('en-US', {
@@ -488,8 +495,14 @@
                         <span class="metric-value">${formatNumber(data.summary.totalRequests)}</span>
                     </div>
                     <div class="metric-row">
-                        <span class="metric-label">Characters Translated</span>
-                        <span class="metric-value">${formatNumber(data.summary.totalCharacters)}</span>
+                        <span class="metric-label">Data Transferred</span>
+                        <span class="metric-value">${formatBytes(data.summary.totalBytes)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Latency (P99)</span>
+                        <span class="metric-value ${parseFloat(data.summary.avgLatencyMs) > 1000 ? 'warning' : 'success'}">
+                            ${data.summary.avgLatencyMs} ms
+                        </span>
                     </div>
                     <div class="metric-row">
                         <span class="metric-label">Error Rate</span>

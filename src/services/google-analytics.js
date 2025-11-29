@@ -112,17 +112,27 @@ export async function getTranslationMetrics(days = 7) {
       'aggregation.perSeriesAligner': 'ALIGN_SUM',
     });
 
-    // Query for Translation API character count
-    const charCountResponse = await monitoring.projects.timeSeries.list({
+    // Query for Translation API request sizes (bytes sent - approximates characters)
+    const requestSizesResponse = await monitoring.projects.timeSeries.list({
       name: `projects/${GOOGLE_PROJECT_ID}`,
-      filter: 'metric.type="translate.googleapis.com/character_count"',
+      filter: 'metric.type="serviceruntime.googleapis.com/api/request_sizes" AND resource.labels.service="translate.googleapis.com"',
       'interval.startTime': startTime.toISOString(),
       'interval.endTime': endTime.toISOString(),
       'aggregation.alignmentPeriod': '86400s',
       'aggregation.perSeriesAligner': 'ALIGN_SUM',
     });
 
-    // Query for error count
+    // Query for Translation API request latencies (performance monitoring)
+    const latencyResponse = await monitoring.projects.timeSeries.list({
+      name: `projects/${GOOGLE_PROJECT_ID}`,
+      filter: 'metric.type="serviceruntime.googleapis.com/api/request_latencies" AND resource.labels.service="translate.googleapis.com"',
+      'interval.startTime': startTime.toISOString(),
+      'interval.endTime': endTime.toISOString(),
+      'aggregation.alignmentPeriod': '86400s',
+      'aggregation.perSeriesAligner': 'ALIGN_PERCENTILE_99',
+    });
+
+    // Query for error count (non-2xx responses)
     const errorCountResponse = await monitoring.projects.timeSeries.list({
       name: `projects/${GOOGLE_PROJECT_ID}`,
       filter: 'metric.type="serviceruntime.googleapis.com/api/request_count" AND resource.labels.service="translate.googleapis.com" AND metric.labels.response_code_class!="2xx"',
@@ -134,7 +144,8 @@ export async function getTranslationMetrics(days = 7) {
 
     return {
       requestCount: requestCountResponse.data.timeSeries || [],
-      characterCount: charCountResponse.data.timeSeries || [],
+      requestSizes: requestSizesResponse.data.timeSeries || [],
+      latency: latencyResponse.data.timeSeries || [],
       errorCount: errorCountResponse.data.timeSeries || [],
     };
   } catch (error) {
@@ -198,9 +209,10 @@ export async function getGoogleAnalytics(days = 7) {
 
     // Process metrics to get totals
     let totalRequests = 0;
-    let totalCharacters = 0;
+    let totalBytes = 0;
     let totalErrors = 0;
-    const dailyData = [];
+    let avgLatencyMs = 0;
+    let latencyPoints = 0;
 
     if (metrics.requestCount && !metrics.error) {
       metrics.requestCount.forEach(series => {
@@ -210,12 +222,35 @@ export async function getGoogleAnalytics(days = 7) {
       });
     }
 
-    if (metrics.characterCount && !metrics.error) {
-      metrics.characterCount.forEach(series => {
+    if (metrics.requestSizes && !metrics.error) {
+      metrics.requestSizes.forEach(series => {
         series.points?.forEach(point => {
-          totalCharacters += parseInt(point.value?.int64Value || 0);
+          // Request sizes can be in distributionValue or int64Value
+          if (point.value?.distributionValue?.mean) {
+            totalBytes += point.value.distributionValue.mean * (point.value.distributionValue.count || 1);
+          } else if (point.value?.int64Value) {
+            totalBytes += parseInt(point.value.int64Value);
+          }
         });
       });
+    }
+
+    if (metrics.latency && !metrics.error) {
+      metrics.latency.forEach(series => {
+        series.points?.forEach(point => {
+          // Latency is in nanoseconds, convert to milliseconds
+          if (point.value?.distributionValue?.mean) {
+            avgLatencyMs += point.value.distributionValue.mean / 1000000;
+            latencyPoints++;
+          } else if (point.value?.int64Value) {
+            avgLatencyMs += parseInt(point.value.int64Value) / 1000000;
+            latencyPoints++;
+          }
+        });
+      });
+      if (latencyPoints > 0) {
+        avgLatencyMs = avgLatencyMs / latencyPoints;
+      }
     }
 
     if (metrics.errorCount && !metrics.error) {
@@ -226,8 +261,11 @@ export async function getGoogleAnalytics(days = 7) {
       });
     }
 
+    // Approximate characters from bytes (1 byte ≈ 1 char for most text)
+    const approxCharacters = Math.round(totalBytes);
+
     // Estimate cost (Translation API v3 is $20 per million characters)
-    const estimatedCost = (totalCharacters / 1000000) * 20;
+    const estimatedCost = (approxCharacters / 1000000) * 20;
 
     return {
       success: true,
@@ -235,9 +273,11 @@ export async function getGoogleAnalytics(days = 7) {
         period: { days },
         summary: {
           totalRequests,
-          totalCharacters,
+          totalBytes,
+          approxCharacters,
           totalErrors,
           errorRate: totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : 0,
+          avgLatencyMs: avgLatencyMs.toFixed(2),
           estimatedCostUSD: estimatedCost.toFixed(2),
         },
         billing: billing.error ? null : billing,

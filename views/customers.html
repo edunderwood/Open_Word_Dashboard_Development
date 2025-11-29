@@ -422,16 +422,22 @@
           ` : ''}
         `;
 
-        // Update footer with actions
+        // Update footer with actions - left side for dangerous actions, right side for close
+        const leftButtons = [];
+        if (customer.subscription_status === 'trialing') {
+          leftButtons.push(`<button class="btn btn-warning" onclick="endTrial('${customer.id}')">End Trial</button>`);
+        }
+        if (customer.stripe_subscription_id && customer.subscription_status === 'active') {
+          leftButtons.push(`<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>`);
+        }
+
         document.getElementById('modalFooter').innerHTML = `
-          ${customer.subscription_status === 'trialing' ?
-            `<button class="btn btn-warning" onclick="endTrial('${customer.id}')">End Trial</button>` : ''
-          }
-          ${customer.stripe_subscription_id && customer.subscription_status === 'active' ?
-            `<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>` : ''
-          }
+          <div style="display: flex; gap: 12px;">
+            ${leftButtons.join('')}
+          </div>
           <button class="btn btn-secondary" onclick="closeModal()">Close</button>
         `;
+        document.getElementById('modalFooter').style.justifyContent = 'space-between';
       } catch (error) {
         console.error('Error loading customer:', error);
         document.getElementById('modalBody').innerHTML =
