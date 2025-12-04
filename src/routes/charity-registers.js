@@ -8,10 +8,11 @@ import supabase from '../services/supabase.js';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import AdmZip from 'adm-zip';
+import * as XLSX from 'xlsx';
 
 const router = express.Router();
 
-// Configure multer for file uploads (memory storage for CSV/ZIP processing)
+// Configure multer for file uploads (memory storage for CSV/ZIP/Excel processing)
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -22,10 +23,14 @@ const upload = multer({
         const isZIP = file.mimetype === 'application/zip' ||
                       file.mimetype === 'application/x-zip-compressed' ||
                       file.originalname.endsWith('.zip');
-        if (isCSV || isZIP) {
+        const isExcel = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                        file.mimetype === 'application/vnd.ms-excel' ||
+                        file.originalname.endsWith('.xlsx') ||
+                        file.originalname.endsWith('.xls');
+        if (isCSV || isZIP || isExcel) {
             cb(null, true);
         } else {
-            cb(new Error('Only CSV or ZIP files are allowed'), false);
+            cb(new Error('Only CSV, ZIP or Excel files are allowed'), false);
         }
     }
 });
@@ -696,40 +701,70 @@ router.post('/ireland', upload.single('file'), async (req, res) => {
 
         console.log(`📂 Processing Ireland charity register upload (${req.file.size} bytes, ${req.file.originalname})`);
 
-        // Parse CSV/Excel content
-        let csvContent;
-        const isZip = req.file.originalname.endsWith('.zip');
+        // Determine file type and parse accordingly
+        let records = [];
+        const fileName = req.file.originalname.toLowerCase();
+        const isZip = fileName.endsWith('.zip');
+        const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
         if (isZip) {
-            console.log('   Extracting CSV from ZIP file...');
+            console.log('   Extracting from ZIP file...');
             const zip = new AdmZip(req.file.buffer);
             const zipEntries = zip.getEntries();
 
+            // Look for CSV or Excel in the ZIP
             const csvEntry = zipEntries.find(entry =>
-                entry.entryName.endsWith('.csv') && !entry.entryName.startsWith('__MACOSX')
+                (entry.entryName.endsWith('.csv') || entry.entryName.endsWith('.xlsx') || entry.entryName.endsWith('.xls')) &&
+                !entry.entryName.startsWith('__MACOSX')
             );
 
             if (!csvEntry) {
                 return res.status(400).json({
-                    error: 'No CSV file found in ZIP archive'
+                    error: 'No CSV or Excel file found in ZIP archive'
                 });
             }
 
-            console.log(`   Found CSV: ${csvEntry.entryName}`);
-            csvContent = zip.readAsText(csvEntry);
+            console.log(`   Found file: ${csvEntry.entryName}`);
+
+            if (csvEntry.entryName.endsWith('.xlsx') || csvEntry.entryName.endsWith('.xls')) {
+                // Parse Excel from ZIP
+                const workbook = XLSX.read(zip.readFile(csvEntry), { type: 'buffer' });
+                const sheetName = workbook.SheetNames[0];
+                records = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+            } else {
+                // Parse CSV from ZIP
+                const csvContent = zip.readAsText(csvEntry);
+                records = parse(csvContent, {
+                    columns: true,
+                    skip_empty_lines: true,
+                    trim: true,
+                    relax_column_count: true
+                });
+            }
+        } else if (isExcel) {
+            console.log('   Parsing Excel file...');
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            records = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+            console.log(`   Sheet: ${sheetName}`);
         } else {
-            csvContent = req.file.buffer.toString('utf-8');
+            // Assume CSV
+            console.log('   Parsing CSV file...');
+            const csvContent = req.file.buffer.toString('utf-8');
+            records = parse(csvContent, {
+                columns: true,
+                skip_empty_lines: true,
+                trim: true,
+                relax_column_count: true
+            });
         }
 
-        // Parse CSV
-        const records = parse(csvContent, {
-            columns: true,
-            skip_empty_lines: true,
-            trim: true,
-            relax_column_count: true
-        });
+        console.log(`   Found ${records.length} records in file`);
 
-        console.log(`   Found ${records.length} records in CSV`);
+        // Log first record columns for debugging
+        if (records.length > 0) {
+            console.log(`   Columns found: ${Object.keys(records[0]).join(', ')}`);
+        }
 
         // Map CRA columns to our schema
         // Expected columns: Registered Charity Number (RCN), Charity Name, Status, etc.

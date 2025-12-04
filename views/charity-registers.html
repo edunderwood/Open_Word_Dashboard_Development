@@ -254,9 +254,9 @@
             </div>
           </div>
           <div class="upload-zone" id="irelandUploadZone" onclick="document.getElementById('irelandFile').click()">
-            <input type="file" id="irelandFile" accept=".csv,.zip" onchange="uploadIreland(this.files[0])">
-            <p><strong>Drop CSV or ZIP file here</strong> or click to browse</p>
-            <small>Upload the CRA charity register file</small>
+            <input type="file" id="irelandFile" accept=".csv,.zip,.xlsx,.xls" onchange="uploadIreland(this.files[0])">
+            <p><strong>Drop Excel, CSV or ZIP file here</strong> or click to browse</p>
+            <small>Upload the CRA charity register file (.xlsx, .csv or .zip)</small>
           </div>
           <div class="upload-progress" id="irelandProgress">
             <div class="text-center text-muted">Uploading and processing...</div>
@@ -288,6 +288,7 @@
           <div class="form-group">
             <label for="searchName">Charity Name</label>
             <input type="text" id="searchName" class="form-input" placeholder="e.g., Red Cross">
+            <small class="text-muted">Note: Name search works for Scotland, NI & Ireland only. England/Wales requires exact charity number.</small>
           </div>
         </div>
         <button class="btn btn-primary" onclick="searchRegisters()">Search</button>
@@ -711,8 +712,9 @@
     }
 
     // Drag and drop for upload zones
-    function setupDragDrop(zoneId, inputId, uploadFn, allowZip = false) {
+    function setupDragDrop(zoneId, inputId, uploadFn, options = {}) {
       const zone = document.getElementById(zoneId);
+      const { allowZip = false, allowExcel = false } = options;
 
       zone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -730,10 +732,16 @@
         const file = e.dataTransfer.files[0];
         const isCSV = file && file.name.endsWith('.csv');
         const isZIP = file && file.name.endsWith('.zip');
-        if (isCSV || (allowZip && isZIP)) {
+        const isExcel = file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'));
+
+        if (isCSV || (allowZip && isZIP) || (allowExcel && isExcel)) {
           uploadFn(file);
         } else {
-          alert(allowZip ? 'Please drop a CSV or ZIP file' : 'Please drop a CSV file');
+          let msg = 'Please drop a CSV file';
+          if (allowZip && allowExcel) msg = 'Please drop an Excel, CSV or ZIP file';
+          else if (allowZip) msg = 'Please drop a CSV or ZIP file';
+          else if (allowExcel) msg = 'Please drop an Excel or CSV file';
+          alert(msg);
         }
       });
     }
@@ -761,9 +769,9 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadRegisterData();
       loadReviews();
-      setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland, true); // Allow ZIP for Scotland
-      setupDragDrop('niUploadZone', 'niFile', uploadNI, false);
-      setupDragDrop('irelandUploadZone', 'irelandFile', uploadIreland, true); // Allow ZIP for Ireland
+      setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland, { allowZip: true });
+      setupDragDrop('niUploadZone', 'niFile', uploadNI, {});
+      setupDragDrop('irelandUploadZone', 'irelandFile', uploadIreland, { allowZip: true, allowExcel: true });
     });
   </script>
 </body>
