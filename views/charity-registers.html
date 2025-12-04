@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Charity Registers - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .upload-zone {
+      border: 2px dashed var(--gray-300);
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: var(--gray-50);
+    }
+    .upload-zone:hover {
+      border-color: var(--primary);
+      background: #f0f9ff;
+    }
+    .upload-zone.dragover {
+      border-color: var(--primary);
+      background: #e0f2fe;
+    }
+    .upload-zone input[type="file"] {
+      display: none;
+    }
+    .register-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid var(--gray-200);
+      margin-bottom: 15px;
+    }
+    .register-info h4 {
+      margin: 0 0 5px 0;
+      color: var(--gray-800);
+    }
+    .register-info p {
+      margin: 0;
+      color: var(--gray-500);
+      font-size: 0.875rem;
+    }
+    .register-stats {
+      text-align: right;
+    }
+    .register-stats .count {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .register-stats .date {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .review-item {
+      padding: 15px;
+      background: #fffbeb;
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .review-item h5 {
+      margin: 0 0 5px 0;
+    }
+    .review-item .meta {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      margin-bottom: 10px;
+    }
+    .search-results {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .search-result-item {
+      padding: 10px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .search-result-item:last-child {
+      border-bottom: none;
+    }
+    .upload-progress {
+      display: none;
+      margin-top: 15px;
+    }
+    .upload-progress.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/costs">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Costs
+            </a>
+          </li>
+          <li>
+            <a href="/charity-registers" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Charity Registers
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+          <li>
+            <a href="/analytics">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              Analytics
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>UK Charity Registers</h2>
+          <p>Manage charity validation registers for Scotland (OSCR) and Northern Ireland (CCNI)</p>
+        </div>
+      </div>
+
+      <!-- Register Status Cards -->
+      <div class="grid grid-2" style="margin-bottom: 20px;">
+        <!-- Scotland Register -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Scotland (OSCR)</h3>
+          </div>
+          <div class="register-card">
+            <div class="register-info">
+              <h4>Office of the Scottish Charity Regulator</h4>
+              <p>Download from: <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-register-download/" target="_blank">OSCR Website</a></p>
+            </div>
+            <div class="register-stats">
+              <div class="count" id="scotlandCount">-</div>
+              <div>charities</div>
+              <div class="date" id="scotlandDate">Never updated</div>
+            </div>
+          </div>
+          <div class="upload-zone" id="scotlandUploadZone" onclick="document.getElementById('scotlandFile').click()">
+            <input type="file" id="scotlandFile" accept=".csv" onchange="uploadScotland(this.files[0])">
+            <p><strong>Drop CSV file here</strong> or click to browse</p>
+            <small>Upload the OSCR charity register CSV file</small>
+          </div>
+          <div class="upload-progress" id="scotlandProgress">
+            <div class="text-center text-muted">Uploading and processing...</div>
+          </div>
+        </div>
+
+        <!-- Northern Ireland Register -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Northern Ireland (CCNI)</h3>
+          </div>
+          <div class="register-card">
+            <div class="register-info">
+              <h4>Charity Commission for Northern Ireland</h4>
+              <p>Download from: <a href="https://www.charitycommissionni.org.uk/charity-search/" target="_blank">CCNI Website</a></p>
+            </div>
+            <div class="register-stats">
+              <div class="count" id="niCount">-</div>
+              <div>charities</div>
+              <div class="date" id="niDate">Never updated</div>
+            </div>
+          </div>
+          <div class="upload-zone" id="niUploadZone" onclick="document.getElementById('niFile').click()">
+            <input type="file" id="niFile" accept=".csv" onchange="uploadNI(this.files[0])">
+            <p><strong>Drop CSV file here</strong> or click to browse</p>
+            <small>Upload the CCNI charity register CSV file</small>
+          </div>
+          <div class="upload-progress" id="niProgress">
+            <div class="text-center text-muted">Uploading and processing...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Reviews -->
+      <div class="card">
+        <div class="card-header flex justify-between items-center">
+          <h3>Pending Charity Reviews</h3>
+          <button class="btn btn-sm btn-outline" onclick="loadReviews()">Refresh</button>
+        </div>
+        <div id="reviewsList">
+          <p class="text-center text-muted" style="padding: 20px;">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Search Register -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Search Registers</h3>
+        </div>
+        <div class="grid grid-2" style="margin-bottom: 15px;">
+          <div class="form-group">
+            <label for="searchNumber">Charity Number</label>
+            <input type="text" id="searchNumber" class="form-input" placeholder="e.g., SC012345 or NIC100123">
+          </div>
+          <div class="form-group">
+            <label for="searchName">Charity Name</label>
+            <input type="text" id="searchName" class="form-input" placeholder="e.g., Red Cross">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="searchRegisters()">Search</button>
+        <div id="searchResults" class="search-results" style="margin-top: 15px;">
+          <!-- Results will appear here -->
+        </div>
+      </div>
+
+      <!-- Info Card -->
+      <div class="card">
+        <h3 style="margin-bottom: 15px;">About Charity Validation</h3>
+        <ul style="color: var(--gray-600); line-height: 1.8;">
+          <li><strong>England & Wales:</strong> Validated in real-time via Charity Commission API</li>
+          <li><strong>Scotland:</strong> Validated against OSCR register (uploaded monthly)</li>
+          <li><strong>Northern Ireland:</strong> Validated against CCNI register (uploaded monthly)</li>
+          <li>Verified charities receive a <strong>50% discount</strong> on all pricing tiers</li>
+          <li>Unverified charities can request manual review, which appears above</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+
+  <!-- Approve Modal -->
+  <div class="modal-overlay" id="approveModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Approve Charity Status</h3>
+        <button class="modal-close" onclick="closeApproveModal()">&times;</button>
+      </div>
+      <form onsubmit="confirmApprove(event)">
+        <div class="modal-body">
+          <input type="hidden" id="approveOrgId">
+          <p>Approving charity status for: <strong id="approveOrgName"></strong></p>
+          <p>Charity Number: <strong id="approveCharityNumber"></strong></p>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="approveRegisteredName">Registered Name (optional)</label>
+            <input type="text" id="approveRegisteredName" class="form-input" placeholder="Official registered charity name">
+          </div>
+          <div class="form-group">
+            <label for="approveNotes">Notes (optional)</label>
+            <textarea id="approveNotes" class="form-input" rows="2" placeholder="Any notes about this approval"></textarea>
+          </div>
+          <p class="text-muted" style="margin-top: 10px;">This will apply a 50% discount to this organisation.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeApproveModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Approve & Apply Discount</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reject Modal -->
+  <div class="modal-overlay" id="rejectModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Reject Charity Status</h3>
+        <button class="modal-close" onclick="closeRejectModal()">&times;</button>
+      </div>
+      <form onsubmit="confirmReject(event)">
+        <div class="modal-body">
+          <input type="hidden" id="rejectOrgId">
+          <p>Rejecting charity status for: <strong id="rejectOrgName"></strong></p>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="rejectReason">Reason for rejection *</label>
+            <textarea id="rejectReason" class="form-input" rows="3" placeholder="e.g., Charity number not found in official register" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeRejectModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Reject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Load register metadata
+    async function loadRegisterData() {
+      try {
+        const response = await fetch('/api/charity-registers');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        // Scotland
+        const scotland = data.data.scotland;
+        document.getElementById('scotlandCount').textContent = scotland.actualRecordCount?.toLocaleString() || '0';
+        if (scotland.last_updated) {
+          document.getElementById('scotlandDate').textContent =
+            'Updated: ' + new Date(scotland.last_updated).toLocaleDateString();
+        }
+
+        // Northern Ireland
+        const ni = data.data.northern_ireland;
+        document.getElementById('niCount').textContent = ni.actualRecordCount?.toLocaleString() || '0';
+        if (ni.last_updated) {
+          document.getElementById('niDate').textContent =
+            'Updated: ' + new Date(ni.last_updated).toLocaleDateString();
+        }
+      } catch (error) {
+        console.error('Error loading register data:', error);
+      }
+    }
+
+    // Load pending reviews
+    async function loadReviews() {
+      try {
+        const response = await fetch('/api/charity-registers/reviews');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('reviewsList');
+
+        if (data.data.length === 0) {
+          container.innerHTML = '<p class="text-center text-muted" style="padding: 20px;">No pending reviews</p>';
+          return;
+        }
+
+        container.innerHTML = data.data.map(review => `
+          <div class="review-item">
+            <h5>${review.name}</h5>
+            <div class="meta">
+              Charity Number: <strong>${review.charity_number}</strong> |
+              Region: ${review.charity_region || 'Unknown'} |
+              Requested: ${new Date(review.charity_review_requested_at).toLocaleDateString()}
+            </div>
+            ${review.charity_review_reason ? `<p style="font-size: 0.875rem; margin-bottom: 10px;">${review.charity_review_reason}</p>` : ''}
+            <div>
+              <button class="btn btn-sm btn-primary" onclick="showApproveModal('${review.id}', '${review.name.replace(/'/g, "\\'")}', '${review.charity_number}')">Approve</button>
+              <button class="btn btn-sm btn-danger" onclick="showRejectModal('${review.id}', '${review.name.replace(/'/g, "\\'")}')">Reject</button>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading reviews:', error);
+        document.getElementById('reviewsList').innerHTML =
+          '<p class="text-center text-danger" style="padding: 20px;">Error loading reviews</p>';
+      }
+    }
+
+    // Upload Scotland register
+    async function uploadScotland(file) {
+      if (!file) return;
+      if (!confirm(`Upload ${file.name} to replace the Scotland charity register?`)) {
+        document.getElementById('scotlandFile').value = '';
+        return;
+      }
+
+      const progress = document.getElementById('scotlandProgress');
+      progress.classList.add('active');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/charity-registers/scotland', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        alert(`Success! ${data.stats.insertedRecords.toLocaleString()} Scottish charities imported.`);
+        loadRegisterData();
+
+      } catch (error) {
+        alert('Error uploading: ' + error.message);
+      } finally {
+        progress.classList.remove('active');
+        document.getElementById('scotlandFile').value = '';
+      }
+    }
+
+    // Upload NI register
+    async function uploadNI(file) {
+      if (!file) return;
+      if (!confirm(`Upload ${file.name} to replace the Northern Ireland charity register?`)) {
+        document.getElementById('niFile').value = '';
+        return;
+      }
+
+      const progress = document.getElementById('niProgress');
+      progress.classList.add('active');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/charity-registers/northern-ireland', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        alert(`Success! ${data.stats.insertedRecords.toLocaleString()} NI charities imported.`);
+        loadRegisterData();
+
+      } catch (error) {
+        alert('Error uploading: ' + error.message);
+      } finally {
+        progress.classList.remove('active');
+        document.getElementById('niFile').value = '';
+      }
+    }
+
+    // Search registers
+    async function searchRegisters() {
+      const number = document.getElementById('searchNumber').value.trim();
+      const name = document.getElementById('searchName').value.trim();
+
+      if (!number && !name) {
+        alert('Please enter a charity number or name to search');
+        return;
+      }
+
+      const container = document.getElementById('searchResults');
+      container.innerHTML = '<p class="text-center text-muted">Searching...</p>';
+
+      try {
+        const params = new URLSearchParams();
+        if (number) params.append('number', number);
+        if (name) params.append('name', name);
+
+        const response = await fetch(`/api/charity-registers/search?${params}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        if (data.data.length === 0) {
+          container.innerHTML = '<p class="text-center text-muted">No results found</p>';
+          return;
+        }
+
+        container.innerHTML = data.data.map(charity => `
+          <div class="search-result-item">
+            <strong>${charity.charity_name}</strong>
+            <br>
+            <span class="badge ${charity.charity_status === 'Registered' ? 'badge-success' : 'badge-gray'}">${charity.charity_status}</span>
+            <span class="text-muted" style="font-size: 0.875rem; margin-left: 10px;">
+              ${charity.charity_number} | ${charity.source === 'scotland' ? 'Scotland' : 'Northern Ireland'}
+              ${charity.postcode ? ` | ${charity.postcode}` : ''}
+            </span>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        container.innerHTML = `<p class="text-center text-danger">Error: ${error.message}</p>`;
+      }
+    }
+
+    // Approve modal functions
+    function showApproveModal(orgId, orgName, charityNumber) {
+      document.getElementById('approveOrgId').value = orgId;
+      document.getElementById('approveOrgName').textContent = orgName;
+      document.getElementById('approveCharityNumber').textContent = charityNumber;
+      document.getElementById('approveRegisteredName').value = '';
+      document.getElementById('approveNotes').value = '';
+      document.getElementById('approveModal').classList.add('active');
+    }
+
+    function closeApproveModal() {
+      document.getElementById('approveModal').classList.remove('active');
+    }
+
+    async function confirmApprove(event) {
+      event.preventDefault();
+      const orgId = document.getElementById('approveOrgId').value;
+      const registeredName = document.getElementById('approveRegisteredName').value;
+      const notes = document.getElementById('approveNotes').value;
+
+      try {
+        const response = await fetch(`/api/charity-registers/reviews/${orgId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registeredName, notes })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Charity status approved - 50% discount applied');
+        closeApproveModal();
+        loadReviews();
+
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // Reject modal functions
+    function showRejectModal(orgId, orgName) {
+      document.getElementById('rejectOrgId').value = orgId;
+      document.getElementById('rejectOrgName').textContent = orgName;
+      document.getElementById('rejectReason').value = '';
+      document.getElementById('rejectModal').classList.add('active');
+    }
+
+    function closeRejectModal() {
+      document.getElementById('rejectModal').classList.remove('active');
+    }
+
+    async function confirmReject(event) {
+      event.preventDefault();
+      const orgId = document.getElementById('rejectOrgId').value;
+      const reason = document.getElementById('rejectReason').value;
+
+      try {
+        const response = await fetch(`/api/charity-registers/reviews/${orgId}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Charity review rejected');
+        closeRejectModal();
+        loadReviews();
+
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // Drag and drop for upload zones
+    function setupDragDrop(zoneId, inputId, uploadFn) {
+      const zone = document.getElementById(zoneId);
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+
+      zone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.csv')) {
+          uploadFn(file);
+        } else {
+          alert('Please drop a CSV file');
+        }
+      });
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadRegisterData();
+      loadReviews();
+      setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland);
+      setupDragDrop('niUploadZone', 'niFile', uploadNI);
+    });
+  </script>
+</body>
+</html>
