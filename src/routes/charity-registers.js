@@ -90,6 +90,38 @@ router.get('/search', async (req, res) => {
         if (number) {
             const normalized = number.toUpperCase().trim();
 
+            // Check England/Wales via Charity Commission API (6-7 digit numbers)
+            if (/^\d{6,7}$/.test(normalized) || /^\d{6,7}-\d{1,2}$/.test(normalized)) {
+                const apiKey = process.env.CHARITY_COMMISSION_API_KEY;
+                if (apiKey) {
+                    try {
+                        const url = `https://api.charitycommission.gov.uk/register/api/allcharitydetails/${normalized}/0`;
+                        const response = await fetch(url, {
+                            headers: {
+                                'Ocp-Apim-Subscription-Key': apiKey,
+                                'Accept': 'application/json'
+                            }
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const charity = Array.isArray(data) ? data[0] : data;
+                            if (charity) {
+                                results.push({
+                                    charity_number: charity.reg_charity_number?.toString() || normalized,
+                                    charity_name: charity.charity_name,
+                                    charity_status: charity.reg_status,
+                                    registered_date: charity.date_of_registration,
+                                    source: 'england_wales'
+                                });
+                            }
+                        }
+                    } catch (apiError) {
+                        console.error('Charity Commission API error:', apiError.message);
+                    }
+                }
+            }
+
             // Check Scotland register
             if (normalized.startsWith('SC')) {
                 const { data } = await supabase
@@ -98,7 +130,7 @@ router.get('/search', async (req, res) => {
                     .eq('charity_number', normalized);
 
                 if (data && data.length > 0) {
-                    results = data.map(r => ({ ...r, source: 'scotland' }));
+                    results = [...results, ...data.map(r => ({ ...r, source: 'scotland' }))];
                 }
             }
 
@@ -138,6 +170,8 @@ router.get('/search', async (req, res) => {
             if (niResults.data) {
                 results = [...results, ...niResults.data.map(r => ({ ...r, source: 'northern_ireland' }))];
             }
+
+            // Note: England/Wales name search not supported via API (number lookup only)
         }
 
         res.json({

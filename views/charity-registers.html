@@ -543,17 +543,21 @@
           return;
         }
 
-        container.innerHTML = data.data.map(charity => `
+        container.innerHTML = data.data.map(charity => {
+          const regionName = charity.source === 'scotland' ? 'Scotland' :
+                             charity.source === 'england_wales' ? 'England & Wales' :
+                             'Northern Ireland';
+          return `
           <div class="search-result-item">
             <strong>${charity.charity_name}</strong>
             <br>
             <span class="badge ${charity.charity_status === 'Registered' ? 'badge-success' : 'badge-gray'}">${charity.charity_status}</span>
             <span class="text-muted" style="font-size: 0.875rem; margin-left: 10px;">
-              ${charity.charity_number} | ${charity.source === 'scotland' ? 'Scotland' : 'Northern Ireland'}
+              ${charity.charity_number} | ${regionName}
               ${charity.postcode ? ` | ${charity.postcode}` : ''}
             </span>
           </div>
-        `).join('');
+        `}).join('');
 
       } catch (error) {
         container.innerHTML = `<p class="text-center text-danger">Error: ${error.message}</p>`;
