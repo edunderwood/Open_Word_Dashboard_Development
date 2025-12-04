@@ -184,7 +184,7 @@
           <div class="register-card">
             <div class="register-info">
               <h4>Office of the Scottish Charity Regulator</h4>
-              <p>Download from: <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-register-download/" target="_blank">OSCR Website</a></p>
+              <p>Download from: <a href="https://www.oscr.org.uk/about-charities/search-the-register/download-the-scottish-charity-register/" target="_blank">OSCR Website</a></p>
             </div>
             <div class="register-stats">
               <div class="count" id="scotlandCount">-</div>
@@ -192,13 +192,22 @@
               <div class="date" id="scotlandDate">Never updated</div>
             </div>
           </div>
+          <!-- API Sync Button -->
+          <div style="margin-bottom: 15px;">
+            <button class="btn btn-primary" onclick="syncScotlandFromApi()" id="scotlandSyncBtn">
+              Sync from OSCR API
+            </button>
+            <small class="text-muted" style="display: block; margin-top: 5px;">
+              Fetch all charities directly from the OSCR API (recommended)
+            </small>
+          </div>
           <div class="upload-zone" id="scotlandUploadZone" onclick="document.getElementById('scotlandFile').click()">
-            <input type="file" id="scotlandFile" accept=".csv" onchange="uploadScotland(this.files[0])">
-            <p><strong>Drop CSV file here</strong> or click to browse</p>
-            <small>Upload the OSCR charity register CSV file</small>
+            <input type="file" id="scotlandFile" accept=".csv,.zip" onchange="uploadScotland(this.files[0])">
+            <p><strong>Drop ZIP or CSV file here</strong> or click to browse</p>
+            <small>Or upload the OSCR charity register file manually (ZIP or CSV)</small>
           </div>
           <div class="upload-progress" id="scotlandProgress">
-            <div class="text-center text-muted">Uploading and processing...</div>
+            <div class="text-center text-muted" id="scotlandProgressText">Uploading and processing...</div>
           </div>
         </div>
 
@@ -266,11 +275,15 @@
         <h3 style="margin-bottom: 15px;">About Charity Validation</h3>
         <ul style="color: var(--gray-600); line-height: 1.8;">
           <li><strong>England & Wales:</strong> Validated in real-time via Charity Commission API</li>
-          <li><strong>Scotland:</strong> Validated against OSCR register (uploaded monthly)</li>
+          <li><strong>Scotland:</strong> Validated in real-time via OSCR API (with database fallback)</li>
           <li><strong>Northern Ireland:</strong> Validated against CCNI register (uploaded monthly)</li>
           <li>Verified charities receive a <strong>50% discount</strong> on all pricing tiers</li>
           <li>Unverified charities can request manual review, which appears above</li>
         </ul>
+        <p style="margin-top: 15px; color: var(--gray-500); font-size: 0.875rem;">
+          <strong>Note:</strong> The Scotland database is a fallback for when the OSCR API is unavailable.
+          Use "Sync from OSCR API" to populate the database with the latest data.
+        </p>
       </div>
     </main>
   </div>
@@ -393,6 +406,42 @@
         console.error('Error loading reviews:', error);
         document.getElementById('reviewsList').innerHTML =
           '<p class="text-center text-danger" style="padding: 20px;">Error loading reviews</p>';
+      }
+    }
+
+    // Sync Scotland from OSCR API
+    async function syncScotlandFromApi() {
+      if (!confirm('Sync the Scotland charity register from the OSCR API? This may take a few minutes.')) {
+        return;
+      }
+
+      const btn = document.getElementById('scotlandSyncBtn');
+      const progress = document.getElementById('scotlandProgress');
+      const progressText = document.getElementById('scotlandProgressText');
+
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+      progress.classList.add('active');
+      progressText.textContent = 'Fetching charities from OSCR API... This may take a few minutes.';
+
+      try {
+        const response = await fetch('/api/charity-registers/scotland/sync', {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        alert(`Success! ${data.stats.insertedRecords.toLocaleString()} Scottish charities synced from OSCR API.`);
+        loadRegisterData();
+
+      } catch (error) {
+        alert('Error syncing: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sync from OSCR API';
+        progress.classList.remove('active');
       }
     }
 
@@ -587,7 +636,7 @@
     }
 
     // Drag and drop for upload zones
-    function setupDragDrop(zoneId, inputId, uploadFn) {
+    function setupDragDrop(zoneId, inputId, uploadFn, allowZip = false) {
       const zone = document.getElementById(zoneId);
 
       zone.addEventListener('dragover', (e) => {
@@ -604,10 +653,12 @@
         e.preventDefault();
         zone.classList.remove('dragover');
         const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.csv')) {
+        const isCSV = file && file.name.endsWith('.csv');
+        const isZIP = file && file.name.endsWith('.zip');
+        if (isCSV || (allowZip && isZIP)) {
           uploadFn(file);
         } else {
-          alert('Please drop a CSV file');
+          alert(allowZip ? 'Please drop a CSV or ZIP file' : 'Please drop a CSV file');
         }
       });
     }
@@ -635,8 +686,8 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadRegisterData();
       loadReviews();
-      setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland);
-      setupDragDrop('niUploadZone', 'niFile', uploadNI);
+      setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland, true); // Allow ZIP for Scotland
+      setupDragDrop('niUploadZone', 'niFile', uploadNI, false);
     });
   </script>
 </body>
