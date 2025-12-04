@@ -44,9 +44,10 @@ router.get('/', async (req, res) => {
         if (metaError) throw metaError;
 
         // Get record counts from actual tables
-        const [scotlandCount, niCount] = await Promise.all([
+        const [scotlandCount, niCount, irelandCount] = await Promise.all([
             supabase.from('charity_register_scotland').select('id', { count: 'exact', head: true }),
-            supabase.from('charity_register_ni').select('id', { count: 'exact', head: true })
+            supabase.from('charity_register_ni').select('id', { count: 'exact', head: true }),
+            supabase.from('charity_register_ireland').select('id', { count: 'exact', head: true })
         ]);
 
         const registers = {
@@ -57,6 +58,10 @@ router.get('/', async (req, res) => {
             northern_ireland: {
                 ...(metadata?.find(r => r.register_name === 'northern_ireland') || {}),
                 actualRecordCount: niCount.count || 0
+            },
+            ireland: {
+                ...(metadata?.find(r => r.register_name === 'ireland') || {}),
+                actualRecordCount: irelandCount.count || 0
             }
         };
 
@@ -145,13 +150,25 @@ router.get('/search', async (req, res) => {
                     results = [...results, ...data.map(r => ({ ...r, source: 'northern_ireland' }))];
                 }
             }
+
+            // Check Ireland register (8 digits starting with 20, or CHY prefix)
+            if (/^20\d{6}$/.test(normalized) || normalized.startsWith('CHY')) {
+                const { data } = await supabase
+                    .from('charity_register_ireland')
+                    .select('*')
+                    .eq('charity_number', normalized);
+
+                if (data && data.length > 0) {
+                    results = [...results, ...data.map(r => ({ ...r, source: 'ireland' }))];
+                }
+            }
         }
 
         if (name && name.length >= 3) {
-            // Search by name in both registers (limit results)
+            // Search by name in all database registers (limit results)
             const searchTerm = `%${name}%`;
 
-            const [scotlandResults, niResults] = await Promise.all([
+            const [scotlandResults, niResults, irelandResults] = await Promise.all([
                 supabase
                     .from('charity_register_scotland')
                     .select('*')
@@ -159,6 +176,11 @@ router.get('/search', async (req, res) => {
                     .limit(20),
                 supabase
                     .from('charity_register_ni')
+                    .select('*')
+                    .ilike('charity_name', searchTerm)
+                    .limit(20),
+                supabase
+                    .from('charity_register_ireland')
                     .select('*')
                     .ilike('charity_name', searchTerm)
                     .limit(20)
@@ -169,6 +191,9 @@ router.get('/search', async (req, res) => {
             }
             if (niResults.data) {
                 results = [...results, ...niResults.data.map(r => ({ ...r, source: 'northern_ireland' }))];
+            }
+            if (irelandResults.data) {
+                results = [...results, ...irelandResults.data.map(r => ({ ...r, source: 'ireland' }))];
             }
 
             // Note: England/Wales name search not supported via API (number lookup only)
@@ -656,6 +681,141 @@ router.post('/northern-ireland', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Error processing NI register:', error);
         res.status(500).json({ error: `Error processing CSV: ${error.message}` });
+    }
+});
+
+/**
+ * POST /api/charity-registers/ireland
+ * Upload Ireland (CRA) charity register Excel/CSV
+ */
+router.post('/ireland', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        console.log(`📂 Processing Ireland charity register upload (${req.file.size} bytes, ${req.file.originalname})`);
+
+        // Parse CSV/Excel content
+        let csvContent;
+        const isZip = req.file.originalname.endsWith('.zip');
+
+        if (isZip) {
+            console.log('   Extracting CSV from ZIP file...');
+            const zip = new AdmZip(req.file.buffer);
+            const zipEntries = zip.getEntries();
+
+            const csvEntry = zipEntries.find(entry =>
+                entry.entryName.endsWith('.csv') && !entry.entryName.startsWith('__MACOSX')
+            );
+
+            if (!csvEntry) {
+                return res.status(400).json({
+                    error: 'No CSV file found in ZIP archive'
+                });
+            }
+
+            console.log(`   Found CSV: ${csvEntry.entryName}`);
+            csvContent = zip.readAsText(csvEntry);
+        } else {
+            csvContent = req.file.buffer.toString('utf-8');
+        }
+
+        // Parse CSV
+        const records = parse(csvContent, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true,
+            relax_column_count: true
+        });
+
+        console.log(`   Found ${records.length} records in CSV`);
+
+        // Map CRA columns to our schema
+        // Expected columns: Registered Charity Number (RCN), Charity Name, Status, etc.
+        const charities = records.map(row => {
+            const charityNum = (
+                row['Registered Charity Number'] ||
+                row['RCN'] ||
+                row['Charity Number'] ||
+                row['charity_number'] ||
+                ''
+            ).toString().toUpperCase().trim();
+
+            return {
+                charity_number: charityNum,
+                charity_name: row['Charity Name'] || row['charity_name'] || row['Name'] || '',
+                charity_status: row['Status'] || row['status'] || row['Charity Status'] || 'Registered',
+                registered_date: parseDate(row['Date Registered'] || row['Registered Date'] || row['registered_date']),
+                charitable_purpose: row['Charitable Purpose'] || row['charitable_purpose'] || row['Main Charitable Purpose'] || ''
+            };
+        }).filter(c => c.charity_number && (/^20\d{6}$/.test(c.charity_number) || c.charity_number.startsWith('CHY')));
+
+        console.log(`   Filtered to ${charities.length} valid Ireland charity records`);
+
+        if (charities.length === 0) {
+            return res.status(400).json({
+                error: 'No valid Ireland charity records found. Expected "Registered Charity Number" column with 8-digit numbers starting with 20, or CHY prefix.'
+            });
+        }
+
+        // Clear existing records
+        const { error: deleteError } = await supabase
+            .from('charity_register_ireland')
+            .delete()
+            .neq('id', 0);
+
+        if (deleteError) {
+            console.error('Error clearing Ireland register:', deleteError);
+            return res.status(500).json({ error: 'Error clearing existing records' });
+        }
+
+        // Insert in batches of 1000
+        const batchSize = 1000;
+        let insertedCount = 0;
+        let errors = [];
+
+        for (let i = 0; i < charities.length; i += batchSize) {
+            const batch = charities.slice(i, i + batchSize);
+            const { error: insertError } = await supabase
+                .from('charity_register_ireland')
+                .insert(batch);
+
+            if (insertError) {
+                console.error(`Error inserting batch ${i / batchSize + 1}:`, insertError);
+                errors.push(insertError.message);
+            } else {
+                insertedCount += batch.length;
+            }
+        }
+
+        // Update metadata
+        await supabase
+            .from('charity_register_metadata')
+            .upsert({
+                register_name: 'ireland',
+                last_updated: new Date().toISOString(),
+                record_count: insertedCount,
+                source_url: 'https://www.charitiesregulator.ie/en/information-for-the-public/search-the-register-of-charities',
+                notes: `Uploaded via dashboard on ${new Date().toLocaleDateString()}`
+            }, { onConflict: 'register_name' });
+
+        console.log(`✅ Ireland register updated: ${insertedCount} records`);
+
+        res.json({
+            success: true,
+            message: `Ireland charity register updated successfully`,
+            stats: {
+                totalInCsv: records.length,
+                validRecords: charities.length,
+                insertedRecords: insertedCount,
+                errors: errors.length > 0 ? errors : undefined
+            }
+        });
+
+    } catch (error) {
+        console.error('Error processing Ireland register:', error);
+        res.status(500).json({ error: `Error processing file: ${error.message}` });
     }
 });
 

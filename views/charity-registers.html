@@ -169,13 +169,13 @@
     <main class="main-content">
       <div class="page-header">
         <div>
-          <h2>UK Charity Registers</h2>
-          <p>Manage charity validation registers for Scotland (OSCR) and Northern Ireland (CCNI)</p>
+          <h2>UK & Ireland Charity Registers</h2>
+          <p>Manage charity validation registers for UK and Ireland</p>
         </div>
       </div>
 
       <!-- Register Status Cards -->
-      <div class="grid grid-2" style="margin-bottom: 20px;">
+      <div class="grid grid-3" style="margin-bottom: 20px;">
         <!-- Scotland Register -->
         <div class="card">
           <div class="card-header">
@@ -236,6 +236,32 @@
             <div class="text-center text-muted">Uploading and processing...</div>
           </div>
         </div>
+
+        <!-- Ireland Register -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Ireland (CRA)</h3>
+          </div>
+          <div class="register-card">
+            <div class="register-info">
+              <h4>Charities Regulator Authority</h4>
+              <p>Download from: <a href="https://www.charitiesregulator.ie/en/information-for-the-public/search-the-register-of-charities" target="_blank">CRA Website</a></p>
+            </div>
+            <div class="register-stats">
+              <div class="count" id="irelandCount">-</div>
+              <div>charities</div>
+              <div class="date" id="irelandDate">Never updated</div>
+            </div>
+          </div>
+          <div class="upload-zone" id="irelandUploadZone" onclick="document.getElementById('irelandFile').click()">
+            <input type="file" id="irelandFile" accept=".csv,.zip" onchange="uploadIreland(this.files[0])">
+            <p><strong>Drop CSV or ZIP file here</strong> or click to browse</p>
+            <small>Upload the CRA charity register file</small>
+          </div>
+          <div class="upload-progress" id="irelandProgress">
+            <div class="text-center text-muted">Uploading and processing...</div>
+          </div>
+        </div>
       </div>
 
       <!-- Pending Reviews -->
@@ -276,7 +302,8 @@
         <ul style="color: var(--gray-600); line-height: 1.8;">
           <li><strong>England & Wales:</strong> Validated in real-time via Charity Commission API</li>
           <li><strong>Scotland:</strong> Validated in real-time via OSCR API (with database fallback)</li>
-          <li><strong>Northern Ireland:</strong> Validated against CCNI register (uploaded monthly)</li>
+          <li><strong>Northern Ireland:</strong> Validated against CCNI register (uploaded periodically)</li>
+          <li><strong>Ireland (ROI):</strong> Validated against CRA register (uploaded periodically)</li>
           <li>Verified charities receive a <strong>50% discount</strong> on all pricing tiers</li>
           <li>Unverified charities can request manual review, which appears above</li>
         </ul>
@@ -365,6 +392,14 @@
         if (ni.last_updated) {
           document.getElementById('niDate').textContent =
             'Updated: ' + new Date(ni.last_updated).toLocaleDateString();
+        }
+
+        // Ireland
+        const ireland = data.data.ireland;
+        document.getElementById('irelandCount').textContent = ireland?.actualRecordCount?.toLocaleString() || '0';
+        if (ireland?.last_updated) {
+          document.getElementById('irelandDate').textContent =
+            'Updated: ' + new Date(ireland.last_updated).toLocaleDateString();
         }
       } catch (error) {
         console.error('Error loading register data:', error);
@@ -515,6 +550,41 @@
       }
     }
 
+    // Upload Ireland register
+    async function uploadIreland(file) {
+      if (!file) return;
+      if (!confirm(`Upload ${file.name} to replace the Ireland charity register?`)) {
+        document.getElementById('irelandFile').value = '';
+        return;
+      }
+
+      const progress = document.getElementById('irelandProgress');
+      progress.classList.add('active');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/charity-registers/ireland', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        alert(`Success! ${data.stats.insertedRecords.toLocaleString()} Ireland charities imported.`);
+        loadRegisterData();
+
+      } catch (error) {
+        alert('Error uploading: ' + error.message);
+      } finally {
+        progress.classList.remove('active');
+        document.getElementById('irelandFile').value = '';
+      }
+    }
+
     // Search registers
     async function searchRegisters() {
       const number = document.getElementById('searchNumber').value.trim();
@@ -546,6 +616,7 @@
         container.innerHTML = data.data.map(charity => {
           const regionName = charity.source === 'scotland' ? 'Scotland' :
                              charity.source === 'england_wales' ? 'England & Wales' :
+                             charity.source === 'ireland' ? 'Ireland' :
                              'Northern Ireland';
           return `
           <div class="search-result-item">
@@ -692,6 +763,7 @@
       loadReviews();
       setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland, true); // Allow ZIP for Scotland
       setupDragDrop('niUploadZone', 'niFile', uploadNI, false);
+      setupDragDrop('irelandUploadZone', 'irelandFile', uploadIreland, true); // Allow ZIP for Ireland
     });
   </script>
 </body>
