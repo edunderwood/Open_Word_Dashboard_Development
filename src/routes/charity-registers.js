@@ -729,7 +729,17 @@ router.post('/ireland', upload.single('file'), async (req, res) => {
             if (csvEntry.entryName.endsWith('.xlsx') || csvEntry.entryName.endsWith('.xls')) {
                 // Parse Excel from ZIP
                 const workbook = XLSX.read(zip.readFile(csvEntry), { type: 'buffer' });
-                const sheetName = workbook.SheetNames[0];
+
+                // Look for "Public Register" sheet first, fall back to first sheet
+                let sheetName = workbook.SheetNames.find(name =>
+                    name.toLowerCase().includes('public register') ||
+                    name.toLowerCase() === 'public register'
+                );
+                if (!sheetName) {
+                    sheetName = workbook.SheetNames[0];
+                }
+                console.log(`   Available sheets: ${workbook.SheetNames.join(', ')}`);
+                console.log(`   Using sheet: ${sheetName}`);
                 records = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
             } else {
                 // Parse CSV from ZIP
@@ -744,9 +754,20 @@ router.post('/ireland', upload.single('file'), async (req, res) => {
         } else if (isExcel) {
             console.log('   Parsing Excel file...');
             const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
+
+            // Look for "Public Register" sheet first, fall back to first sheet
+            let sheetName = workbook.SheetNames.find(name =>
+                name.toLowerCase().includes('public register') ||
+                name.toLowerCase() === 'public register'
+            );
+            if (!sheetName) {
+                sheetName = workbook.SheetNames[0];
+                console.log(`   "Public Register" sheet not found, using first sheet`);
+            }
+
+            console.log(`   Available sheets: ${workbook.SheetNames.join(', ')}`);
+            console.log(`   Using sheet: ${sheetName}`);
             records = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-            console.log(`   Sheet: ${sheetName}`);
         } else {
             // Assume CSV
             console.log('   Parsing CSV file...');
@@ -763,11 +784,37 @@ router.post('/ireland', upload.single('file'), async (req, res) => {
 
         // Log first record columns for debugging
         if (records.length > 0) {
-            console.log(`   Columns found: ${Object.keys(records[0]).join(', ')}`);
+            const firstRow = records[0];
+            const columns = Object.keys(firstRow);
+            console.log(`   Columns found (${columns.length}): ${columns.join(' | ')}`);
+
+            // Debug: Show exact column names with char codes to detect hidden characters
+            columns.forEach((col, i) => {
+                const charCodes = [...col].map(c => c.charCodeAt(0)).join(',');
+                console.log(`   Column ${i}: "${col}" [${charCodes}]`);
+            });
+
+            // Debug: Show first record values
+            console.log(`   First record charity_number field: "${firstRow['Registered Charity Number']}"`);
+            console.log(`   First record charity_name field: "${firstRow['Registered Charity Name']}"`);
+            console.log(`   First record status field: "${firstRow['Status']}"`);
         }
 
         // Map CRA columns to our schema
-        // Expected columns: Registered Charity Number (RCN), Charity Name, Status, etc.
+        // Expected columns from Irish Charities Regulator Excel export:
+        // - Registered Charity Number
+        // - Registered Charity Name
+        // - Also Known As
+        // - Status
+        // - Charity Classification: Primary [Secondary (Sub)]
+        // - Primary Address
+        // - Also Operates In
+        // - Governing Form
+        // - CRO Number
+        // - Country Established
+        // - Charitable Purpose
+        // - Charitable Objects
+        // - Trustees (Start Date)
         const charities = records.map(row => {
             const charityNum = (
                 row['Registered Charity Number'] ||
@@ -779,7 +826,7 @@ router.post('/ireland', upload.single('file'), async (req, res) => {
 
             return {
                 charity_number: charityNum,
-                charity_name: row['Charity Name'] || row['charity_name'] || row['Name'] || '',
+                charity_name: row['Registered Charity Name'] || row['Charity Name'] || row['charity_name'] || row['Name'] || '',
                 charity_status: row['Status'] || row['status'] || row['Charity Status'] || 'Registered',
                 registered_date: parseDate(row['Date Registered'] || row['Registered Date'] || row['registered_date']),
                 charitable_purpose: row['Charitable Purpose'] || row['charitable_purpose'] || row['Main Charitable Purpose'] || ''
