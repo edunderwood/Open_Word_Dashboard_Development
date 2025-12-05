@@ -157,7 +157,82 @@
         </div>
       </div>
 
-      <!-- Plan Breakdown -->
+      <!-- Credit System Stats -->
+      <div class="card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
+        <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+          <h3 style="color: white;">Credit System</h3>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 0;">
+          <div>
+            <div style="opacity: 0.9; margin-bottom: 8px;">Total Credits in Circulation</div>
+            <div style="font-size: 2rem; font-weight: 700;" id="totalCredits">-</div>
+          </div>
+          <div>
+            <div style="opacity: 0.9; margin-bottom: 8px;">Credits Purchased (Month)</div>
+            <div style="font-size: 2rem; font-weight: 700;" id="creditsPurchasedMonth">-</div>
+          </div>
+          <div>
+            <div style="opacity: 0.9; margin-bottom: 8px;">Credits Used (Month)</div>
+            <div style="font-size: 2rem; font-weight: 700;" id="creditsUsedMonth">-</div>
+          </div>
+          <div>
+            <div style="opacity: 0.9; margin-bottom: 8px;">Credit Revenue (Month)</div>
+            <div style="font-size: 2rem; font-weight: 700;" id="creditRevenueMonth">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Low Balance Alert -->
+      <div id="lowBalanceAlert" class="card" style="display: none; border-left: 4px solid var(--warning);">
+        <div class="card-header">
+          <h3>Low Balance Customers</h3>
+          <span class="badge badge-warning" id="lowBalanceCount">0</span>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Tier</th>
+                <th>Balance</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="lowBalanceCustomers"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tier Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Customers by Tier</h3>
+        </div>
+        <div id="tierBreakdown" class="stats-grid" style="margin-bottom: 0;">
+          <div>
+            <div class="text-muted mb-2">Basic</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #6b7280;" id="tierBasic">-</div>
+          </div>
+          <div>
+            <div class="text-muted mb-2">Standard</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;" id="tierStandard">-</div>
+          </div>
+          <div>
+            <div class="text-muted mb-2">Pro</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;" id="tierPro">-</div>
+          </div>
+          <div>
+            <div class="text-muted mb-2">Enterprise</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #8b5cf6;" id="tierEnterprise">-</div>
+          </div>
+          <div>
+            <div class="text-muted mb-2">Charities</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;" id="charityCount">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plan Breakdown (Legacy) -->
       <div class="card">
         <div class="card-header">
           <h3>Customers by Plan</h3>
@@ -339,6 +414,88 @@
       }
     }
 
+    // Load credit system stats
+    async function loadCredits() {
+      try {
+        const response = await fetch('/api/dashboard/credits');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const { balances, thisMonth, tiers, charities } = data.data;
+
+        // Update credit stats
+        document.getElementById('totalCredits').textContent = formatNumber(balances.totalCurrent.toFixed(1));
+        document.getElementById('creditsPurchasedMonth').textContent = formatNumber(thisMonth.creditsPurchased.toFixed(1));
+        document.getElementById('creditsUsedMonth').textContent = formatNumber(thisMonth.creditsUsed.toFixed(1));
+        document.getElementById('creditRevenueMonth').textContent = formatCurrency(thisMonth.revenue);
+
+        // Update tier breakdown
+        document.getElementById('tierBasic').textContent = tiers.basic || 0;
+        document.getElementById('tierStandard').textContent = tiers.standard || 0;
+        document.getElementById('tierPro').textContent = tiers.pro || 0;
+        document.getElementById('tierEnterprise').textContent = tiers.enterprise || 0;
+        document.getElementById('charityCount').textContent = charities || 0;
+
+      } catch (error) {
+        console.error('Error loading credit stats:', error);
+      }
+    }
+
+    // Load low balance customers
+    async function loadLowBalanceCustomers() {
+      try {
+        const response = await fetch('/api/dashboard/low-balance-customers?threshold=10');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const alertDiv = document.getElementById('lowBalanceAlert');
+        const countBadge = document.getElementById('lowBalanceCount');
+        const tableBody = document.getElementById('lowBalanceCustomers');
+
+        if (data.data.customers.length === 0) {
+          alertDiv.style.display = 'none';
+          return;
+        }
+
+        // Show the alert section
+        alertDiv.style.display = 'block';
+        countBadge.textContent = data.data.count;
+
+        // Get tier badge
+        function getTierBadge(tier) {
+          const badges = {
+            basic: '<span class="badge" style="background: #6b7280; color: white;">Basic</span>',
+            standard: '<span class="badge" style="background: #3b82f6; color: white;">Standard</span>',
+            pro: '<span class="badge" style="background: #f59e0b; color: white;">Pro</span>',
+            enterprise: '<span class="badge" style="background: #8b5cf6; color: white;">Enterprise</span>'
+          };
+          return badges[tier] || badges.basic;
+        }
+
+        // Populate table
+        tableBody.innerHTML = data.data.customers.map(customer => `
+          <tr>
+            <td>
+              <a href="/customers/${customer.id}">${customer.name}</a>
+              ${customer.isCharity ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 10px;">Charity</span>' : ''}
+            </td>
+            <td>${getTierBadge(customer.tier)}</td>
+            <td style="font-weight: 600; color: ${customer.currentBalance <= 0 ? 'var(--danger)' : 'var(--warning)'};">
+              ${customer.currentBalance.toFixed(2)} credits
+            </td>
+            <td>
+              <a href="/customers/${customer.id}" class="btn btn-sm btn-outline">View</a>
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading low balance customers:', error);
+      }
+    }
+
     // Load recent activity
     async function loadActivity() {
       try {
@@ -385,6 +542,8 @@
     function refreshData() {
       loadSummary();
       loadRevenue();
+      loadCredits();
+      loadLowBalanceCustomers();
       loadActivity();
     }
 

@@ -166,6 +166,168 @@ router.get('/recent-activity', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/credits
+ * Get credit system statistics across all customers
+ */
+router.get('/credits', async (req, res) => {
+  try {
+    const CHARS_PER_CREDIT = 23000;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    // Get all credit balances
+    const { data: balances, error: balancesError } = await supabase
+      .from('credit_balances')
+      .select('current_balance, lifetime_purchased, lifetime_used, organisation_id');
+
+    // Calculate totals
+    let totalCurrentBalance = 0;
+    let totalLifetimePurchased = 0;
+    let totalLifetimeUsed = 0;
+    let lowBalanceCount = 0;
+    let zeroBalanceCount = 0;
+
+    balances?.forEach(b => {
+      const balance = parseFloat(b.current_balance) || 0;
+      totalCurrentBalance += balance;
+      totalLifetimePurchased += parseFloat(b.lifetime_purchased) || 0;
+      totalLifetimeUsed += parseFloat(b.lifetime_used) || 0;
+
+      if (balance <= 0) {
+        zeroBalanceCount++;
+      } else if (balance <= 10) {
+        lowBalanceCount++;
+      }
+    });
+
+    // Get credit purchases this month
+    const { data: purchasesThisMonth } = await supabase
+      .from('credit_purchases')
+      .select('credits_purchased, amount_paid_pence')
+      .gte('created_at', startOfMonth);
+
+    let creditsPurchasedThisMonth = 0;
+    let revenueThisMonth = 0;
+    purchasesThisMonth?.forEach(p => {
+      creditsPurchasedThisMonth += parseFloat(p.credits_purchased) || 0;
+      revenueThisMonth += (p.amount_paid_pence || 0) / 100;
+    });
+
+    // Get credit usage this month
+    const { data: usageThisMonth } = await supabase
+      .from('credit_usage')
+      .select('credits_used, total_billable_characters')
+      .gte('session_start', startOfMonth);
+
+    let creditsUsedThisMonth = 0;
+    let charsThisMonth = 0;
+    usageThisMonth?.forEach(u => {
+      creditsUsedThisMonth += parseFloat(u.credits_used) || 0;
+      charsThisMonth += u.total_billable_characters || 0;
+    });
+
+    // Get tier breakdown
+    const { data: tierBreakdown } = await supabase
+      .from('organisations')
+      .select('subscription_tier');
+
+    const tierCounts = { basic: 0, standard: 0, pro: 0, enterprise: 0 };
+    tierBreakdown?.forEach(org => {
+      const tier = org.subscription_tier || 'basic';
+      tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+    });
+
+    // Get charity breakdown
+    const { count: charityCount } = await supabase
+      .from('organisations')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_registered_charity', true);
+
+    res.json({
+      success: true,
+      data: {
+        balances: {
+          totalCurrent: totalCurrentBalance,
+          totalPurchased: totalLifetimePurchased,
+          totalUsed: totalLifetimeUsed,
+          customersWithBalance: balances?.length || 0,
+          lowBalance: lowBalanceCount,
+          zeroBalance: zeroBalanceCount
+        },
+        thisMonth: {
+          creditsPurchased: creditsPurchasedThisMonth,
+          creditsUsed: creditsUsedThisMonth,
+          revenue: revenueThisMonth,
+          charactersProcessed: charsThisMonth
+        },
+        tiers: tierCounts,
+        charities: charityCount || 0,
+        charsPerCredit: CHARS_PER_CREDIT
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching credit stats:', error);
+    res.status(500).json({ error: 'Failed to fetch credit statistics' });
+  }
+});
+
+/**
+ * GET /api/dashboard/low-balance-customers
+ * Get customers with low or zero credit balances
+ */
+router.get('/low-balance-customers', async (req, res) => {
+  try {
+    const threshold = parseFloat(req.query.threshold) || 10;
+
+    // Get low balance customers with org details
+    const { data: lowBalanceOrgs, error } = await supabase
+      .from('credit_balances')
+      .select(`
+        current_balance,
+        lifetime_purchased,
+        lifetime_used,
+        updated_at,
+        organisation_id,
+        organisations (
+          id,
+          name,
+          organisation_key,
+          subscription_tier,
+          is_registered_charity
+        )
+      `)
+      .lte('current_balance', threshold)
+      .order('current_balance', { ascending: true });
+
+    if (error) throw error;
+
+    // Format response
+    const customers = lowBalanceOrgs?.map(b => ({
+      id: b.organisation_id,
+      name: b.organisations?.name || 'Unknown',
+      organisationKey: b.organisations?.organisation_key,
+      tier: b.organisations?.subscription_tier || 'basic',
+      isCharity: b.organisations?.is_registered_charity || false,
+      currentBalance: parseFloat(b.current_balance) || 0,
+      lifetimeUsed: parseFloat(b.lifetime_used) || 0,
+      lastUpdated: b.updated_at
+    })) || [];
+
+    res.json({
+      success: true,
+      data: {
+        threshold,
+        count: customers.length,
+        customers
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching low balance customers:', error);
+    res.status(500).json({ error: 'Failed to fetch low balance customers' });
+  }
+});
+
+/**
  * GET /api/dashboard/revenue
  * Get revenue statistics from Stripe
  */

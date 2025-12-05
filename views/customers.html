@@ -123,10 +123,10 @@
               <tr>
                 <th>Organisation</th>
                 <th>Key</th>
-                <th>Plan</th>
+                <th>Tier</th>
+                <th>Credits</th>
                 <th>Status</th>
                 <th>Last Login</th>
-                <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -215,6 +215,17 @@
       });
     }
 
+    // Get tier color
+    function getTierColor(tier) {
+      const colors = {
+        basic: '#6b7280',
+        standard: '#3b82f6',
+        pro: '#f59e0b',
+        enterprise: '#8b5cf6'
+      };
+      return colors[tier] || colors.basic;
+    }
+
     // Get status badge
     function getStatusBadge(customer) {
       if (customer.is_paused) {
@@ -271,26 +282,31 @@
         if (customers.length === 0) {
           table.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No customers found</td></tr>';
         } else {
-          table.innerHTML = customers.map(customer => `
+          table.innerHTML = customers.map(customer => {
+            const creditBalance = customer.credit_balance ?? 0;
+            const tier = customer.subscription_tier || 'basic';
+            return `
             <tr>
               <td>
                 <strong>${customer.name || 'Unnamed'}</strong>
+                ${customer.is_registered_charity ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>' : ''}
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
-              <td>${(customer.subscription_plan || '-').replace(/_/g, ' ')}</td>
+              <td><span class="badge" style="background: ${getTierColor(tier)}; color: white;">${tier.charAt(0).toUpperCase() + tier.slice(1)}</span></td>
+              <td style="font-weight: 600; color: ${creditBalance <= 0 ? 'var(--danger)' : creditBalance <= 10 ? 'var(--warning)' : 'inherit'};">
+                ${creditBalance.toFixed(1)}
+              </td>
               <td>${getStatusBadge(customer)}</td>
               <td>${customer.last_login ? formatDateTime(customer.last_login) : '<span class="text-muted">Never</span>'}</td>
-              <td>${formatDate(customer.created_at)}</td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View</button>
-                <button class="btn btn-sm btn-outline" onclick="viewUsage('${customer.id}', '${customer.name}')">Usage</button>
                 ${customer.is_paused
                   ? `<button class="btn btn-sm btn-success" onclick="unpauseCustomer('${customer.id}')">Unpause</button>`
                   : `<button class="btn btn-sm btn-warning" onclick="pauseCustomer('${customer.id}')">Pause</button>`
                 }
               </td>
             </tr>
-          `).join('');
+          `}).join('');
         }
 
         // Update pagination
@@ -339,19 +355,22 @@
       document.getElementById('modalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
 
       try {
-        // Fetch customer details and session stats in parallel
-        const [customerResponse, sessionResponse] = await Promise.all([
+        // Fetch customer details, session stats, and credits in parallel
+        const [customerResponse, sessionResponse, creditsResponse] = await Promise.all([
           fetch(`/api/customers/${id}`),
-          fetch(`/api/customers/${id}/session-stats`)
+          fetch(`/api/customers/${id}/session-stats`),
+          fetch(`/api/customers/${id}/credits`)
         ]);
 
         const customerData = await customerResponse.json();
         const sessionData = await sessionResponse.json();
+        const creditsData = await creditsResponse.json();
 
         if (!customerData.success) throw new Error(customerData.error);
 
         const customer = customerData.data;
         const sessionStats = sessionData.success ? sessionData.data : null;
+        const credits = creditsData.success ? creditsData.data : null;
 
         document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
 
@@ -410,6 +429,65 @@
                           <td>${formatDateTime(s.startedAt)}</td>
                           <td>${formatDateTime(s.endedAt)}</td>
                           <td><strong>${s.durationFormatted}</strong></td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Credit Balance Section -->
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">
+              Credit Balance
+              ${credits?.isCharity ? '<span class="badge badge-success" style="margin-left: 8px;">50% Charity Discount</span>' : ''}
+            </h4>
+            <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 15px;">
+              <div class="stat-card" style="padding: 15px; ${credits?.balance?.current <= 10 ? 'border: 2px solid var(--danger);' : ''}">
+                <div class="label" style="font-size: 0.7rem;">Current Balance</div>
+                <div class="value" style="font-size: 1.2rem; color: ${credits?.balance?.current <= 0 ? 'var(--danger)' : credits?.balance?.current <= 10 ? 'var(--warning)' : 'var(--success)'};">
+                  ${credits?.balance?.current?.toFixed(2) || '0.00'} credits
+                </div>
+              </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Tier</div>
+                <div class="value" style="font-size: 1.2rem;">
+                  <span class="badge" style="background: ${getTierColor(credits?.tier || 'basic')}; color: white;">${(credits?.tier || 'basic').charAt(0).toUpperCase() + (credits?.tier || 'basic').slice(1)}</span>
+                </div>
+              </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Lifetime Purchased</div>
+                <div class="value" style="font-size: 1rem;">${credits?.balance?.purchased?.toFixed(2) || '0.00'}</div>
+              </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Lifetime Used</div>
+                <div class="value" style="font-size: 1rem;">${credits?.balance?.used?.toFixed(2) || '0.00'}</div>
+              </div>
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+              <button class="btn btn-sm btn-success" onclick="addCredits('${customer.id}', '${customer.name}')">Gift Credits</button>
+              <button class="btn btn-sm btn-warning" onclick="deductCredits('${customer.id}', '${customer.name}')">Deduct Credits</button>
+            </div>
+            ${credits?.recentUsage?.length > 0 ? `
+              <div style="margin-top: 15px;">
+                <h5 style="margin-bottom: 10px; color: var(--gray-500); font-size: 0.7rem; text-transform: uppercase;">Recent Credit Usage</h5>
+                <div class="table-container" style="max-height: 120px; overflow-y: auto;">
+                  <table style="font-size: 0.85rem;">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Credits Used</th>
+                        <th>Characters</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${credits.recentUsage.map(u => `
+                        <tr>
+                          <td>${formatDateTime(u.session_start)}</td>
+                          <td style="color: var(--danger);">-${parseFloat(u.credits_used).toFixed(3)}</td>
+                          <td>${formatNumber(u.total_billable_characters)}</td>
                         </tr>
                       `).join('')}
                     </tbody>
@@ -639,6 +717,74 @@
         loadCustomers();
       } catch (error) {
         alert('Error cancelling subscription: ' + error.message);
+      }
+    }
+
+    // Add credits to customer (admin gift)
+    async function addCredits(id, name) {
+      const amountStr = prompt(`Enter the number of credits to gift to ${name}:`);
+      if (!amountStr) return;
+
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+      }
+
+      const reason = prompt('Enter a reason for this credit gift (optional):') || 'Admin gift';
+
+      if (!confirm(`Gift ${amount} credits to ${name}?\n\nReason: ${reason}`)) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/add-credits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credits: amount, reason }),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Successfully added ${amount} credits to ${name}.\nNew balance: ${data.data.newBalance.toFixed(2)} credits`);
+        viewCustomer(id); // Refresh modal
+      } catch (error) {
+        alert('Error adding credits: ' + error.message);
+      }
+    }
+
+    // Deduct credits from customer (admin adjustment)
+    async function deductCredits(id, name) {
+      const amountStr = prompt(`Enter the number of credits to deduct from ${name}:`);
+      if (!amountStr) return;
+
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+      }
+
+      const reason = prompt('Enter a reason for this deduction (required):');
+      if (!reason) {
+        alert('A reason is required for deductions');
+        return;
+      }
+
+      if (!confirm(`Deduct ${amount} credits from ${name}?\n\nReason: ${reason}\n\nThis action cannot be easily undone.`)) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/deduct-credits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credits: amount, reason }),
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Successfully deducted ${amount} credits from ${name}.\nNew balance: ${data.data.newBalance.toFixed(2)} credits`);
+        viewCustomer(id); // Refresh modal
+      } catch (error) {
+        alert('Error deducting credits: ' + error.message);
       }
     }
 

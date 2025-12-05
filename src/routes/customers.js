@@ -52,6 +52,21 @@ router.get('/', async (req, res) => {
 
     if (error) throw error;
 
+    // Get customer IDs for batch fetching credits
+    const customerIds = customers.map(c => c.id);
+
+    // Batch fetch credit balances
+    const { data: creditBalances } = await supabase
+      .from('credit_balances')
+      .select('organisation_id, current_balance')
+      .in('organisation_id', customerIds);
+
+    // Create a map of customer_id -> credit_balance
+    const creditMap = {};
+    creditBalances?.forEach(cb => {
+      creditMap[cb.organisation_id] = parseFloat(cb.current_balance) || 0;
+    });
+
     // Fetch last login for each customer (batch fetch auth users)
     const customersWithLogin = await Promise.all(
       customers.map(async (customer) => {
@@ -66,7 +81,11 @@ router.get('/', async (req, res) => {
             // Silently fail for individual auth lookups
           }
         }
-        return { ...customer, last_login: lastLogin };
+        return {
+          ...customer,
+          last_login: lastLogin,
+          credit_balance: creditMap[customer.id] ?? 0
+        };
       })
     );
 
@@ -501,6 +520,250 @@ function formatDuration(minutes) {
   }
   return `${mins} min`;
 }
+
+/**
+ * GET /api/customers/:id/credits
+ * Get customer credit balance and history
+ */
+router.get('/:id/credits', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const CHARS_PER_CREDIT = 23000;
+
+    // Get credit balance
+    const { data: balance, error: balanceError } = await supabase
+      .from('credit_balances')
+      .select('*')
+      .eq('organisation_id', id)
+      .single();
+
+    // Get recent purchases
+    const { data: purchases, error: purchasesError } = await supabase
+      .from('credit_purchases')
+      .select('*')
+      .eq('organisation_id', id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // Get recent usage
+    const { data: usage, error: usageError } = await supabase
+      .from('credit_usage')
+      .select('*')
+      .eq('organisation_id', id)
+      .order('session_start', { ascending: false })
+      .limit(20);
+
+    // Calculate usage this month
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const { data: monthlyUsage } = await supabase
+      .from('credit_usage')
+      .select('credits_used, total_billable_characters')
+      .eq('organisation_id', id)
+      .gte('session_start', startOfMonth);
+
+    let creditsUsedThisMonth = 0;
+    let charsThisMonth = 0;
+    monthlyUsage?.forEach(u => {
+      creditsUsedThisMonth += parseFloat(u.credits_used) || 0;
+      charsThisMonth += u.total_billable_characters || 0;
+    });
+
+    // Get organisation tier info
+    const { data: org } = await supabase
+      .from('organisations')
+      .select('subscription_tier, is_registered_charity')
+      .eq('id', id)
+      .single();
+
+    res.json({
+      success: true,
+      data: {
+        balance: balance ? {
+          current: parseFloat(balance.current_balance) || 0,
+          purchased: parseFloat(balance.lifetime_purchased) || 0,
+          used: parseFloat(balance.lifetime_used) || 0,
+          lifetimePurchased: parseFloat(balance.lifetime_purchased) || 0,
+          lifetimeUsed: parseFloat(balance.lifetime_used) || 0,
+          lowBalanceThreshold: parseFloat(balance.low_balance_threshold) || 10,
+          updatedAt: balance.updated_at
+        } : {
+          current: 0,
+          purchased: 0,
+          used: 0,
+          lifetimePurchased: 0,
+          lifetimeUsed: 0,
+          lowBalanceThreshold: 10
+        },
+        tier: org?.subscription_tier || 'basic',
+        isCharity: org?.is_registered_charity || false,
+        thisMonth: {
+          creditsUsed: creditsUsedThisMonth,
+          charactersProcessed: charsThisMonth
+        },
+        purchases: purchases || [],
+        recentUsage: usage || [],
+        charsPerCredit: CHARS_PER_CREDIT
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching customer credits:', error);
+    res.status(500).json({ error: 'Failed to fetch customer credits' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/add-credits
+ * Add credits to a customer account (admin gift)
+ */
+router.post('/:id/add-credits', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { credits, reason } = req.body;
+
+    if (!credits || credits <= 0) {
+      return res.status(400).json({ error: 'Credits must be a positive number' });
+    }
+
+    // Get current balance
+    const { data: existingBalance } = await supabase
+      .from('credit_balances')
+      .select('*')
+      .eq('organisation_id', id)
+      .single();
+
+    if (existingBalance) {
+      // Update existing balance
+      const { error: updateError } = await supabase
+        .from('credit_balances')
+        .update({
+          current_balance: parseFloat(existingBalance.current_balance) + credits,
+          lifetime_purchased: parseFloat(existingBalance.lifetime_purchased) + credits,
+          updated_at: new Date().toISOString()
+        })
+        .eq('organisation_id', id);
+
+      if (updateError) throw updateError;
+    } else {
+      // Create new balance record
+      const { error: insertError } = await supabase
+        .from('credit_balances')
+        .insert({
+          organisation_id: id,
+          current_balance: credits,
+          lifetime_purchased: credits,
+          lifetime_used: 0
+        });
+
+      if (insertError) throw insertError;
+    }
+
+    // Record the purchase as a gift
+    const { error: purchaseError } = await supabase
+      .from('credit_purchases')
+      .insert({
+        organisation_id: id,
+        credits_purchased: credits,
+        amount_paid_pence: 0,
+        unit_price_pence: 0,
+        purchase_type: 'gift',
+        notes: reason || 'Admin credit gift'
+      });
+
+    if (purchaseError) throw purchaseError;
+
+    // Get organisation name for logging
+    const { data: org } = await supabase
+      .from('organisations')
+      .select('name')
+      .eq('id', id)
+      .single();
+
+    console.log(`🎁 ${credits} credits gifted to ${org?.name || id}: ${reason || 'No reason provided'}`);
+
+    res.json({
+      success: true,
+      message: `${credits} credits added successfully`,
+      data: {
+        creditsAdded: credits,
+        newBalance: existingBalance
+          ? parseFloat(existingBalance.current_balance) + credits
+          : credits
+      }
+    });
+  } catch (error) {
+    console.error('Error adding credits:', error);
+    res.status(500).json({ error: 'Failed to add credits' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/deduct-credits
+ * Manually deduct credits (admin adjustment)
+ */
+router.post('/:id/deduct-credits', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { credits, reason } = req.body;
+
+    if (!credits || credits <= 0) {
+      return res.status(400).json({ error: 'Credits must be a positive number' });
+    }
+
+    // Get current balance
+    const { data: existingBalance, error: balanceError } = await supabase
+      .from('credit_balances')
+      .select('*')
+      .eq('organisation_id', id)
+      .single();
+
+    if (balanceError || !existingBalance) {
+      return res.status(400).json({ error: 'Customer has no credit balance' });
+    }
+
+    const currentBalance = parseFloat(existingBalance.current_balance);
+    if (credits > currentBalance) {
+      return res.status(400).json({
+        error: `Cannot deduct ${credits} credits. Current balance is only ${currentBalance}`
+      });
+    }
+
+    // Deduct credits
+    const { error: updateError } = await supabase
+      .from('credit_balances')
+      .update({
+        current_balance: currentBalance - credits,
+        lifetime_used: parseFloat(existingBalance.lifetime_used) + credits,
+        updated_at: new Date().toISOString()
+      })
+      .eq('organisation_id', id);
+
+    if (updateError) throw updateError;
+
+    // Get organisation name for logging
+    const { data: org } = await supabase
+      .from('organisations')
+      .select('name')
+      .eq('id', id)
+      .single();
+
+    console.log(`➖ ${credits} credits deducted from ${org?.name || id}: ${reason || 'No reason provided'}`);
+
+    res.json({
+      success: true,
+      message: `${credits} credits deducted successfully`,
+      data: {
+        creditsDeducted: credits,
+        newBalance: currentBalance - credits,
+        reason: reason || 'Admin adjustment'
+      }
+    });
+  } catch (error) {
+    console.error('Error deducting credits:', error);
+    res.status(500).json({ error: 'Failed to deduct credits' });
+  }
+});
 
 /**
  * POST /api/customers/:id/cancel-subscription
