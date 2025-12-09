@@ -5,6 +5,132 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pricing - OpenWord Admin</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .tier-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 2px solid var(--gray-200);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .tier-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .tier-card.inactive {
+      opacity: 0.6;
+      border-color: var(--gray-300);
+    }
+    .tier-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .tier-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .tier-id {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      margin-top: 2px;
+    }
+    .tier-price {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .tier-price small {
+      font-size: 0.875rem;
+      font-weight: 400;
+      color: var(--gray-500);
+    }
+    .tier-details {
+      margin: 16px 0;
+      padding: 16px 0;
+      border-top: 1px solid var(--gray-200);
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .tier-detail {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 0.875rem;
+    }
+    .tier-detail label {
+      color: var(--gray-600);
+    }
+    .tier-detail span {
+      font-weight: 500;
+      color: var(--gray-900);
+    }
+    .tier-features {
+      margin-top: 16px;
+    }
+    .tier-features h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: 8px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.875rem;
+    }
+    .feature-item.enabled {
+      color: var(--success);
+    }
+    .feature-item.disabled {
+      color: var(--gray-400);
+    }
+    .tier-actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    .charity-card {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+    .charity-card h3 {
+      margin: 0 0 8px 0;
+    }
+    .charity-card .discount-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    .info-card {
+      background: var(--gray-50);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    .info-card h4 {
+      margin: 0 0 12px 0;
+      color: var(--gray-700);
+    }
+    .info-card ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--gray-600);
+      line-height: 1.8;
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -73,57 +199,38 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <div class="page-header flex justify-between items-center">
+      <div class="page-header">
         <div>
-          <h2>Subscription Pricing</h2>
-          <p>Manage subscription tiers and pricing</p>
-        </div>
-        <button class="btn btn-primary" onclick="showAddTierModal()">Add Tier</button>
-      </div>
-
-      <!-- Pricing Tiers Table -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Pricing Tiers</h3>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Plan</th>
-                <th>Monthly Fee</th>
-                <th>Usage Rate</th>
-                <th>Min Monthly</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="tiersTable">
-              <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
-            </tbody>
-          </table>
+          <h2>Plan Pricing</h2>
+          <p>Manage subscription tiers, credit pricing, and charity discounts</p>
         </div>
       </div>
 
-      <!-- Current Stripe Products -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Stripe Products</h3>
-          <button class="btn btn-sm btn-outline" onclick="loadStripeProducts()">Refresh from Stripe</button>
-        </div>
-        <div id="stripeProducts" class="text-muted text-center" style="padding: 20px;">
-          Loading Stripe products...
+      <!-- Charity Discount Card -->
+      <div class="charity-card">
+        <h3>Charity Discount</h3>
+        <p>Verified charities receive a discount on credit pricing</p>
+        <div class="discount-value" id="charityDiscount">50%</div>
+        <small>Applied to credit purchases for verified charitable organisations</small>
+      </div>
+
+      <!-- Pricing Tiers Grid -->
+      <h3 style="margin-bottom: 16px;">Subscription Tiers</h3>
+      <div class="pricing-grid" id="tiersGrid">
+        <div class="tier-card">
+          <p class="text-muted text-center">Loading pricing tiers...</p>
         </div>
       </div>
 
-      <!-- Pricing Notes -->
-      <div class="card">
-        <h3 style="margin-bottom: 15px;">Pricing Model</h3>
-        <ul style="color: var(--gray-600); line-height: 1.8;">
-          <li><strong>Monthly Fee:</strong> Fixed monthly subscription cost</li>
-          <li><strong>Usage Rate:</strong> Per-character rate (e.g., £0.000048 = £48 per million characters)</li>
-          <li><strong>Minimum Monthly:</strong> Minimum charge per month (for pay-as-you-go plans)</li>
-          <li>Changes here update the <code>subscription_pricing</code> table used by the main OpenWord system</li>
+      <!-- Info Card -->
+      <div class="info-card">
+        <h4>Pricing Model</h4>
+        <ul>
+          <li><strong>Monthly Fee:</strong> Fixed subscription cost per month (in pence)</li>
+          <li><strong>Credit Price:</strong> Cost per credit for regular customers (in pence)</li>
+          <li><strong>Charity Credit Price:</strong> Discounted credit price for verified charities</li>
+          <li><strong>Chars per Credit:</strong> Number of characters included per credit (default: 23,000)</li>
+          <li>Changes here update the <code>pricing_tiers</code> table used by OpenWord</li>
         </ul>
       </div>
     </main>
@@ -131,7 +238,7 @@
 
   <!-- Edit Tier Modal -->
   <div class="modal-overlay" id="editModal">
-    <div class="modal">
+    <div class="modal" style="max-width: 600px;">
       <div class="modal-header">
         <h3 id="editModalTitle">Edit Pricing Tier</h3>
         <button class="modal-close" onclick="closeEditModal()">&times;</button>
@@ -139,55 +246,91 @@
       <form id="editForm" onsubmit="saveTier(event)">
         <div class="modal-body">
           <input type="hidden" id="tierId">
+          <input type="hidden" id="isNewTier" value="false">
 
           <div class="grid grid-2">
             <div class="form-group">
-              <label for="planName">Plan Name (identifier)</label>
-              <input type="text" id="planName" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+              <label for="tierIdInput">Tier ID</label>
+              <input type="text" id="tierIdInput" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only" placeholder="e.g., basic">
+              <small class="text-muted">Cannot be changed after creation</small>
             </div>
             <div class="form-group">
-              <label for="displayName">Display Name</label>
-              <input type="text" id="displayName" class="form-input" required>
+              <label for="tierName">Display Name</label>
+              <input type="text" id="tierName" class="form-input" required placeholder="e.g., Basic">
             </div>
-          </div>
-
-          <div class="grid grid-3">
-            <div class="form-group">
-              <label for="monthlyFee">Monthly Fee (£)</label>
-              <input type="number" id="monthlyFee" class="form-input" step="0.01" min="0" required>
-            </div>
-            <div class="form-group">
-              <label for="usageRate">Usage Rate (per char)</label>
-              <input type="number" id="usageRate" class="form-input" step="0.000001" min="0" required>
-              <small class="text-muted">e.g., 0.000048</small>
-            </div>
-            <div class="form-group">
-              <label for="minimumMonthlyFee">Min Monthly (£)</label>
-              <input type="number" id="minimumMonthlyFee" class="form-input" step="0.01" min="0" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="features">Features (one per line)</label>
-            <textarea id="features" class="form-input" rows="5" placeholder="25 Source languages&#10;Translation to over 100 languages&#10;Unlimited clients"></textarea>
           </div>
 
           <div class="grid grid-2">
             <div class="form-group">
-              <label for="stripeMonthlyPriceId">Stripe Monthly Price ID</label>
-              <input type="text" id="stripeMonthlyPriceId" class="form-input" placeholder="price_xxx">
+              <label for="monthlyFeePence">Monthly Fee (pence)</label>
+              <input type="number" id="monthlyFeePence" class="form-input" min="0" required placeholder="1200">
+              <small class="text-muted">e.g., 1200 = £12.00</small>
             </div>
             <div class="form-group">
-              <label for="stripeUsagePriceId">Stripe Usage Price ID</label>
-              <input type="text" id="stripeUsagePriceId" class="form-input" placeholder="price_xxx">
+              <label for="charsPerCredit">Characters per Credit</label>
+              <input type="number" id="charsPerCredit" class="form-input" min="1000" required placeholder="23000">
+            </div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label for="creditPricePence">Credit Price (pence)</label>
+              <input type="number" id="creditPricePence" class="form-input" min="0" required placeholder="118">
+              <small class="text-muted">e.g., 118 = £1.18</small>
+            </div>
+            <div class="form-group">
+              <label for="charityCreditPricePence">Charity Credit Price (pence)</label>
+              <input type="number" id="charityCreditPricePence" class="form-input" min="0" required placeholder="59">
+              <small class="text-muted">e.g., 59 = £0.59 (50% off)</small>
             </div>
           </div>
 
           <div class="form-group">
-            <label>
-              <input type="checkbox" id="isActive" checked>
-              Active (visible to customers)
-            </label>
+            <label for="description">Description</label>
+            <input type="text" id="description" class="form-input" placeholder="Brief description of this tier">
+          </div>
+
+          <h4 style="margin: 20px 0 12px 0; font-size: 0.875rem; color: var(--gray-600);">Features</h4>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label for="maxConcurrentSessions">Max Concurrent Sessions</label>
+              <input type="number" id="maxConcurrentSessions" class="form-input" min="1" required placeholder="1">
+            </div>
+            <div class="form-group">
+              <label for="displayOrder">Display Order</label>
+              <input type="number" id="displayOrder" class="form-input" min="0" placeholder="1">
+            </div>
+          </div>
+
+          <div class="grid grid-2" style="margin-top: 12px;">
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="canCustomizeBranding">
+                Custom Branding
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="canReceiveFeedback">
+                Participant Feedback
+              </label>
+            </div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="aiAudioEnabled">
+                AI Audio
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="isActive" checked>
+                Active (visible to customers)
+              </label>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -199,20 +342,12 @@
   </div>
 
   <script>
-    let stripeProducts = [];
-
-    // Format currency
-    function formatCurrency(amount) {
+    // Format currency from pence
+    function formatPence(pence) {
       return new Intl.NumberFormat('en-GB', {
         style: 'currency',
         currency: 'GBP'
-      }).format(amount);
-    }
-
-    // Format usage rate
-    function formatUsageRate(rate) {
-      const perMillion = rate * 1000000;
-      return `£${perMillion.toFixed(2)}/M chars`;
+      }).format(pence / 100);
     }
 
     // Load pricing tiers
@@ -223,101 +358,85 @@
 
         if (!data.success) throw new Error(data.error);
 
-        const table = document.getElementById('tiersTable');
+        const grid = document.getElementById('tiersGrid');
         if (data.data.length === 0) {
-          table.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No pricing tiers found.</td></tr>';
+          grid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No pricing tiers found.</p></div>';
         } else {
-          table.innerHTML = data.data.map(tier => `
-            <tr>
-              <td>
-                <strong>${tier.display_name}</strong>
-                <br><small class="text-muted">${tier.plan_name}</small>
-              </td>
-              <td>${formatCurrency(tier.monthly_fee || 0)}</td>
-              <td>
-                ${formatUsageRate(tier.usage_rate || 0)}
-                <br><small class="text-muted">£${tier.usage_rate}/char</small>
-              </td>
-              <td>${formatCurrency(tier.minimum_monthly_fee || 0)}</td>
-              <td>
-                ${tier.is_active
-                  ? '<span class="badge badge-success">Active</span>'
-                  : '<span class="badge badge-gray">Inactive</span>'
-                }
-              </td>
-              <td>
+          grid.innerHTML = data.data.map(tier => `
+            <div class="tier-card ${tier.is_active ? '' : 'inactive'}">
+              <div class="tier-header">
+                <div>
+                  <div class="tier-name">${tier.name}</div>
+                  <div class="tier-id">${tier.id}</div>
+                </div>
+                <div class="tier-price">
+                  ${formatPence(tier.monthly_fee_pence)}<small>/mo</small>
+                </div>
+              </div>
+
+              <div class="tier-details">
+                <div class="tier-detail">
+                  <label>Credit Price</label>
+                  <span>${formatPence(tier.credit_price_pence)}</span>
+                </div>
+                <div class="tier-detail">
+                  <label>Charity Price</label>
+                  <span>${formatPence(tier.charity_credit_price_pence)}</span>
+                </div>
+                <div class="tier-detail">
+                  <label>Chars/Credit</label>
+                  <span>${tier.chars_per_credit.toLocaleString()}</span>
+                </div>
+                <div class="tier-detail">
+                  <label>Max Sessions</label>
+                  <span>${tier.max_concurrent_sessions}</span>
+                </div>
+              </div>
+
+              <div class="tier-features">
+                <h4>Features</h4>
+                <div class="feature-item ${tier.can_customize_branding ? 'enabled' : 'disabled'}">
+                  ${tier.can_customize_branding ? '✓' : '✗'} Custom Branding
+                </div>
+                <div class="feature-item ${tier.can_receive_feedback ? 'enabled' : 'disabled'}">
+                  ${tier.can_receive_feedback ? '✓' : '✗'} Participant Feedback
+                </div>
+                <div class="feature-item ${tier.ai_audio_enabled ? 'enabled' : 'disabled'}">
+                  ${tier.ai_audio_enabled ? '✓' : '✗'} AI Audio
+                </div>
+              </div>
+
+              <div class="tier-actions">
                 <button class="btn btn-sm btn-outline" onclick="editTier('${tier.id}')">Edit</button>
                 ${tier.is_active
-                  ? `<button class="btn btn-sm btn-danger" onclick="deleteTier('${tier.id}')">Disable</button>`
-                  : ''
+                  ? `<button class="btn btn-sm btn-danger" onclick="disableTier('${tier.id}')">Disable</button>`
+                  : `<span class="badge badge-gray">Inactive</span>`
                 }
-              </td>
-            </tr>
+              </div>
+            </div>
           `).join('');
         }
       } catch (error) {
         console.error('Error loading tiers:', error);
-        document.getElementById('tiersTable').innerHTML =
-          '<tr><td colspan="6" class="text-center text-danger">Error loading pricing tiers</td></tr>';
+        document.getElementById('tiersGrid').innerHTML =
+          '<div class="tier-card"><p class="text-danger text-center">Error loading pricing tiers</p></div>';
       }
     }
 
-    // Load Stripe products
-    async function loadStripeProducts() {
+    // Load charity discount
+    async function loadCharityDiscount() {
       try {
-        const response = await fetch('/api/pricing/stripe/products');
+        const response = await fetch('/api/pricing');
         const data = await response.json();
 
-        if (!data.success) throw new Error(data.error);
-
-        stripeProducts = data.data;
-        const container = document.getElementById('stripeProducts');
-
-        if (stripeProducts.length === 0) {
-          container.innerHTML = '<p class="text-muted">No active Stripe products found.</p>';
-        } else {
-          container.innerHTML = `
-            <div class="grid grid-3">
-              ${stripeProducts.map(product => `
-                <div style="padding: 15px; background: var(--gray-50); border-radius: 8px; text-align: left;">
-                  <strong>${product.name}</strong>
-                  <p class="text-muted" style="font-size: 0.75rem; margin: 5px 0;">${product.id}</p>
-                  <div style="margin-top: 10px; font-size: 0.875rem;">
-                    ${product.prices.map(price => `
-                      <div style="margin-bottom: 4px;">
-                        ${formatCurrency(price.unitAmount)}/${price.interval || 'one-time'}
-                        ${price.usageType === 'metered' ? '<span class="badge badge-info" style="font-size: 0.6rem;">metered</span>' : ''}
-                        <br><small class="text-muted">${price.id}</small>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          `;
+        if (data.success && data.data.length > 0) {
+          const tier = data.data[0];
+          const discount = Math.round((1 - tier.charity_credit_price_pence / tier.credit_price_pence) * 100);
+          document.getElementById('charityDiscount').textContent = `${discount}%`;
         }
       } catch (error) {
-        console.error('Error loading Stripe products:', error);
-        document.getElementById('stripeProducts').innerHTML =
-          `<p class="text-danger">Error loading Stripe products: ${error.message}</p>`;
+        console.error('Error loading charity discount:', error);
       }
-    }
-
-    // Show add tier modal
-    function showAddTierModal() {
-      document.getElementById('editModalTitle').textContent = 'Add Pricing Tier';
-      document.getElementById('tierId').value = '';
-      document.getElementById('planName').value = '';
-      document.getElementById('planName').disabled = false;
-      document.getElementById('displayName').value = '';
-      document.getElementById('monthlyFee').value = '0';
-      document.getElementById('usageRate').value = '0.000048';
-      document.getElementById('minimumMonthlyFee').value = '0';
-      document.getElementById('features').value = '';
-      document.getElementById('stripeMonthlyPriceId').value = '';
-      document.getElementById('stripeUsagePriceId').value = '';
-      document.getElementById('isActive').checked = true;
-      document.getElementById('editModal').classList.add('active');
     }
 
     // Edit tier
@@ -331,15 +450,20 @@
         const tier = data.data;
         document.getElementById('editModalTitle').textContent = 'Edit Pricing Tier';
         document.getElementById('tierId').value = tier.id;
-        document.getElementById('planName').value = tier.plan_name || '';
-        document.getElementById('planName').disabled = true; // Can't change plan_name after creation
-        document.getElementById('displayName').value = tier.display_name || '';
-        document.getElementById('monthlyFee').value = tier.monthly_fee || 0;
-        document.getElementById('usageRate').value = tier.usage_rate || 0;
-        document.getElementById('minimumMonthlyFee').value = tier.minimum_monthly_fee || 0;
-        document.getElementById('features').value = (tier.features || []).join('\n');
-        document.getElementById('stripeMonthlyPriceId').value = tier.stripe_monthly_price_id || '';
-        document.getElementById('stripeUsagePriceId').value = tier.stripe_usage_price_id || '';
+        document.getElementById('isNewTier').value = 'false';
+        document.getElementById('tierIdInput').value = tier.id;
+        document.getElementById('tierIdInput').disabled = true;
+        document.getElementById('tierName').value = tier.name || '';
+        document.getElementById('monthlyFeePence').value = tier.monthly_fee_pence || 0;
+        document.getElementById('charsPerCredit').value = tier.chars_per_credit || 23000;
+        document.getElementById('creditPricePence').value = tier.credit_price_pence || 118;
+        document.getElementById('charityCreditPricePence').value = tier.charity_credit_price_pence || 59;
+        document.getElementById('maxConcurrentSessions').value = tier.max_concurrent_sessions || 1;
+        document.getElementById('displayOrder').value = tier.display_order || 0;
+        document.getElementById('description').value = tier.description || '';
+        document.getElementById('canCustomizeBranding').checked = tier.can_customize_branding || false;
+        document.getElementById('canReceiveFeedback').checked = tier.can_receive_feedback || false;
+        document.getElementById('aiAudioEnabled').checked = tier.ai_audio_enabled || false;
         document.getElementById('isActive').checked = tier.is_active;
         document.getElementById('editModal').classList.add('active');
       } catch (error) {
@@ -351,22 +475,28 @@
     async function saveTier(event) {
       event.preventDefault();
 
-      const id = document.getElementById('tierId').value;
+      const isNew = document.getElementById('isNewTier').value === 'true';
+      const id = isNew ? document.getElementById('tierIdInput').value : document.getElementById('tierId').value;
+
       const tier = {
-        planName: document.getElementById('planName').value,
-        displayName: document.getElementById('displayName').value,
-        monthlyFee: parseFloat(document.getElementById('monthlyFee').value),
-        usageRate: parseFloat(document.getElementById('usageRate').value),
-        minimumMonthlyFee: parseFloat(document.getElementById('minimumMonthlyFee').value),
-        features: document.getElementById('features').value.split('\n').filter(f => f.trim()),
-        stripeMonthlyPriceId: document.getElementById('stripeMonthlyPriceId').value || null,
-        stripeUsagePriceId: document.getElementById('stripeUsagePriceId').value || null,
+        id: document.getElementById('tierIdInput').value,
+        name: document.getElementById('tierName').value,
+        monthlyFeePence: parseInt(document.getElementById('monthlyFeePence').value),
+        charsPerCredit: parseInt(document.getElementById('charsPerCredit').value),
+        creditPricePence: parseInt(document.getElementById('creditPricePence').value),
+        charityCreditPricePence: parseInt(document.getElementById('charityCreditPricePence').value),
+        maxConcurrentSessions: parseInt(document.getElementById('maxConcurrentSessions').value),
+        displayOrder: parseInt(document.getElementById('displayOrder').value) || 0,
+        description: document.getElementById('description').value,
+        canCustomizeBranding: document.getElementById('canCustomizeBranding').checked,
+        canReceiveFeedback: document.getElementById('canReceiveFeedback').checked,
+        aiAudioEnabled: document.getElementById('aiAudioEnabled').checked,
         isActive: document.getElementById('isActive').checked,
       };
 
       try {
-        const url = id ? `/api/pricing/${id}` : '/api/pricing';
-        const method = id ? 'PUT' : 'POST';
+        const url = isNew ? '/api/pricing' : `/api/pricing/${id}`;
+        const method = isNew ? 'POST' : 'PUT';
 
         const response = await fetch(url, {
           method,
@@ -380,13 +510,14 @@
         alert(data.message);
         closeEditModal();
         loadTiers();
+        loadCharityDiscount();
       } catch (error) {
         alert('Error saving tier: ' + error.message);
       }
     }
 
-    // Delete (disable) tier
-    async function deleteTier(id) {
+    // Disable tier
+    async function disableTier(id) {
       if (!confirm('Are you sure you want to disable this pricing tier?')) return;
 
       try {
@@ -431,7 +562,7 @@
     // Load data on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadTiers();
-      loadStripeProducts();
+      loadCharityDiscount();
     });
   </script>
 </body>

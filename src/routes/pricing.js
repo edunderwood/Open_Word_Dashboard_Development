@@ -1,24 +1,23 @@
 /**
- * Pricing Management Routes
- * Uses existing subscription_pricing table from main OpenWord system
+ * Pricing Tiers Management Routes
+ * Manages the pricing_tiers table used by the main OpenWord system
  */
 
 import express from 'express';
 import supabase from '../services/supabase.js';
-import stripe from '../services/stripe.js';
 
 const router = express.Router();
 
 /**
  * GET /api/pricing
- * Get all pricing tiers from subscription_pricing table
+ * Get all pricing tiers from pricing_tiers table
  */
 router.get('/', async (req, res) => {
   try {
     const { data: tiers, error } = await supabase
-      .from('subscription_pricing')
+      .from('pricing_tiers')
       .select('*')
-      .order('monthly_fee', { ascending: true });
+      .order('display_order', { ascending: true });
 
     if (error) throw error;
 
@@ -28,7 +27,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching pricing tiers:', error);
-    res.status(500).json({ error: 'Failed to fetch pricing tiers' });
+    res.status(500).json({ success: false, error: 'Failed to fetch pricing tiers' });
   }
 });
 
@@ -41,7 +40,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const { data: tier, error } = await supabase
-      .from('subscription_pricing')
+      .from('pricing_tiers')
       .select('*')
       .eq('id', id)
       .single();
@@ -49,7 +48,7 @@ router.get('/:id', async (req, res) => {
     if (error) throw error;
 
     if (!tier) {
-      return res.status(404).json({ error: 'Pricing tier not found' });
+      return res.status(404).json({ success: false, error: 'Pricing tier not found' });
     }
 
     res.json({
@@ -58,7 +57,7 @@ router.get('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching pricing tier:', error);
-    res.status(500).json({ error: 'Failed to fetch pricing tier' });
+    res.status(500).json({ success: false, error: 'Failed to fetch pricing tier' });
   }
 });
 
@@ -70,30 +69,38 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      displayName,
-      monthlyFee,
-      usageRate,
-      minimumMonthlyFee,
-      features,
+      name,
+      monthlyFeePence,
+      charsPerCredit,
+      creditPricePence,
+      charityCreditPricePence,
+      maxConcurrentSessions,
+      canCustomizeBranding,
+      canReceiveFeedback,
+      aiAudioEnabled,
+      description,
+      displayOrder,
       isActive,
-      stripeMonthlyPriceId,
-      stripeUsagePriceId,
     } = req.body;
 
     // Build update object with only provided fields
     const updateData = {};
-    if (displayName !== undefined) updateData.display_name = displayName;
-    if (monthlyFee !== undefined) updateData.monthly_fee = monthlyFee;
-    if (usageRate !== undefined) updateData.usage_rate = usageRate;
-    if (minimumMonthlyFee !== undefined) updateData.minimum_monthly_fee = minimumMonthlyFee;
-    if (features !== undefined) updateData.features = features;
+    if (name !== undefined) updateData.name = name;
+    if (monthlyFeePence !== undefined) updateData.monthly_fee_pence = monthlyFeePence;
+    if (charsPerCredit !== undefined) updateData.chars_per_credit = charsPerCredit;
+    if (creditPricePence !== undefined) updateData.credit_price_pence = creditPricePence;
+    if (charityCreditPricePence !== undefined) updateData.charity_credit_price_pence = charityCreditPricePence;
+    if (maxConcurrentSessions !== undefined) updateData.max_concurrent_sessions = maxConcurrentSessions;
+    if (canCustomizeBranding !== undefined) updateData.can_customize_branding = canCustomizeBranding;
+    if (canReceiveFeedback !== undefined) updateData.can_receive_feedback = canReceiveFeedback;
+    if (aiAudioEnabled !== undefined) updateData.ai_audio_enabled = aiAudioEnabled;
+    if (description !== undefined) updateData.description = description;
+    if (displayOrder !== undefined) updateData.display_order = displayOrder;
     if (isActive !== undefined) updateData.is_active = isActive;
-    if (stripeMonthlyPriceId !== undefined) updateData.stripe_monthly_price_id = stripeMonthlyPriceId;
-    if (stripeUsagePriceId !== undefined) updateData.stripe_usage_price_id = stripeUsagePriceId;
     updateData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
-      .from('subscription_pricing')
+      .from('pricing_tiers')
       .update(updateData)
       .eq('id', id)
       .select()
@@ -101,7 +108,7 @@ router.put('/:id', async (req, res) => {
 
     if (error) throw error;
 
-    console.log(`💰 Pricing tier updated: ${data.display_name} (${id})`);
+    console.log(`💰 Pricing tier updated: ${data.name} (${id})`);
 
     res.json({
       success: true,
@@ -110,7 +117,7 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating pricing tier:', error);
-    res.status(500).json({ error: 'Failed to update pricing tier' });
+    res.status(500).json({ success: false, error: 'Failed to update pricing tier' });
   }
 });
 
@@ -121,31 +128,39 @@ router.put('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      planName,
-      displayName,
-      monthlyFee,
-      usageRate,
-      minimumMonthlyFee,
-      features,
-      stripeMonthlyPriceId,
-      stripeUsagePriceId,
+      id,
+      name,
+      monthlyFeePence,
+      charsPerCredit,
+      creditPricePence,
+      charityCreditPricePence,
+      maxConcurrentSessions,
+      canCustomizeBranding,
+      canReceiveFeedback,
+      aiAudioEnabled,
+      description,
+      displayOrder,
     } = req.body;
 
-    if (!planName || !displayName) {
-      return res.status(400).json({ error: 'Plan name and display name are required' });
+    if (!id || !name) {
+      return res.status(400).json({ success: false, error: 'Tier ID and name are required' });
     }
 
     const { data, error } = await supabase
-      .from('subscription_pricing')
+      .from('pricing_tiers')
       .insert({
-        plan_name: planName,
-        display_name: displayName,
-        monthly_fee: monthlyFee || 0,
-        usage_rate: usageRate || 0.000048,
-        minimum_monthly_fee: minimumMonthlyFee || 0,
-        features: features || [],
-        stripe_monthly_price_id: stripeMonthlyPriceId,
-        stripe_usage_price_id: stripeUsagePriceId,
+        id,
+        name,
+        monthly_fee_pence: monthlyFeePence || 0,
+        chars_per_credit: charsPerCredit || 23000,
+        credit_price_pence: creditPricePence || 118,
+        charity_credit_price_pence: charityCreditPricePence || 59,
+        max_concurrent_sessions: maxConcurrentSessions || 1,
+        can_customize_branding: canCustomizeBranding || false,
+        can_receive_feedback: canReceiveFeedback || false,
+        ai_audio_enabled: aiAudioEnabled || false,
+        description: description || '',
+        display_order: displayOrder || 0,
         is_active: true,
       })
       .select()
@@ -153,7 +168,7 @@ router.post('/', async (req, res) => {
 
     if (error) throw error;
 
-    console.log(`💰 New pricing tier created: ${displayName}`);
+    console.log(`💰 New pricing tier created: ${name} (${id})`);
 
     res.json({
       success: true,
@@ -162,7 +177,7 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating pricing tier:', error);
-    res.status(500).json({ error: 'Failed to create pricing tier' });
+    res.status(500).json({ success: false, error: 'Failed to create pricing tier' });
   }
 });
 
@@ -175,28 +190,21 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     // Check if any customers are using this tier
-    const { data: tier } = await supabase
-      .from('subscription_pricing')
-      .select('plan_name')
-      .eq('id', id)
-      .single();
+    const { count: customerCount } = await supabase
+      .from('organisations')
+      .select('*', { count: 'exact', head: true })
+      .eq('subscription_tier', id);
 
-    if (tier) {
-      const { count: customerCount } = await supabase
-        .from('organisations')
-        .select('*', { count: 'exact', head: true })
-        .eq('subscription_plan', tier.plan_name);
-
-      if (customerCount > 0) {
-        return res.status(400).json({
-          error: `Cannot delete tier - ${customerCount} customer(s) are using it`,
-        });
-      }
+    if (customerCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot disable tier - ${customerCount} customer(s) are using it`,
+      });
     }
 
     // Soft delete by setting inactive
     const { error } = await supabase
-      .from('subscription_pricing')
+      .from('pricing_tiers')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', id);
 
@@ -209,86 +217,37 @@ router.delete('/:id', async (req, res) => {
       message: 'Pricing tier disabled successfully',
     });
   } catch (error) {
-    console.error('Error deleting pricing tier:', error);
-    res.status(500).json({ error: 'Failed to delete pricing tier' });
+    console.error('Error disabling pricing tier:', error);
+    res.status(500).json({ success: false, error: 'Failed to disable pricing tier' });
   }
 });
 
 /**
- * GET /api/pricing/stripe/products
- * Get Stripe products and prices for reference
+ * GET /api/pricing/charity-discount
+ * Get current charity discount percentage (global setting)
  */
-router.get('/stripe/products', async (req, res) => {
+router.get('/charity-discount', async (req, res) => {
   try {
-    const products = await stripe.products.list({ active: true, limit: 100 });
-    const prices = await stripe.prices.list({ active: true, limit: 100 });
-
-    // Map prices to products
-    const productsWithPrices = products.data.map(product => {
-      const productPrices = prices.data.filter(p => p.product === product.id);
-      return {
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        prices: productPrices.map(p => ({
-          id: p.id,
-          unitAmount: p.unit_amount ? p.unit_amount / 100 : 0,
-          currency: p.currency,
-          interval: p.recurring?.interval,
-          usageType: p.recurring?.usage_type,
-        })),
-      };
-    });
-
-    res.json({
-      success: true,
-      data: productsWithPrices,
-    });
-  } catch (error) {
-    console.error('Error fetching Stripe products:', error);
-    res.status(500).json({ error: 'Failed to fetch Stripe products' });
-  }
-});
-
-/**
- * POST /api/pricing/:id/sync-stripe
- * Link pricing tier with Stripe price IDs
- */
-router.post('/:id/sync-stripe', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { stripeMonthlyPriceId, stripeUsagePriceId } = req.body;
-
-    const updateData = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (stripeMonthlyPriceId) {
-      updateData.stripe_monthly_price_id = stripeMonthlyPriceId;
-    }
-    if (stripeUsagePriceId) {
-      updateData.stripe_usage_price_id = stripeUsagePriceId;
-    }
-
-    const { data, error } = await supabase
-      .from('subscription_pricing')
-      .update(updateData)
-      .eq('id', id)
-      .select()
+    // Calculate charity discount from first tier's credit prices
+    const { data: tier, error } = await supabase
+      .from('pricing_tiers')
+      .select('credit_price_pence, charity_credit_price_pence')
+      .eq('id', 'basic')
       .single();
 
     if (error) throw error;
 
-    console.log(`💰 Pricing tier synced with Stripe: ${data.display_name}`);
+    const discountPercent = tier
+      ? Math.round((1 - tier.charity_credit_price_pence / tier.credit_price_pence) * 100)
+      : 50;
 
     res.json({
       success: true,
-      message: 'Pricing tier synced with Stripe',
-      data,
+      data: { discountPercent },
     });
   } catch (error) {
-    console.error('Error syncing with Stripe:', error);
-    res.status(500).json({ error: 'Failed to sync with Stripe' });
+    console.error('Error fetching charity discount:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch charity discount' });
   }
 });
 
