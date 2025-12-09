@@ -15,11 +15,17 @@ dotenv.config();
 const OPENWORD_SERVER_URL = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
 const MONITOR_INTERVAL = parseInt(process.env.MONITOR_INTERVAL_MINUTES || '5');
 
+// Performance thresholds (in milliseconds)
+const PERFORMANCE_WARNING_THRESHOLD = 3000; // 3 seconds
+const PERFORMANCE_CRITICAL_THRESHOLD = 8000; // 8 seconds
+
 // Store for tracking issues
 const issueTracker = {
   serverDown: false,
   lastServerCheck: null,
   consecutiveFailures: 0,
+  consecutiveSlowResponses: 0,
+  lastResponseTime: null,
   lastAlertSent: {},
 };
 
@@ -27,11 +33,13 @@ const issueTracker = {
  * Check if OpenWord main server is healthy
  */
 async function checkServerHealth() {
+  const startTime = Date.now();
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-// Try multiple endpoints - /health first, then root
+    // Try multiple endpoints - /health first, then root
     let response = await fetch(`${OPENWORD_SERVER_URL}/health`, {
       signal: controller.signal,
     }).catch(() => null);
@@ -44,6 +52,8 @@ async function checkServerHealth() {
     }
 
     clearTimeout(timeout);
+    const responseTime = Date.now() - startTime;
+    issueTracker.lastResponseTime = responseTime;
 
     if (response.ok) {
       if (issueTracker.serverDown) {
@@ -51,19 +61,23 @@ async function checkServerHealth() {
         await sendWarningAlert(
           'Server Recovered',
           `<p>OpenWord server is back online after ${issueTracker.consecutiveFailures} failed checks.</p>
-           <p>URL: ${OPENWORD_SERVER_URL}</p>`
+           <p>URL: ${OPENWORD_SERVER_URL}</p>
+           <p>Response time: ${responseTime}ms</p>`
         );
       }
       issueTracker.serverDown = false;
       issueTracker.consecutiveFailures = 0;
       issueTracker.lastServerCheck = new Date();
-      return { healthy: true, status: response.status };
+
+      return { healthy: true, status: response.status, responseTime };
     } else {
       throw new Error(`Server returned ${response.status}`);
     }
   } catch (error) {
+    const responseTime = Date.now() - startTime;
     issueTracker.consecutiveFailures++;
     issueTracker.lastServerCheck = new Date();
+    issueTracker.lastResponseTime = responseTime;
 
     // Send critical alert after 3 consecutive failures
     if (issueTracker.consecutiveFailures >= 3 && !issueTracker.serverDown) {
@@ -77,7 +91,104 @@ async function checkServerHealth() {
       );
     }
 
-    return { healthy: false, error: error.message };
+    return { healthy: false, error: error.message, responseTime };
+  }
+}
+
+/**
+ * Check server performance (response times)
+ */
+async function checkServerPerformance() {
+  const startTime = Date.now();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15 second timeout for performance check
+
+    // Test the health endpoint
+    const response = await fetch(`${OPENWORD_SERVER_URL}/health`, {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    const responseTime = Date.now() - startTime;
+
+    // Check if response time is concerning
+    let performanceStatus = 'good';
+
+    if (responseTime >= PERFORMANCE_CRITICAL_THRESHOLD) {
+      performanceStatus = 'critical';
+      issueTracker.consecutiveSlowResponses++;
+
+      // Alert after 2 consecutive critical slow responses
+      if (issueTracker.consecutiveSlowResponses >= 2) {
+        const shouldAlert = !issueTracker.lastAlertSent.performanceCritical ||
+          (Date.now() - issueTracker.lastAlertSent.performanceCritical) > 30 * 60 * 1000; // 30 minutes
+
+        if (shouldAlert) {
+          await sendCriticalAlert(
+            'Critical Performance Issue',
+            `<p>OpenWord server is responding extremely slowly!</p>
+             <p>Response time: <strong>${(responseTime / 1000).toFixed(2)} seconds</strong></p>
+             <p>Threshold: ${(PERFORMANCE_CRITICAL_THRESHOLD / 1000).toFixed(1)} seconds</p>
+             <p>Consecutive slow responses: ${issueTracker.consecutiveSlowResponses}</p>
+             <p>URL: ${OPENWORD_SERVER_URL}</p>
+             <p style="color: #dc3545;">This may affect user experience. Consider checking server resources and logs.</p>`
+          );
+          issueTracker.lastAlertSent.performanceCritical = Date.now();
+        }
+      }
+    } else if (responseTime >= PERFORMANCE_WARNING_THRESHOLD) {
+      performanceStatus = 'warning';
+      issueTracker.consecutiveSlowResponses++;
+
+      // Alert after 3 consecutive warning-level slow responses
+      if (issueTracker.consecutiveSlowResponses >= 3) {
+        const shouldAlert = !issueTracker.lastAlertSent.performanceWarning ||
+          (Date.now() - issueTracker.lastAlertSent.performanceWarning) > 60 * 60 * 1000; // 1 hour
+
+        if (shouldAlert) {
+          await sendWarningAlert(
+            'Server Performance Degraded',
+            `<p>OpenWord server response times are elevated.</p>
+             <p>Response time: <strong>${(responseTime / 1000).toFixed(2)} seconds</strong></p>
+             <p>Warning threshold: ${(PERFORMANCE_WARNING_THRESHOLD / 1000).toFixed(1)} seconds</p>
+             <p>Consecutive slow responses: ${issueTracker.consecutiveSlowResponses}</p>
+             <p>URL: ${OPENWORD_SERVER_URL}</p>
+             <p>This may indicate the server is under heavy load or experiencing issues.</p>`
+          );
+          issueTracker.lastAlertSent.performanceWarning = Date.now();
+        }
+      }
+    } else {
+      // Performance is good - reset counter
+      if (issueTracker.consecutiveSlowResponses > 0) {
+        console.log(`✅ Server performance recovered (was ${issueTracker.consecutiveSlowResponses} consecutive slow responses)`);
+      }
+      issueTracker.consecutiveSlowResponses = 0;
+    }
+
+    return {
+      responseTime,
+      status: performanceStatus,
+      threshold: {
+        warning: PERFORMANCE_WARNING_THRESHOLD,
+        critical: PERFORMANCE_CRITICAL_THRESHOLD
+      },
+      consecutiveSlowResponses: issueTracker.consecutiveSlowResponses
+    };
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+
+    // Timeout or other error - treat as critical performance issue
+    issueTracker.consecutiveSlowResponses++;
+
+    return {
+      responseTime,
+      status: 'error',
+      error: error.message,
+      consecutiveSlowResponses: issueTracker.consecutiveSlowResponses
+    };
   }
 }
 
@@ -265,11 +376,25 @@ export async function runAllChecks() {
   const results = {
     timestamp: new Date().toISOString(),
     server: await checkServerHealth(),
+    performance: await checkServerPerformance(),
     database: await checkDatabaseHealth(),
     paymentIssues: await checkPaymentIssues(),
     usageAnomalies: await checkUsageAnomalies(),
     charityReviews: await checkPendingCharityReviews(),
   };
+
+  // Log performance summary
+  if (results.performance) {
+    const perfStatus = results.performance.status;
+    const respTime = results.performance.responseTime;
+    if (perfStatus === 'good') {
+      console.log(`⚡ Server performance: ${respTime}ms (good)`);
+    } else if (perfStatus === 'warning') {
+      console.log(`⚠️ Server performance: ${respTime}ms (slow)`);
+    } else if (perfStatus === 'critical') {
+      console.log(`🚨 Server performance: ${respTime}ms (critical)`);
+    }
+  }
 
   console.log('✅ Monitoring checks completed:', JSON.stringify(results, null, 2));
   return results;
