@@ -89,6 +89,34 @@
       <!-- System Status Alert -->
       <div id="systemAlert" class="alert" style="display: none;"></div>
 
+      <!-- Pending Charity Reviews Alert -->
+      <div id="charityReviewAlert" class="card" style="display: none; border-left: 4px solid #f59e0b; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+        <div class="card-header" style="border-bottom: 1px solid rgba(0,0,0,0.1);">
+          <h3 style="color: #92400e; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Pending Charity Reviews
+          </h3>
+          <span class="badge badge-warning" id="charityReviewCount" style="font-size: 14px;">0</span>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Organisation</th>
+                <th>Charity Number</th>
+                <th>Region</th>
+                <th>Contact</th>
+                <th>Requested</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="charityReviewsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Key Stats -->
       <div class="stats-grid">
         <div class="stat-card primary">
@@ -442,6 +470,115 @@
       }
     }
 
+    // Load pending charity reviews
+    async function loadCharityReviews() {
+      try {
+        const response = await fetch('/api/dashboard/pending-charity-reviews');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const alertDiv = document.getElementById('charityReviewAlert');
+        const countBadge = document.getElementById('charityReviewCount');
+        const tableBody = document.getElementById('charityReviewsTable');
+
+        if (data.data.count === 0) {
+          alertDiv.style.display = 'none';
+          return;
+        }
+
+        // Show the alert section
+        alertDiv.style.display = 'block';
+        countBadge.textContent = data.data.count;
+
+        // Populate table
+        tableBody.innerHTML = data.data.reviews.map(review => `
+          <tr>
+            <td>
+              <a href="/customers/${review.id}" style="color: #92400e; font-weight: 600;">${review.name}</a>
+              ${review.is_registered_charity ? '<span class="badge badge-info" style="margin-left: 4px; font-size: 10px;">Claims Charity</span>' : ''}
+            </td>
+            <td>${review.charity_number || '<span class="text-muted">Not provided</span>'}</td>
+            <td>${review.charity_region || '<span class="text-muted">Unknown</span>'}</td>
+            <td>
+              ${review.contact_name || 'Unknown'}
+              ${review.contact_email ? `<br><small class="text-muted">${review.contact_email}</small>` : ''}
+            </td>
+            <td>${formatDate(review.charity_review_requested_at)}</td>
+            <td style="white-space: nowrap;">
+              <button onclick="grantCharityDiscount('${review.id}', '${review.name.replace(/'/g, "\\'")}')"
+                      class="btn btn-sm" style="background: #10b981; color: white; margin-right: 4px;">
+                Grant 50%
+              </button>
+              <button onclick="denyCharityDiscount('${review.id}', '${review.name.replace(/'/g, "\\'")}')"
+                      class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;">
+                Deny
+              </button>
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading charity reviews:', error);
+      }
+    }
+
+    // Grant charity discount
+    async function grantCharityDiscount(orgId, orgName) {
+      const discountPercent = prompt(`Grant charity discount to "${orgName}".\n\nEnter discount percentage (default 50%):`, '50');
+
+      if (discountPercent === null) return; // User cancelled
+
+      const discount = parseInt(discountPercent) || 50;
+      const reason = prompt('Enter reason for granting discount (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/grant-charity-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discountPercent: discount, reason })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Charity discount of ${discount}% granted to ${orgName}`);
+        loadCharityReviews(); // Refresh the list
+        loadCredits(); // Refresh charity count
+      } catch (error) {
+        console.error('Error granting discount:', error);
+        alert('Failed to grant discount: ' + error.message);
+      }
+    }
+
+    // Deny charity discount
+    async function denyCharityDiscount(orgId, orgName) {
+      if (!confirm(`Deny charity status for "${orgName}"?\n\nThis will mark the review as completed without granting a discount.`)) {
+        return;
+      }
+
+      const reason = prompt('Enter reason for denial (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/deny-charity-review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Charity review denied for ${orgName}`);
+        loadCharityReviews(); // Refresh the list
+      } catch (error) {
+        console.error('Error denying review:', error);
+        alert('Failed to deny review: ' + error.message);
+      }
+    }
+
     // Load low balance customers
     async function loadLowBalanceCustomers() {
       try {
@@ -543,6 +680,7 @@
       loadSummary();
       loadRevenue();
       loadCredits();
+      loadCharityReviews();
       loadLowBalanceCustomers();
       loadActivity();
     }

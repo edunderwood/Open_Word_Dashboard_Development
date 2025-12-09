@@ -204,6 +204,59 @@ async function checkDatabaseHealth() {
 }
 
 /**
+ * Check for pending charity review requests
+ */
+async function checkPendingCharityReviews() {
+  try {
+    const { data: pendingReviews, error } = await supabase
+      .from('organisations')
+      .select('id, name, charity_number, charity_region, charity_review_reason, charity_review_requested_at, contact_name')
+      .eq('charity_review_requested', true)
+      .eq('charity_verified', false)
+      .order('charity_review_requested_at', { ascending: true });
+
+    if (error) throw error;
+
+    const count = pendingReviews?.length || 0;
+
+    if (count > 0) {
+      // Check if we've already alerted about these specific reviews
+      const reviewIds = pendingReviews.map(r => r.id).sort().join(',');
+      const lastAlertedIds = issueTracker.lastAlertSent.charityReviewIds || '';
+
+      // Alert if there are new reviews we haven't alerted about
+      if (reviewIds !== lastAlertedIds) {
+        await sendWarningAlert(
+          `${count} Charity Review Request${count > 1 ? 's' : ''} Pending`,
+          `<p>The following organisations have requested manual charity verification:</p>
+           <ul>
+             ${pendingReviews.map(r => `
+               <li>
+                 <strong>${r.name}</strong><br>
+                 Charity Number: ${r.charity_number || 'Not provided'}<br>
+                 Region: ${r.charity_region || 'Unknown'}<br>
+                 Contact: ${r.contact_name || 'Unknown'}<br>
+                 Requested: ${new Date(r.charity_review_requested_at).toLocaleString()}<br>
+                 ${r.charity_review_reason ? `Reason: ${r.charity_review_reason}` : ''}
+               </li>
+             `).join('')}
+           </ul>
+           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/charity-registers">
+             Review in Dashboard
+           </a></p>`
+        );
+        issueTracker.lastAlertSent.charityReviewIds = reviewIds;
+      }
+    }
+
+    return { count, reviews: pendingReviews || [] };
+  } catch (error) {
+    console.error('Error checking charity reviews:', error);
+    return { error: error.message };
+  }
+}
+
+/**
  * Run all monitoring checks
  */
 export async function runAllChecks() {
@@ -215,6 +268,7 @@ export async function runAllChecks() {
     database: await checkDatabaseHealth(),
     paymentIssues: await checkPaymentIssues(),
     usageAnomalies: await checkUsageAnomalies(),
+    charityReviews: await checkPendingCharityReviews(),
   };
 
   console.log('✅ Monitoring checks completed:', JSON.stringify(results, null, 2));

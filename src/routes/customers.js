@@ -42,6 +42,25 @@ router.get('/', async (req, res) => {
       query = query.eq('subscription_plan', plan);
     }
 
+    // Charity filter
+    const charity = req.query.charity || '';
+    if (charity) {
+      switch (charity) {
+        case 'verified':
+          query = query.eq('charity_verified', true);
+          break;
+        case 'pending':
+          query = query.eq('charity_review_requested', true).eq('charity_verified', false);
+          break;
+        case 'claimed':
+          query = query.eq('is_registered_charity', true).eq('charity_verified', false);
+          break;
+        case 'none':
+          query = query.eq('is_registered_charity', false);
+          break;
+      }
+    }
+
     // Get total count first
     const { count: totalCount } = await query;
 
@@ -819,6 +838,115 @@ router.post('/:id/cancel-subscription', async (req, res) => {
   } catch (error) {
     console.error('Error cancelling subscription:', error);
     res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/grant-charity-discount
+ * Grant charity discount to a customer (even if not a verified charity)
+ */
+router.post('/:id/grant-charity-discount', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { discountPercent, reason } = req.body;
+
+    const discount = discountPercent || 50; // Default 50% discount
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        charity_verified: true,
+        charity_discount_percent: discount,
+        charity_review_requested: false,
+        charity_review_completed_at: new Date().toISOString(),
+        charity_review_notes: reason || 'Discount granted by admin'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`💚 Charity discount (${discount}%) granted to: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: `${discount}% charity discount granted successfully`,
+      data,
+    });
+  } catch (error) {
+    console.error('Error granting charity discount:', error);
+    res.status(500).json({ error: 'Failed to grant charity discount' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/deny-charity-review
+ * Deny a charity review request (mark as completed without granting discount)
+ */
+router.post('/:id/deny-charity-review', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        charity_review_requested: false,
+        charity_review_completed_at: new Date().toISOString(),
+        charity_review_notes: reason || 'Review denied by admin - not eligible for charity discount'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`🚫 Charity review denied for: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: 'Charity review denied',
+      data,
+    });
+  } catch (error) {
+    console.error('Error denying charity review:', error);
+    res.status(500).json({ error: 'Failed to deny charity review' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/revoke-charity-discount
+ * Revoke charity discount from a customer
+ */
+router.post('/:id/revoke-charity-discount', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        charity_verified: false,
+        charity_discount_percent: 0,
+        charity_review_notes: reason || 'Discount revoked by admin'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`❌ Charity discount revoked from: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: 'Charity discount revoked',
+      data,
+    });
+  } catch (error) {
+    console.error('Error revoking charity discount:', error);
+    res.status(500).json({ error: 'Failed to revoke charity discount' });
   }
 });
 

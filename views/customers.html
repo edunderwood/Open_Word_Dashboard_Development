@@ -112,6 +112,13 @@
             <option value="professional">Professional</option>
             <option value="enterprise">Enterprise</option>
           </select>
+          <select id="charityFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
+            <option value="">All Charity Status</option>
+            <option value="verified">Verified Charities</option>
+            <option value="pending">Pending Review</option>
+            <option value="claimed">Claims Charity</option>
+            <option value="none">Not Charity</option>
+          </select>
         </div>
       </div>
 
@@ -259,6 +266,7 @@
       const search = document.getElementById('searchInput').value;
       const status = document.getElementById('statusFilter').value;
       const plan = document.getElementById('planFilter').value;
+      const charity = document.getElementById('charityFilter').value;
 
       try {
         const params = new URLSearchParams({
@@ -268,6 +276,7 @@
         if (search) params.append('search', search);
         if (status) params.append('status', status);
         if (plan) params.append('plan', plan);
+        if (charity) params.append('charity', charity);
 
         const response = await fetch(`/api/customers?${params}`);
         const data = await response.json();
@@ -289,7 +298,12 @@
             <tr>
               <td>
                 <strong>${customer.name || 'Unnamed'}</strong>
-                ${customer.is_registered_charity ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>' : ''}
+                ${customer.charity_verified
+                  ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
+                  : customer.charity_review_requested
+                    ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Review</span>'
+                    : ''
+                }
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
               <td><span class="badge" style="background: ${getTierColor(tier)}; color: white;">${tier.charAt(0).toUpperCase() + tier.slice(1)}</span></td>
@@ -438,11 +452,41 @@
             ` : ''}
           </div>
 
+          <!-- Charity Status Section -->
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Charity Status</h4>
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+              <div>
+                ${customer.charity_verified
+                  ? `<span class="badge badge-success" style="font-size: 12px; padding: 6px 12px;">Verified - ${customer.charity_discount_percent || 50}% Discount</span>`
+                  : customer.charity_review_requested
+                    ? '<span class="badge badge-warning" style="font-size: 12px; padding: 6px 12px;">Review Pending</span>'
+                    : customer.is_registered_charity
+                      ? '<span class="badge badge-info" style="font-size: 12px; padding: 6px 12px;">Claims Charity (Unverified)</span>'
+                      : '<span class="badge badge-gray" style="font-size: 12px; padding: 6px 12px;">Not a Charity</span>'
+                }
+              </div>
+              ${customer.charity_number ? `<div><strong>Charity No:</strong> ${customer.charity_number}</div>` : ''}
+              ${customer.charity_region ? `<div><strong>Region:</strong> ${customer.charity_region}</div>` : ''}
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+              ${!customer.charity_verified
+                ? `<button class="btn btn-sm btn-success" onclick="grantCharityDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Grant Charity Discount</button>`
+                : `<button class="btn btn-sm btn-danger" onclick="revokeCharityDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Revoke Discount</button>`
+              }
+              ${customer.charity_review_requested && !customer.charity_verified
+                ? `<button class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;" onclick="denyCharityReview('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Deny Review</button>`
+                : ''
+              }
+            </div>
+            ${customer.charity_review_notes ? `<div style="margin-top: 10px; font-size: 0.85rem; color: var(--gray-500);"><strong>Notes:</strong> ${customer.charity_review_notes}</div>` : ''}
+          </div>
+
           <!-- Credit Balance Section -->
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
             <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">
               Credit Balance
-              ${credits?.isCharity ? '<span class="badge badge-success" style="margin-left: 8px;">50% Charity Discount</span>' : ''}
+              ${customer.charity_verified ? `<span class="badge badge-success" style="margin-left: 8px;">${customer.charity_discount_percent || 50}% Charity Discount</span>` : ''}
             </h4>
             <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 15px;">
               <div class="stat-card" style="padding: 15px; ${credits?.balance?.current <= 10 ? 'border: 2px solid var(--danger);' : ''}">
@@ -785,6 +829,82 @@
         viewCustomer(id); // Refresh modal
       } catch (error) {
         alert('Error deducting credits: ' + error.message);
+      }
+    }
+
+    // Grant charity discount
+    async function grantCharityDiscount(id, name) {
+      const discountPercent = prompt(`Grant charity discount to "${name}".\n\nEnter discount percentage (default 50%):`, '50');
+      if (discountPercent === null) return;
+
+      const discount = parseInt(discountPercent) || 50;
+      const reason = prompt('Enter reason for granting discount (optional):');
+
+      if (!confirm(`Grant ${discount}% charity discount to ${name}?`)) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/grant-charity-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discountPercent: discount, reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Charity discount of ${discount}% granted to ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error granting discount: ' + error.message);
+      }
+    }
+
+    // Revoke charity discount
+    async function revokeCharityDiscount(id, name) {
+      if (!confirm(`Revoke charity discount from "${name}"?\n\nThey will no longer receive discounted credit pricing.`)) return;
+
+      const reason = prompt('Enter reason for revoking discount (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/revoke-charity-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Charity discount revoked from ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error revoking discount: ' + error.message);
+      }
+    }
+
+    // Deny charity review
+    async function denyCharityReview(id, name) {
+      if (!confirm(`Deny charity status for "${name}"?\n\nThis will mark the review as completed without granting a discount.`)) return;
+
+      const reason = prompt('Enter reason for denial (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/deny-charity-review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Charity review denied for ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error denying review: ' + error.message);
       }
     }
 

@@ -400,4 +400,32 @@ router.get('/revenue', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/pending-charity-reviews
+ * Get organisations with pending charity review requests
+ */
+router.get('/pending-charity-reviews', async (req, res) => {
+  try {
+    const { data: pendingReviews, error } = await supabase
+      .from('organisations')
+      .select('id, name, charity_number, charity_region, charity_review_reason, charity_review_requested_at, contact_name, contact_email, is_registered_charity')
+      .eq('charity_review_requested', true)
+      .eq('charity_verified', false)
+      .order('charity_review_requested_at', { ascending: true });
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        count: pendingReviews?.length || 0,
+        reviews: pendingReviews || []
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pending charity reviews:', error);
+    res.status(500).json({ error: 'Failed to fetch pending charity reviews' });
+  }
+});
+
 export default router;
