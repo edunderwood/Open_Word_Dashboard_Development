@@ -32,6 +32,36 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/pricing/charity-discount
+ * Get current charity discount percentage (global setting)
+ * NOTE: This route must be defined BEFORE /:id to avoid being matched as an ID
+ */
+router.get('/charity-discount', async (req, res) => {
+  try {
+    // Calculate charity discount from first tier's credit prices
+    const { data: tier, error } = await supabase
+      .from('pricing_tiers')
+      .select('credit_price_pence, charity_credit_price_pence')
+      .eq('id', 'basic')
+      .single();
+
+    if (error) throw error;
+
+    const discountPercent = tier
+      ? Math.round((1 - tier.charity_credit_price_pence / tier.credit_price_pence) * 100)
+      : 50;
+
+    res.json({
+      success: true,
+      data: { discountPercent },
+    });
+  } catch (error) {
+    console.error('Error fetching charity discount:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch charity discount' });
+  }
+});
+
+/**
  * GET /api/pricing/:id
  * Get single pricing tier
  */
@@ -230,35 +260,6 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error disabling pricing tier:', error);
     res.status(500).json({ success: false, error: 'Failed to disable pricing tier' });
-  }
-});
-
-/**
- * GET /api/pricing/charity-discount
- * Get current charity discount percentage (global setting)
- */
-router.get('/charity-discount', async (req, res) => {
-  try {
-    // Calculate charity discount from first tier's credit prices
-    const { data: tier, error } = await supabase
-      .from('pricing_tiers')
-      .select('credit_price_pence, charity_credit_price_pence')
-      .eq('id', 'basic')
-      .single();
-
-    if (error) throw error;
-
-    const discountPercent = tier
-      ? Math.round((1 - tier.charity_credit_price_pence / tier.credit_price_pence) * 100)
-      : 50;
-
-    res.json({
-      success: true,
-      data: { discountPercent },
-    });
-  } catch (error) {
-    console.error('Error fetching charity discount:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch charity discount' });
   }
 });
 
