@@ -111,7 +111,10 @@ router.put('/:id', async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error updating pricing tier:', error);
+      throw error;
+    }
 
     console.log(`💰 Pricing tier updated: ${data.name} (${id})`);
 
@@ -122,6 +125,7 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating pricing tier:', error);
+    console.error('Update data was:', req.body);
     res.status(500).json({ success: false, error: 'Failed to update pricing tier' });
   }
 });
