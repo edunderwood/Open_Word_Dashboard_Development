@@ -38,18 +38,16 @@ router.get('/', async (req, res) => {
  */
 router.get('/charity-discount', async (req, res) => {
   try {
-    // Calculate charity discount from first tier's credit prices
+    // Get charity discount percentage from basic tier
     const { data: tier, error } = await supabase
       .from('pricing_tiers')
-      .select('credit_price_pence, charity_credit_price_pence')
+      .select('charity_discount_percent')
       .eq('id', 'basic')
       .single();
 
     if (error) throw error;
 
-    const discountPercent = tier
-      ? Math.round((1 - tier.charity_credit_price_pence / tier.credit_price_pence) * 100)
-      : 50;
+    const discountPercent = tier?.charity_discount_percent ?? 50;
 
     res.json({
       success: true,
@@ -103,7 +101,7 @@ router.put('/:id', async (req, res) => {
       monthlyFeePence,
       charsPerCredit,
       creditPricePence,
-      charityCreditPricePence,
+      charityDiscountPercent,
       maxConcurrentSessions,
       canCustomizeBranding,
       canReceiveFeedback,
@@ -113,17 +111,12 @@ router.put('/:id', async (req, res) => {
       isActive,
     } = req.body;
 
-    const {
-      charityDiscountPercent,
-    } = req.body;
-
     // Build update object with only provided fields
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (monthlyFeePence !== undefined) updateData.monthly_fee_pence = monthlyFeePence;
     if (charsPerCredit !== undefined) updateData.chars_per_credit = charsPerCredit;
     if (creditPricePence !== undefined) updateData.credit_price_pence = creditPricePence;
-    if (charityCreditPricePence !== undefined) updateData.charity_credit_price_pence = charityCreditPricePence;
     if (charityDiscountPercent !== undefined) updateData.charity_discount_percent = charityDiscountPercent;
     if (maxConcurrentSessions !== undefined) updateData.max_concurrent_sessions = maxConcurrentSessions;
     if (canCustomizeBranding !== undefined) updateData.can_customize_branding = canCustomizeBranding;
@@ -172,7 +165,6 @@ router.post('/', async (req, res) => {
       monthlyFeePence,
       charsPerCredit,
       creditPricePence,
-      charityCreditPricePence,
       charityDiscountPercent,
       maxConcurrentSessions,
       canCustomizeBranding,
@@ -194,7 +186,6 @@ router.post('/', async (req, res) => {
         monthly_fee_pence: monthlyFeePence || 0,
         chars_per_credit: charsPerCredit || 23000,
         credit_price_pence: creditPricePence || 118,
-        charity_credit_price_pence: charityCreditPricePence || 59,
         charity_discount_percent: charityDiscountPercent || 50,
         max_concurrent_sessions: maxConcurrentSessions || 1,
         can_customize_branding: canCustomizeBranding || false,

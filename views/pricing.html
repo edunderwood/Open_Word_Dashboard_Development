@@ -228,7 +228,7 @@
         <ul>
           <li><strong>Monthly Fee:</strong> Fixed subscription cost per month (in pence)</li>
           <li><strong>Credit Price:</strong> Cost per credit for regular customers (in pence)</li>
-          <li><strong>Charity Credit Price:</strong> Discounted credit price for verified charities</li>
+          <li><strong>Charity Discount:</strong> Percentage discount applied to credit price for verified charities</li>
           <li><strong>Chars per Credit:</strong> Number of characters included per credit (default: 23,000)</li>
           <li>Changes here update the <code>pricing_tiers</code> table used by OpenWord</li>
         </ul>
@@ -279,20 +279,9 @@
               <small class="text-muted">e.g., 118 = £1.18</small>
             </div>
             <div class="form-group">
-              <label for="charityCreditPricePence">Charity Credit Price (pence)</label>
-              <input type="number" id="charityCreditPricePence" class="form-input" min="0" step="0.01" required placeholder="59">
-              <small class="text-muted">e.g., 70.80 = £0.71</small>
-            </div>
-          </div>
-
-          <div class="grid grid-2">
-            <div class="form-group">
               <label for="charityDiscountPercent">Default Charity Discount (%)</label>
               <input type="number" id="charityDiscountPercent" class="form-input" min="0" max="100" required placeholder="50">
-              <small class="text-muted">Applied to new charities on this tier</small>
-            </div>
-            <div class="form-group">
-              <!-- Empty for alignment -->
+              <small class="text-muted">Applied to credit price for verified charities</small>
             </div>
           </div>
 
@@ -391,12 +380,12 @@
                   <span>${formatPence(tier.credit_price_pence)}</span>
                 </div>
                 <div class="tier-detail">
-                  <label>Charity Price</label>
-                  <span>${formatPence(tier.charity_credit_price_pence)}</span>
-                </div>
-                <div class="tier-detail">
                   <label>Charity Discount</label>
                   <span style="color: #10b981; font-weight: 600;">${tier.charity_discount_percent || 50}%</span>
+                </div>
+                <div class="tier-detail">
+                  <label>Charity Price</label>
+                  <span style="color: #10b981;">${formatPence(Math.round(tier.credit_price_pence * (1 - (tier.charity_discount_percent || 50) / 100)))}</span>
                 </div>
                 <div class="tier-detail">
                   <label>Chars/Credit</label>
@@ -473,7 +462,6 @@
         document.getElementById('monthlyFeePence').value = tier.monthly_fee_pence || 0;
         document.getElementById('charsPerCredit').value = tier.chars_per_credit || 23000;
         document.getElementById('creditPricePence').value = tier.credit_price_pence || 118;
-        document.getElementById('charityCreditPricePence').value = tier.charity_credit_price_pence || 59;
         document.getElementById('charityDiscountPercent').value = tier.charity_discount_percent || 50;
         document.getElementById('maxConcurrentSessions').value = tier.max_concurrent_sessions || 1;
         document.getElementById('displayOrder').value = tier.display_order || 0;
@@ -501,7 +489,6 @@
         monthlyFeePence: parseFloat(document.getElementById('monthlyFeePence').value) || 0,
         charsPerCredit: parseInt(document.getElementById('charsPerCredit').value),
         creditPricePence: parseFloat(document.getElementById('creditPricePence').value) || 0,
-        charityCreditPricePence: parseFloat(document.getElementById('charityCreditPricePence').value) || 0,
         charityDiscountPercent: parseInt(document.getElementById('charityDiscountPercent').value) || 50,
         maxConcurrentSessions: parseInt(document.getElementById('maxConcurrentSessions').value),
         displayOrder: parseInt(document.getElementById('displayOrder').value) || 0,
