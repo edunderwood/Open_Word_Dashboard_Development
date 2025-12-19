@@ -263,7 +263,7 @@
           <div class="grid grid-2">
             <div class="form-group">
               <label for="monthlyFeePence">Monthly Fee (pence)</label>
-              <input type="number" id="monthlyFeePence" class="form-input" min="0" required placeholder="1200">
+              <input type="number" id="monthlyFeePence" class="form-input" min="0" step="0.01" required placeholder="1200">
               <small class="text-muted">e.g., 1200 = £12.00</small>
             </div>
             <div class="form-group">
@@ -275,12 +275,12 @@
           <div class="grid grid-2">
             <div class="form-group">
               <label for="creditPricePence">Credit Price (pence)</label>
-              <input type="number" id="creditPricePence" class="form-input" min="0" required placeholder="118">
+              <input type="number" id="creditPricePence" class="form-input" min="0" step="0.01" required placeholder="118">
               <small class="text-muted">e.g., 118 = £1.18</small>
             </div>
             <div class="form-group">
               <label for="charityCreditPricePence">Charity Credit Price (pence)</label>
-              <input type="number" id="charityCreditPricePence" class="form-input" min="0" required placeholder="59">
+              <input type="number" id="charityCreditPricePence" class="form-input" min="0" step="0.01" required placeholder="59">
               <small class="text-muted">e.g., 59 = £0.59 (50% off)</small>
             </div>
           </div>
@@ -498,10 +498,10 @@
       const tier = {
         id: document.getElementById('tierIdInput').value,
         name: document.getElementById('tierName').value,
-        monthlyFeePence: parseInt(document.getElementById('monthlyFeePence').value),
+        monthlyFeePence: parseFloat(document.getElementById('monthlyFeePence').value),
         charsPerCredit: parseInt(document.getElementById('charsPerCredit').value),
-        creditPricePence: parseInt(document.getElementById('creditPricePence').value),
-        charityCreditPricePence: parseInt(document.getElementById('charityCreditPricePence').value),
+        creditPricePence: parseFloat(document.getElementById('creditPricePence').value),
+        charityCreditPricePence: parseFloat(document.getElementById('charityCreditPricePence').value),
         charityDiscountPercent: parseInt(document.getElementById('charityDiscountPercent').value) || 50,
         maxConcurrentSessions: parseInt(document.getElementById('maxConcurrentSessions').value),
         displayOrder: parseInt(document.getElementById('displayOrder').value) || 0,
