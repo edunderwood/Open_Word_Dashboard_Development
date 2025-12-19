@@ -263,8 +263,8 @@
           <div class="grid grid-2">
             <div class="form-group">
               <label for="monthlyFeePence">Monthly Fee (pence)</label>
-              <input type="number" id="monthlyFeePence" class="form-input" min="0" step="1" required placeholder="1200">
-              <small class="text-muted">e.g., 1200 = £12.00 (whole pence only)</small>
+              <input type="number" id="monthlyFeePence" class="form-input" min="0" step="any" required placeholder="1200">
+              <small class="text-muted">e.g., 1200 = £12.00 (will be rounded to nearest pence)</small>
             </div>
             <div class="form-group">
               <label for="charsPerCredit">Characters per Credit</label>
@@ -275,13 +275,13 @@
           <div class="grid grid-2">
             <div class="form-group">
               <label for="creditPricePence">Credit Price (pence)</label>
-              <input type="number" id="creditPricePence" class="form-input" min="0" step="1" required placeholder="118">
-              <small class="text-muted">e.g., 118 = £1.18 (whole pence only)</small>
+              <input type="number" id="creditPricePence" class="form-input" min="0" step="any" required placeholder="118">
+              <small class="text-muted">e.g., 118 = £1.18 (will be rounded to nearest pence)</small>
             </div>
             <div class="form-group">
               <label for="charityCreditPricePence">Charity Credit Price (pence)</label>
-              <input type="number" id="charityCreditPricePence" class="form-input" min="0" step="1" required placeholder="59">
-              <small class="text-muted">e.g., 71 = £0.71 (whole pence only)</small>
+              <input type="number" id="charityCreditPricePence" class="form-input" min="0" step="any" required placeholder="59">
+              <small class="text-muted">e.g., 70.8 → 71 = £0.71 (rounded to nearest pence)</small>
             </div>
           </div>
 
