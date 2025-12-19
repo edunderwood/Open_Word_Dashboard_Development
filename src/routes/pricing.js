@@ -83,6 +83,10 @@ router.put('/:id', async (req, res) => {
       isActive,
     } = req.body;
 
+    const {
+      charityDiscountPercent,
+    } = req.body;
+
     // Build update object with only provided fields
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -90,6 +94,7 @@ router.put('/:id', async (req, res) => {
     if (charsPerCredit !== undefined) updateData.chars_per_credit = charsPerCredit;
     if (creditPricePence !== undefined) updateData.credit_price_pence = creditPricePence;
     if (charityCreditPricePence !== undefined) updateData.charity_credit_price_pence = charityCreditPricePence;
+    if (charityDiscountPercent !== undefined) updateData.charity_discount_percent = charityDiscountPercent;
     if (maxConcurrentSessions !== undefined) updateData.max_concurrent_sessions = maxConcurrentSessions;
     if (canCustomizeBranding !== undefined) updateData.can_customize_branding = canCustomizeBranding;
     if (canReceiveFeedback !== undefined) updateData.can_receive_feedback = canReceiveFeedback;
@@ -134,6 +139,7 @@ router.post('/', async (req, res) => {
       charsPerCredit,
       creditPricePence,
       charityCreditPricePence,
+      charityDiscountPercent,
       maxConcurrentSessions,
       canCustomizeBranding,
       canReceiveFeedback,
@@ -155,6 +161,7 @@ router.post('/', async (req, res) => {
         chars_per_credit: charsPerCredit || 23000,
         credit_price_pence: creditPricePence || 118,
         charity_credit_price_pence: charityCreditPricePence || 59,
+        charity_discount_percent: charityDiscountPercent || 50,
         max_concurrent_sessions: maxConcurrentSessions || 1,
         can_customize_branding: canCustomizeBranding || false,
         can_receive_feedback: canReceiveFeedback || false,
