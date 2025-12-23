@@ -367,6 +367,124 @@ async function getVercelCosts() {
 }
 
 /**
+ * Get usage statistics: tier breakdown, credit usage last month and this month
+ */
+async function getUsageStatistics() {
+  try {
+    const now = new Date();
+
+    // This month date range
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    // Last month date range
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    // Get organisations by tier
+    const { data: orgs } = await supabase
+      .from('organisations')
+      .select('subscription_tier, minimum_monthly_fee, charity_verified, charity_discount_percent');
+
+    // Monthly fees per tier (in GBP)
+    const TIER_MONTHLY_FEES = {
+      'basic': 12,
+      'standard': 24,
+      'pro': 40,
+      'enterprise': 80
+    };
+
+    // Count orgs by tier and calculate expected fees
+    const tierBreakdown = {
+      basic: { count: 0, expectedFee: 0 },
+      standard: { count: 0, expectedFee: 0 },
+      pro: { count: 0, expectedFee: 0 },
+      enterprise: { count: 0, expectedFee: 0 }
+    };
+
+    let totalExpectedMonthlyFees = 0;
+
+    orgs?.forEach(org => {
+      const tier = org.subscription_tier || 'basic';
+      if (tierBreakdown[tier]) {
+        tierBreakdown[tier].count++;
+
+        // Use org's minimum_monthly_fee if set, otherwise use tier default
+        let fee = org.minimum_monthly_fee || TIER_MONTHLY_FEES[tier] || 12;
+
+        // Apply charity discount if verified
+        if (org.charity_verified) {
+          const discount = org.charity_discount_percent || 50;
+          fee = fee * (1 - discount / 100);
+        }
+
+        tierBreakdown[tier].expectedFee += fee;
+        totalExpectedMonthlyFees += fee;
+      }
+    });
+
+    // Get credit usage for this month
+    const { data: thisMonthUsage } = await supabase
+      .from('credit_usage')
+      .select('credits_used, total_billable_characters')
+      .gte('session_start', thisMonthStart.toISOString())
+      .lte('session_start', thisMonthEnd.toISOString());
+
+    let thisMonthCredits = 0;
+    let thisMonthCharacters = 0;
+    thisMonthUsage?.forEach(u => {
+      thisMonthCredits += parseFloat(u.credits_used) || 0;
+      thisMonthCharacters += u.total_billable_characters || 0;
+    });
+
+    // Get credit usage for last month
+    const { data: lastMonthUsage } = await supabase
+      .from('credit_usage')
+      .select('credits_used, total_billable_characters')
+      .gte('session_start', lastMonthStart.toISOString())
+      .lte('session_start', lastMonthEnd.toISOString());
+
+    let lastMonthCredits = 0;
+    let lastMonthCharacters = 0;
+    lastMonthUsage?.forEach(u => {
+      lastMonthCredits += parseFloat(u.credits_used) || 0;
+      lastMonthCharacters += u.total_billable_characters || 0;
+    });
+
+    // Credit value: £1.18 per credit (from your pricing)
+    const CREDIT_VALUE_GBP = 1.18;
+
+    return {
+      tierBreakdown,
+      totalOrganisations: orgs?.length || 0,
+      expectedMonthlyFees: totalExpectedMonthlyFees,
+      thisMonth: {
+        creditsUsed: thisMonthCredits,
+        charactersProcessed: thisMonthCharacters,
+        valueGBP: thisMonthCredits * CREDIT_VALUE_GBP,
+        period: `${thisMonthStart.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })} - ${now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}`
+      },
+      lastMonth: {
+        creditsUsed: lastMonthCredits,
+        charactersProcessed: lastMonthCharacters,
+        valueGBP: lastMonthCredits * CREDIT_VALUE_GBP,
+        period: lastMonthStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+      },
+      creditValueGBP: CREDIT_VALUE_GBP
+    };
+  } catch (error) {
+    console.error('Error getting usage statistics:', error);
+    return {
+      error: error.message,
+      tierBreakdown: {},
+      expectedMonthlyFees: 0,
+      thisMonth: { creditsUsed: 0, charactersProcessed: 0, valueGBP: 0 },
+      lastMonth: { creditsUsed: 0, charactersProcessed: 0, valueGBP: 0 }
+    };
+  }
+}
+
+/**
  * Get revenue from Stripe for current month
  */
 async function getMonthlyRevenue() {
@@ -444,13 +562,14 @@ async function getMonthlyRevenue() {
 export async function getCostsAnalytics() {
   try {
     // Fetch all costs in parallel
-    const [deepgram, googleTranslate, supabaseCosts, render, vercel, revenue] = await Promise.all([
+    const [deepgram, googleTranslate, supabaseCosts, render, vercel, revenue, usageStats] = await Promise.all([
       getDeepgramCosts(),
       getGoogleTranslateCosts(),
       getSupabaseCosts(),
       getRenderCosts(),
       getVercelCosts(),
-      getMonthlyRevenue()
+      getMonthlyRevenue(),
+      getUsageStatistics()
     ]);
 
     // Calculate totals (all costs are already in GBP)
@@ -521,6 +640,14 @@ export async function getCostsAnalytics() {
           total: totalRevenue,
           activeSubscriptions: revenue.activeSubscriptions || 0,
           currency: 'GBP'
+        },
+        usage: {
+          tierBreakdown: usageStats.tierBreakdown || {},
+          totalOrganisations: usageStats.totalOrganisations || 0,
+          expectedMonthlyFees: usageStats.expectedMonthlyFees || 0,
+          thisMonth: usageStats.thisMonth || { creditsUsed: 0, charactersProcessed: 0, valueGBP: 0 },
+          lastMonth: usageStats.lastMonth || { creditsUsed: 0, charactersProcessed: 0, valueGBP: 0 },
+          creditValueGBP: usageStats.creditValueGBP || 1.18
         },
         summary: {
           totalCosts: totalCostsGBP,

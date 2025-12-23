@@ -316,15 +316,27 @@
           </div>
         </div>
 
-        <!-- Revenue Card -->
+        <!-- Stripe Revenue Card (Actual Money In) -->
         <div class="costs-card">
           <h3>
-            <span class="icon revenue-icon">📈</span>
-            Monthly Revenue
+            <span class="icon revenue-icon">💳</span>
+            Stripe Revenue (Actual)
           </h3>
           <div id="revenue-content">
             <div class="loading-spinner">Loading revenue...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Usage Statistics Section -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <h3 style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+          <span class="icon" style="background: #3b82f6; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">📊</span>
+          Usage Statistics
+          <span style="font-size: 0.75rem; color: var(--gray-500); font-weight: normal; margin-left: auto;">(Credits are purchased up front - usage shown here may not match Stripe payments)</span>
+        </h3>
+        <div id="usage-content">
+          <div class="loading-spinner">Loading usage statistics...</div>
         </div>
       </div>
     </main>
@@ -348,6 +360,7 @@
         document.getElementById('summary-cards').innerHTML = '<div class="loading-spinner">Loading summary...</div>';
         document.getElementById('costs-content').innerHTML = '<div class="loading-spinner">Loading costs...</div>';
         document.getElementById('revenue-content').innerHTML = '<div class="loading-spinner">Loading revenue...</div>';
+        document.getElementById('usage-content').innerHTML = '<div class="loading-spinner">Loading usage statistics...</div>';
 
         const response = await fetch('/costs/summary');
         const result = await response.json();
@@ -360,6 +373,7 @@
         renderSummary(data);
         renderCosts(data.costs);
         renderRevenue(data.revenue);
+        renderUsage(data.usage);
 
         document.getElementById('last-updated').textContent =
           `Last updated: ${new Date().toLocaleTimeString()}`;
@@ -370,6 +384,8 @@
         document.getElementById('costs-content').innerHTML =
           `<div class="error-message">Error: ${error.message}</div>`;
         document.getElementById('revenue-content').innerHTML =
+          `<div class="error-message">Error: ${error.message}</div>`;
+        document.getElementById('usage-content').innerHTML =
           `<div class="error-message">Error: ${error.message}</div>`;
       }
     }
@@ -455,8 +471,8 @@
       let html = `
         <div class="cost-item">
           <div>
-            <div class="name">Stripe Payments</div>
-            <div class="details">Subscription payments this month</div>
+            <div class="name">Stripe Payments This Month</div>
+            <div class="details">Actual payments received via Stripe</div>
           </div>
           <div class="amount revenue">
             ${formatCurrency(revenue.stripeRevenue, 'GBP')}
@@ -465,18 +481,8 @@
         </div>
         <div class="cost-item">
           <div>
-            <div class="name">Usage-Based Revenue</div>
-            <div class="details">Character usage charges</div>
-          </div>
-          <div class="amount revenue">
-            ${formatCurrency(revenue.usageRevenue, 'GBP')}
-            <span class="currency-badge">GBP</span>
-          </div>
-        </div>
-        <div class="cost-item">
-          <div>
-            <div class="name">Monthly Recurring Revenue</div>
-            <div class="details">${revenue.activeSubscriptions} active subscriptions</div>
+            <div class="name">Active Subscriptions (MRR)</div>
+            <div class="details">${revenue.activeSubscriptions} customer(s)</div>
           </div>
           <div class="amount revenue">
             ${formatCurrency(revenue.mrr, 'GBP')}
@@ -484,12 +490,114 @@
           </div>
         </div>
         <div class="total-row">
-          <span>Total Monthly Revenue</span>
-          <span class="amount revenue">${formatCurrency(revenue.total, 'GBP')}</span>
+          <span>Total Stripe Revenue</span>
+          <span class="amount revenue">${formatCurrency(revenue.stripeRevenue, 'GBP')}</span>
         </div>
+        <p class="note">This is actual money received. MRR shows recurring potential.</p>
       `;
 
       document.getElementById('revenue-content').innerHTML = html;
+    }
+
+    function renderUsage(usage) {
+      if (!usage) {
+        document.getElementById('usage-content').innerHTML = '<div class="error-message">Usage data not available</div>';
+        return;
+      }
+
+      const tiers = ['basic', 'standard', 'pro', 'enterprise'];
+      const tierLabels = { basic: 'Basic', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise' };
+      const tierColors = { basic: '#6b7280', standard: '#3b82f6', pro: '#f59e0b', enterprise: '#8b5cf6' };
+
+      let tierRows = '';
+      tiers.forEach(tier => {
+        const data = usage.tierBreakdown[tier] || { count: 0, expectedFee: 0 };
+        if (data.count > 0) {
+          tierRows += `
+            <tr>
+              <td><span class="badge" style="background: ${tierColors[tier]}; color: white;">${tierLabels[tier]}</span></td>
+              <td style="text-align: center;">${data.count}</td>
+              <td style="text-align: right; font-weight: 600;">${formatCurrency(data.expectedFee, 'GBP')}</td>
+            </tr>
+          `;
+        }
+      });
+
+      let html = `
+        <!-- Expected Monthly Fees by Tier -->
+        <div style="margin-bottom: 2rem;">
+          <h4 style="margin-bottom: 1rem; color: var(--gray-600);">Expected Monthly Subscription Fees</h4>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--gray-200);">
+                <th style="text-align: left; padding: 0.75rem 0;">Tier</th>
+                <th style="text-align: center; padding: 0.75rem 0;">Organisations</th>
+                <th style="text-align: right; padding: 0.75rem 0;">Expected Fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tierRows || '<tr><td colspan="3" class="text-muted text-center">No organisations</td></tr>'}
+            </tbody>
+            <tfoot>
+              <tr style="border-top: 2px solid var(--gray-200); background: var(--gray-50);">
+                <td style="padding: 0.75rem 0; font-weight: 600;">Total</td>
+                <td style="text-align: center; padding: 0.75rem 0; font-weight: 600;">${usage.totalOrganisations}</td>
+                <td style="text-align: right; padding: 0.75rem 0; font-weight: 700; color: var(--success);">${formatCurrency(usage.expectedMonthlyFees, 'GBP')}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p class="note">Includes charity discounts where applicable.</p>
+        </div>
+
+        <!-- Credit Usage Stats -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+          <!-- Last Month -->
+          <div style="background: var(--gray-50); border-radius: 12px; padding: 1.25rem;">
+            <h4 style="margin-bottom: 1rem; color: var(--gray-600); font-size: 0.9rem;">
+              Last Month
+              <span style="font-weight: normal; color: var(--gray-500);">(${usage.lastMonth?.period || 'N/A'})</span>
+            </h4>
+            <div style="margin-bottom: 0.75rem;">
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Credits Used</div>
+              <div style="font-size: 1.5rem; font-weight: 700;">${(usage.lastMonth?.creditsUsed || 0).toFixed(2)}</div>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Characters Processed</div>
+              <div style="font-size: 1.1rem; font-weight: 600;">${formatNumber(usage.lastMonth?.charactersProcessed || 0)}</div>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Value (@ £${usage.creditValueGBP}/credit)</div>
+              <div style="font-size: 1.1rem; font-weight: 600; color: #3b82f6;">${formatCurrency(usage.lastMonth?.valueGBP || 0, 'GBP')}</div>
+            </div>
+          </div>
+
+          <!-- This Month -->
+          <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 12px; padding: 1.25rem; border: 1px solid #22c55e;">
+            <h4 style="margin-bottom: 1rem; color: var(--gray-600); font-size: 0.9rem;">
+              This Month
+              <span style="font-weight: normal; color: var(--gray-500);">(${usage.thisMonth?.period || 'N/A'})</span>
+            </h4>
+            <div style="margin-bottom: 0.75rem;">
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Credits Used</div>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #22c55e;">${(usage.thisMonth?.creditsUsed || 0).toFixed(2)}</div>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Characters Processed</div>
+              <div style="font-size: 1.1rem; font-weight: 600;">${formatNumber(usage.thisMonth?.charactersProcessed || 0)}</div>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; color: var(--gray-500);">Value (@ £${usage.creditValueGBP}/credit)</div>
+              <div style="font-size: 1.1rem; font-weight: 600; color: #22c55e;">${formatCurrency(usage.thisMonth?.valueGBP || 0, 'GBP')}</div>
+            </div>
+          </div>
+        </div>
+
+        <p class="note" style="margin-top: 1rem;">
+          Note: Credit usage shows consumption, not revenue. Customers purchase credits upfront, so usage may not directly correlate with Stripe payments.
+        </p>
+      `;
+
+      document.getElementById('usage-content').innerHTML = html;
     }
 
     // Initial load
