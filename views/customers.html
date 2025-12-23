@@ -330,10 +330,10 @@
               <td style="font-weight: 600; color: ${creditBalance <= 0 ? 'var(--danger)' : creditBalance <= 10 ? 'var(--warning)' : 'inherit'};">
                 ${creditBalance.toFixed(1)}
               </td>
-              <td>${getStatusBadge(customer)}</td>
+              <td>${getPaymentStatusBadge(customer)}</td>
               <td>${customer.last_login ? formatDateTime(customer.last_login) : '<span class="text-muted">Never</span>'}</td>
               <td>
-                <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View</button>
+                <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View/Edit</button>
                 ${customer.is_paused
                   ? `<button class="btn btn-sm btn-success" onclick="unpauseCustomer('${customer.id}')">Unpause</button>`
                   : `<button class="btn btn-sm btn-warning" onclick="pauseCustomer('${customer.id}')">Pause</button>`
