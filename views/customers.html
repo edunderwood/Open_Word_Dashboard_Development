@@ -89,13 +89,19 @@
       <!-- Search and Filters -->
       <div class="card">
         <div class="search-bar">
-          <input
-            type="text"
-            id="searchInput"
-            class="form-input"
-            placeholder="Search by name or organisation key..."
-            onkeyup="handleSearch(event)"
-          >
+          <div style="display: flex; gap: 8px; flex: 1; max-width: 400px;">
+            <input
+              type="text"
+              id="searchInput"
+              class="form-input"
+              placeholder="Search customer name or key..."
+              onkeyup="handleSearch(event)"
+              style="flex: 1;"
+            >
+            <button class="btn btn-primary" onclick="loadCustomers()" style="white-space: nowrap;">
+              Search
+            </button>
+          </div>
           <select id="statusFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
