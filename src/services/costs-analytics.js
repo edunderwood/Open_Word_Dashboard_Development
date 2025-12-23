@@ -381,10 +381,20 @@ async function getUsageStatistics() {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    // Get organisations by tier
+    console.log(`📊 Usage stats date ranges:`);
+    console.log(`   This month: ${thisMonthStart.toISOString()} to ${thisMonthEnd.toISOString()}`);
+    console.log(`   Last month: ${lastMonthStart.toISOString()} to ${lastMonthEnd.toISOString()}`);
+
+    // Get organisations by tier with charity status
     const { data: orgs } = await supabase
       .from('organisations')
-      .select('subscription_tier, minimum_monthly_fee, charity_verified, charity_discount_percent');
+      .select('id, subscription_tier, minimum_monthly_fee, charity_verified, charity_discount_percent');
+
+    // Build a map of org_id -> charity discount
+    const orgCharityMap = {};
+    orgs?.forEach(org => {
+      orgCharityMap[org.id] = org.charity_verified ? (org.charity_discount_percent || 50) : 0;
+    });
 
     // Monthly fees per tier (in GBP)
     const TIER_MONTHLY_FEES = {
@@ -423,36 +433,64 @@ async function getUsageStatistics() {
       }
     });
 
-    // Get credit usage for this month
-    const { data: thisMonthUsage } = await supabase
+    // Credit values: £1.18 full price, £0.59 for 50% charity discount
+    const CREDIT_VALUE_FULL = 1.18;
+    const CHARITY_DISCOUNT_DEFAULT = 50;
+
+    // Get credit usage for this month WITH organisation_id
+    const { data: thisMonthUsage, error: thisMonthError } = await supabase
       .from('credit_usage')
-      .select('credits_used, total_billable_characters')
+      .select('credits_used, total_billable_characters, organisation_id')
       .gte('session_start', thisMonthStart.toISOString())
       .lte('session_start', thisMonthEnd.toISOString());
 
+    if (thisMonthError) {
+      console.error('Error fetching this month usage:', thisMonthError);
+    }
+
     let thisMonthCredits = 0;
     let thisMonthCharacters = 0;
+    let thisMonthValueGBP = 0;
+
     thisMonthUsage?.forEach(u => {
-      thisMonthCredits += parseFloat(u.credits_used) || 0;
+      const credits = parseFloat(u.credits_used) || 0;
+      thisMonthCredits += credits;
       thisMonthCharacters += u.total_billable_characters || 0;
+
+      // Calculate value based on org's charity discount
+      const charityDiscount = orgCharityMap[u.organisation_id] || 0;
+      const creditValue = CREDIT_VALUE_FULL * (1 - charityDiscount / 100);
+      thisMonthValueGBP += credits * creditValue;
     });
 
-    // Get credit usage for last month
-    const { data: lastMonthUsage } = await supabase
+    // Get credit usage for last month WITH organisation_id
+    const { data: lastMonthUsage, error: lastMonthError } = await supabase
       .from('credit_usage')
-      .select('credits_used, total_billable_characters')
+      .select('credits_used, total_billable_characters, organisation_id')
       .gte('session_start', lastMonthStart.toISOString())
       .lte('session_start', lastMonthEnd.toISOString());
 
+    if (lastMonthError) {
+      console.error('Error fetching last month usage:', lastMonthError);
+    }
+
+    console.log(`   This month records: ${thisMonthUsage?.length || 0}`);
+    console.log(`   Last month records: ${lastMonthUsage?.length || 0}`);
+
     let lastMonthCredits = 0;
     let lastMonthCharacters = 0;
-    lastMonthUsage?.forEach(u => {
-      lastMonthCredits += parseFloat(u.credits_used) || 0;
-      lastMonthCharacters += u.total_billable_characters || 0;
-    });
+    let lastMonthValueGBP = 0;
 
-    // Credit value: £1.18 per credit (from your pricing)
-    const CREDIT_VALUE_GBP = 1.18;
+    lastMonthUsage?.forEach(u => {
+      const credits = parseFloat(u.credits_used) || 0;
+      lastMonthCredits += credits;
+      lastMonthCharacters += u.total_billable_characters || 0;
+
+      // Calculate value based on org's charity discount
+      const charityDiscount = orgCharityMap[u.organisation_id] || 0;
+      const creditValue = CREDIT_VALUE_FULL * (1 - charityDiscount / 100);
+      lastMonthValueGBP += credits * creditValue;
+    });
 
     return {
       tierBreakdown,
@@ -461,16 +499,17 @@ async function getUsageStatistics() {
       thisMonth: {
         creditsUsed: thisMonthCredits,
         charactersProcessed: thisMonthCharacters,
-        valueGBP: thisMonthCredits * CREDIT_VALUE_GBP,
-        period: `${thisMonthStart.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })} - ${now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}`
+        valueGBP: thisMonthValueGBP,
+        period: `${thisMonthStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
       },
       lastMonth: {
         creditsUsed: lastMonthCredits,
         charactersProcessed: lastMonthCharacters,
-        valueGBP: lastMonthCredits * CREDIT_VALUE_GBP,
+        valueGBP: lastMonthValueGBP,
         period: lastMonthStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
       },
-      creditValueGBP: CREDIT_VALUE_GBP
+      creditValueGBP: CREDIT_VALUE_FULL,
+      charityRate: CREDIT_VALUE_FULL * (1 - CHARITY_DISCOUNT_DEFAULT / 100)
     };
   } catch (error) {
     console.error('Error getting usage statistics:', error);
