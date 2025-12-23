@@ -106,10 +106,10 @@
             <option value="canceled">Cancelled</option>
           </select>
           <select id="planFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
-            <option value="">All Plans</option>
-            <option value="pay_as_you_go">Pay As You Go</option>
+            <option value="">All Tiers</option>
+            <option value="basic">Basic</option>
             <option value="standard">Standard</option>
-            <option value="professional">Professional</option>
+            <option value="pro">Pro</option>
             <option value="enterprise">Enterprise</option>
           </select>
           <select id="charityFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
@@ -233,7 +233,7 @@
       return colors[tier] || colors.basic;
     }
 
-    // Get status badge
+    // Get status badge (for subscription_status - legacy)
     function getStatusBadge(customer) {
       if (customer.is_paused) {
         return '<span class="badge badge-warning">Paused</span>';
@@ -245,6 +245,20 @@
         past_due: '<span class="badge badge-warning">Past Due</span>',
         unpaid: '<span class="badge badge-danger">Unpaid</span>',
         canceled: '<span class="badge badge-gray">Cancelled</span>',
+      };
+      return badges[status] || `<span class="badge badge-gray">${status || 'Unknown'}</span>`;
+    }
+
+    // Get payment status badge (for payment_status field)
+    function getPaymentStatusBadge(customer) {
+      if (customer.is_paused) {
+        return '<span class="badge badge-warning">Paused</span>';
+      }
+      const status = customer.payment_status;
+      const badges = {
+        paid: '<span class="badge badge-success">Paid</span>',
+        pending: '<span class="badge badge-warning">Pending</span>',
+        failed: '<span class="badge badge-danger">Failed</span>',
       };
       return badges[status] || `<span class="badge badge-gray">${status || 'Unknown'}</span>`;
     }
@@ -399,8 +413,8 @@
             </div>
             <div>
               <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Subscription</h4>
-              <p><strong>Plan:</strong> ${(customer.subscription_plan || '-').replace(/_/g, ' ')}</p>
-              <p><strong>Status:</strong> ${getStatusBadge(customer)}</p>
+              <p><strong>Plan:</strong> ${(customer.subscription_tier || '-').replace(/_/g, ' ')}</p>
+              <p><strong>Status:</strong> ${getPaymentStatusBadge(customer)}</p>
               <p><strong>Stripe Customer:</strong> <code style="font-size: 0.75rem;">${customer.stripe_customer_id || '-'}</code></p>
               ${customer.trial_ends_at ? `<p><strong>Trial Ends:</strong> ${formatDate(customer.trial_ends_at)}</p>` : ''}
             </div>

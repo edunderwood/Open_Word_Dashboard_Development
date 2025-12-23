@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
     }
 
     if (plan) {
-      query = query.eq('subscription_plan', plan);
+      query = query.eq('subscription_tier', plan);
     }
 
     // Charity filter
