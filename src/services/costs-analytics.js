@@ -71,11 +71,12 @@ async function getGoogleTranslateCosts() {
     let translationRecords = 0;
 
     try {
+      // Note: language='transcript' for transcriptions, other values are actual translations
       const { data: usageData, error: usageError } = await supabase
         .from('translation_usage')
-        .select('character_count, usage_type')
+        .select('character_count, language')
         .gte('created_at', startOfMonth.toISOString())
-        .eq('usage_type', 'translation'); // Only count translation, not transcript
+        .neq('language', 'transcript'); // Only count translations, not transcripts
 
       if (!usageError && usageData) {
         usageData.forEach(record => {

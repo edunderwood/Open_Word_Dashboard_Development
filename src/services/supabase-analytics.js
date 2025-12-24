@@ -23,14 +23,15 @@ export async function getSupabaseAnalytics(days = 30) {
       feedbackResult
     ] = await Promise.all([
       // Total organisations count
-      supabase.from('organisations').select('id, created_at, subscription_status', { count: 'exact' }),
+      supabase.from('organisations').select('id, created_at, payment_status, subscription_tier', { count: 'exact' }),
 
       // Total services count
       supabase.from('services').select('id, status, created_at', { count: 'exact' }),
 
       // Usage statistics for period
+      // Note: 'language' field = 'transcript' for transcriptions, or actual language code (e.g., 'es') for translations
       supabase.from('translation_usage')
-        .select('character_count, language, type, created_at')
+        .select('character_count, language, created_at')
         .gte('created_at', startDate),
 
       // Recent usage (last 24 hours) for activity check
@@ -49,7 +50,8 @@ export async function getSupabaseAnalytics(days = 30) {
     // Process organisations
     const organisations = organisationsResult.data || [];
     const totalOrganisations = organisationsResult.count || 0;
-    const activeOrganisations = organisations.filter(o => o.subscription_status === 'active' || o.subscription_status === 'trialing').length;
+    // Active = payment_status is 'paid' (not 'pending' or 'failed')
+    const activeOrganisations = organisations.filter(o => o.payment_status === 'paid').length;
     const newOrganisations = organisations.filter(o => new Date(o.created_at) >= new Date(startDate)).length;
 
     // Process services
@@ -62,9 +64,9 @@ export async function getSupabaseAnalytics(days = 30) {
     const totalCharacters = usage.reduce((sum, u) => sum + (u.character_count || 0), 0);
     const totalRecords = usage.length;
 
-    // Group by type (transcript vs translation)
-    const transcriptChars = usage.filter(u => u.type === 'transcript').reduce((sum, u) => sum + (u.character_count || 0), 0);
-    const translationChars = usage.filter(u => u.type === 'translation').reduce((sum, u) => sum + (u.character_count || 0), 0);
+    // Group by type: language='transcript' for transcriptions, other values are translations
+    const transcriptChars = usage.filter(u => u.language === 'transcript').reduce((sum, u) => sum + (u.character_count || 0), 0);
+    const translationChars = usage.filter(u => u.language && u.language !== 'transcript').reduce((sum, u) => sum + (u.character_count || 0), 0);
 
     // Group by language
     const byLanguage = {};
