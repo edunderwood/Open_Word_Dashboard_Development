@@ -58,31 +58,59 @@ async function getDeepgramCosts() {
 
 /**
  * Get Google Translate costs for current month
+ * Uses Supabase translation_usage for accurate character counts
+ * Falls back to Google Cloud Monitoring estimates if Supabase fails
  */
 async function getGoogleTranslateCosts() {
   try {
     const { now, startOfMonth } = getCurrentMonthRange();
     const daysInMonth = Math.ceil((now - startOfMonth) / (1000 * 60 * 60 * 24)) || 1;
 
-    const analytics = await getGoogleAnalytics(daysInMonth);
+    // Get actual character counts from Supabase translation_usage table
+    let totalCharacters = 0;
+    let translationRecords = 0;
 
-    if (!analytics.success) {
-      return { error: analytics.error, cost: 0, costUSD: 0 };
+    try {
+      const { data: usageData, error: usageError } = await supabase
+        .from('translation_usage')
+        .select('character_count, usage_type')
+        .gte('created_at', startOfMonth.toISOString())
+        .eq('usage_type', 'translation'); // Only count translation, not transcript
+
+      if (!usageError && usageData) {
+        usageData.forEach(record => {
+          totalCharacters += record.character_count || 0;
+        });
+        translationRecords = usageData.length;
+        console.log(`📊 Google Translate: ${totalCharacters.toLocaleString()} chars from ${translationRecords} records (Supabase)`);
+      }
+    } catch (dbError) {
+      console.error('Error fetching translation usage from Supabase:', dbError.message);
     }
 
-    const costUSD = parseFloat(analytics.data?.summary?.estimatedCostUSD) || 0;
-    const requests = analytics.data?.summary?.totalRequests || 0;
-    const bytes = analytics.data?.summary?.totalBytes || 0;
+    // Also get Google Cloud Monitoring data for comparison/latency info
+    let googleAnalytics = null;
+    try {
+      googleAnalytics = await getGoogleAnalytics(daysInMonth);
+    } catch (gcError) {
+      console.error('Error fetching Google Cloud analytics:', gcError.message);
+    }
+
+    // Calculate cost: $20 per million characters
+    const COST_PER_MILLION_CHARS_USD = 20;
+    const costUSD = (totalCharacters / 1000000) * COST_PER_MILLION_CHARS_USD;
 
     return {
       cost: costUSD * USD_TO_GBP,
       costUSD,
-      requests,
-      bytes,
+      characters: totalCharacters,
+      translationRecords,
       tier: 'Pay-as-you-go',
       details: {
-        avgLatencyMs: analytics.data?.summary?.avgLatencyMs || '0',
-        errorRate: analytics.data?.summary?.errorRate || '0'
+        source: totalCharacters > 0 ? 'Supabase (accurate)' : 'No data',
+        avgLatencyMs: googleAnalytics?.data?.summary?.avgLatencyMs || 'N/A',
+        errorRate: googleAnalytics?.data?.summary?.errorRate || 'N/A',
+        googleCloudEstimate: googleAnalytics?.data?.summary?.approxCharacters || 0
       }
     };
   } catch (error) {
