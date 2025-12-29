@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logs & Metrics - OpenWord Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .metric-card h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: 5px;
+    }
+    .metric-card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+    .metric-card .unit {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+    }
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: var(--gray-50);
+      border-radius: 8px;
+    }
+    .setting-info h4 {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .setting-info p {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 26px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--gray-300);
+      transition: 0.3s;
+      border-radius: 26px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    input:checked + .toggle-slider {
+      background-color: var(--primary-color);
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    .log-viewer {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.8rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      padding: 5px 0;
+      border-bottom: 1px solid #333;
+    }
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    .log-entry .timestamp {
+      color: #858585;
+      margin-right: 10px;
+    }
+    .log-entry .level {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      margin-right: 10px;
+    }
+    .log-entry .level.info { background: #0e639c; }
+    .log-entry .level.warn { background: #916e00; }
+    .log-entry .level.error { background: #c72e2e; }
+    .log-entry .level.debug { background: #4b5563; }
+    .log-entry .category {
+      color: #4ec9b0;
+      margin-right: 10px;
+    }
+    .log-entry .message {
+      color: #d4d4d4;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>OpenWord</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+          <li>
+            <a href="/logs" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Logs & Metrics
+            </a>
+          </li>
+          <li>
+            <a href="/analytics">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              Analytics
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header flex justify-between items-center">
+        <div>
+          <h2>Logs & Metrics</h2>
+          <p>Server performance and logging controls</p>
+        </div>
+        <button class="btn btn-primary" onclick="refreshMetrics()">Refresh Metrics</button>
+      </div>
+
+      <!-- Server Metrics -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Server Metrics</h3>
+          <span id="metricsTime" class="text-muted" style="font-size: 0.75rem;">-</span>
+        </div>
+
+        <!-- Memory Metrics -->
+        <h4 style="margin-bottom: 10px; font-size: 0.875rem; color: var(--gray-600);">Memory Usage</h4>
+        <div class="metrics-grid" id="memoryMetrics">
+          <div class="metric-card">
+            <h4>Heap Used</h4>
+            <div class="value">-<span class="unit"> MB</span></div>
+          </div>
+          <div class="metric-card">
+            <h4>Heap Total</h4>
+            <div class="value">-<span class="unit"> MB</span></div>
+          </div>
+          <div class="metric-card">
+            <h4>RSS</h4>
+            <div class="value">-<span class="unit"> MB</span></div>
+          </div>
+          <div class="metric-card">
+            <h4>External</h4>
+            <div class="value">-<span class="unit"> MB</span></div>
+          </div>
+        </div>
+
+        <!-- Map Sizes -->
+        <h4 style="margin-bottom: 10px; font-size: 0.875rem; color: var(--gray-600);">In-Memory Maps</h4>
+        <div class="metrics-grid" id="mapMetrics">
+          <div class="metric-card">
+            <h4>Service Languages</h4>
+            <div class="value" id="serviceLanguageMap">-</div>
+          </div>
+          <div class="metric-card">
+            <h4>Active Subscriptions</h4>
+            <div class="value" id="serviceSubscriptionMap">-</div>
+          </div>
+          <div class="metric-card">
+            <h4>Client Subscriptions</h4>
+            <div class="value" id="clientSubscriptionMap">-</div>
+          </div>
+          <div class="metric-card">
+            <h4>Room Subscriptions</h4>
+            <div class="value" id="roomSubscriptionMap">-</div>
+          </div>
+        </div>
+
+        <!-- Socket.IO -->
+        <h4 style="margin-bottom: 10px; font-size: 0.875rem; color: var(--gray-600);">Connections</h4>
+        <div class="metrics-grid" id="connectionMetrics">
+          <div class="metric-card">
+            <h4>Socket.IO Clients</h4>
+            <div class="value" id="socketClients">-</div>
+          </div>
+          <div class="metric-card">
+            <h4>Message Cache Services</h4>
+            <div class="value" id="cacheServices">-</div>
+          </div>
+          <div class="metric-card">
+            <h4>Cached Messages</h4>
+            <div class="value" id="cacheMessages">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log Settings -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Logging Settings</h3>
+          <button class="btn btn-sm btn-outline" onclick="saveSettings()">Save Changes</button>
+        </div>
+
+        <div class="settings-grid">
+          <div class="setting-item">
+            <div class="setting-info">
+              <h4>Debug Translation</h4>
+              <p>Show detailed translation pipeline logs</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="debugTranslation">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <h4>Extra Debugging</h4>
+              <p>Enable verbose logging for all operations</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="extraDebugging">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <h4>Verbose Metrics</h4>
+              <p>Include detailed metrics in /metrics endpoint</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="verboseMetrics" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <h4>Alert Threshold</h4>
+              <p>Consecutive failures before alerting</p>
+            </div>
+            <select id="alertThreshold" style="padding: 8px; border-radius: 4px; border: 1px solid var(--gray-300);">
+              <option value="1">1 failure</option>
+              <option value="2">2 failures</option>
+              <option value="3" selected>3 failures</option>
+              <option value="5">5 failures</option>
+              <option value="10">10 failures</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activity Logs -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Recent Activity</h3>
+          <div>
+            <button class="btn btn-sm btn-outline" onclick="exportLogs()">Export</button>
+            <button class="btn btn-sm btn-outline" onclick="clearLogs()">Clear</button>
+          </div>
+        </div>
+        <div class="log-viewer" id="logViewer">
+          <div class="log-entry">
+            <span class="timestamp">Loading logs...</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Format bytes to MB
+    function formatBytes(bytes) {
+      return (bytes / 1024 / 1024).toFixed(1);
+    }
+
+    // Format timestamp
+    function formatTime(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    }
+
+    // Refresh metrics from server
+    async function refreshMetrics() {
+      try {
+        const btn = document.querySelector('.page-header .btn');
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+
+        const response = await fetch('/api/logs/metrics');
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.error);
+
+        const data = result.data;
+
+        // Update timestamp
+        document.getElementById('metricsTime').textContent = `Last updated: ${formatTime(data.timestamp)}`;
+
+        // Update memory metrics
+        if (data.memory) {
+          const memCards = document.querySelectorAll('#memoryMetrics .metric-card .value');
+          memCards[0].innerHTML = `${formatBytes(data.memory.heapUsed)}<span class="unit"> MB</span>`;
+          memCards[1].innerHTML = `${formatBytes(data.memory.heapTotal)}<span class="unit"> MB</span>`;
+          memCards[2].innerHTML = `${formatBytes(data.memory.rss)}<span class="unit"> MB</span>`;
+          memCards[3].innerHTML = `${formatBytes(data.memory.external)}<span class="unit"> MB</span>`;
+        }
+
+        // Update map metrics
+        if (data.maps) {
+          document.getElementById('serviceLanguageMap').textContent = data.maps.serviceLanguageMap || 0;
+          document.getElementById('serviceSubscriptionMap').textContent = data.maps.serviceSubscriptionMap || 0;
+          document.getElementById('clientSubscriptionMap').textContent = data.maps.clientSubscriptionMap || 0;
+          document.getElementById('roomSubscriptionMap').textContent = data.maps.roomSubscriptionMap || 0;
+        }
+
+        // Update connection metrics
+        if (data.socketIO) {
+          document.getElementById('socketClients').textContent = data.socketIO.connected || 0;
+        }
+        if (data.messageCache) {
+          document.getElementById('cacheServices').textContent = data.messageCache.activeServices || 0;
+          document.getElementById('cacheMessages').textContent = data.messageCache.totalMessages || 0;
+        }
+
+      } catch (error) {
+        console.error('Error fetching metrics:', error);
+        alert('Failed to load metrics: ' + error.message);
+      } finally {
+        const btn = document.querySelector('.page-header .btn');
+        btn.disabled = false;
+        btn.textContent = 'Refresh Metrics';
+      }
+    }
+
+    // Load settings
+    async function loadSettings() {
+      try {
+        const response = await fetch('/api/logs/settings');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          document.getElementById('debugTranslation').checked = result.data.debugTranslation;
+          document.getElementById('extraDebugging').checked = result.data.extraDebugging;
+          document.getElementById('verboseMetrics').checked = result.data.verboseMetrics;
+          document.getElementById('alertThreshold').value = result.data.alertThreshold;
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    }
+
+    // Save settings
+    async function saveSettings() {
+      try {
+        const settings = {
+          debugTranslation: document.getElementById('debugTranslation').checked,
+          extraDebugging: document.getElementById('extraDebugging').checked,
+          verboseMetrics: document.getElementById('verboseMetrics').checked,
+          alertThreshold: parseInt(document.getElementById('alertThreshold').value)
+        };
+
+        const response = await fetch('/api/logs/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert('Settings saved successfully');
+        } else {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error('Error saving settings:', error);
+        alert('Failed to save settings: ' + error.message);
+      }
+    }
+
+    // Load recent logs
+    async function loadLogs() {
+      try {
+        const response = await fetch('/api/logs/recent?limit=100');
+        const result = await response.json();
+
+        const viewer = document.getElementById('logViewer');
+
+        if (!result.success || result.data.length === 0) {
+          viewer.innerHTML = '<div class="log-entry"><span class="message">No logs available</span></div>';
+          return;
+        }
+
+        viewer.innerHTML = result.data.map(log => `
+          <div class="log-entry">
+            <span class="timestamp">${formatTime(log.timestamp)}</span>
+            <span class="level ${log.level}">${log.level.toUpperCase()}</span>
+            <span class="category">[${log.category}]</span>
+            <span class="message">${log.message}</span>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading logs:', error);
+      }
+    }
+
+    // Clear logs
+    async function clearLogs() {
+      if (!confirm('Are you sure you want to clear all logs?')) return;
+
+      try {
+        await fetch('/api/logs/clear', { method: 'DELETE' });
+        loadLogs();
+      } catch (error) {
+        console.error('Error clearing logs:', error);
+      }
+    }
+
+    // Export logs
+    function exportLogs() {
+      window.location.href = '/api/logs/export';
+    }
+
+    // Logout
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshMetrics();
+      loadSettings();
+      loadLogs();
+
+      // Auto-refresh metrics every 30 seconds
+      setInterval(refreshMetrics, 30000);
+
+      // Auto-refresh logs every 10 seconds
+      setInterval(loadLogs, 10000);
+    });
+  </script>
+</body>
+</html>
