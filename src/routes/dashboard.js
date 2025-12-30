@@ -364,25 +364,43 @@ router.get('/revenue', async (req, res) => {
       }
     });
 
-    // Get MRR from active subscriptions
+    // Get MRR from active subscriptions (accounting for discounts)
     const subscriptions = await stripe.subscriptions.list({
       status: 'active',
       limit: 100,
+      expand: ['data.discount.coupon'], // Expand to get coupon details
     });
 
     let mrr = 0;
     subscriptions.data.forEach(sub => {
+      let subscriptionAmount = 0;
+
+      // Calculate base subscription amount
       sub.items.data.forEach(item => {
         if (item.price.recurring) {
           const amount = item.price.unit_amount || 0;
           const interval = item.price.recurring.interval;
           if (interval === 'month') {
-            mrr += amount;
+            subscriptionAmount += amount;
           } else if (interval === 'year') {
-            mrr += amount / 12;
+            subscriptionAmount += amount / 12;
           }
         }
       });
+
+      // Apply discount if present
+      if (sub.discount && sub.discount.coupon) {
+        const coupon = sub.discount.coupon;
+        if (coupon.percent_off) {
+          // Percentage discount (e.g., 50% off)
+          subscriptionAmount = subscriptionAmount * (1 - coupon.percent_off / 100);
+        } else if (coupon.amount_off) {
+          // Fixed amount discount (in smallest currency unit)
+          subscriptionAmount = Math.max(0, subscriptionAmount - coupon.amount_off);
+        }
+      }
+
+      mrr += subscriptionAmount;
     });
 
     res.json({
