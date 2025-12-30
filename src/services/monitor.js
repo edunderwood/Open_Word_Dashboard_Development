@@ -368,6 +368,58 @@ async function checkPendingCharityReviews() {
 }
 
 /**
+ * Check for pending discount review requests (non-charities)
+ */
+async function checkPendingDiscountReviews() {
+  try {
+    const { data: pendingReviews, error } = await supabase
+      .from('organisations')
+      .select('id, name, discount_review_reason, discount_review_requested_at, contact_name, subscription_tier')
+      .eq('discount_review_requested', true)
+      .eq('discount_percent', 0)
+      .order('discount_review_requested_at', { ascending: true });
+
+    if (error) throw error;
+
+    const count = pendingReviews?.length || 0;
+
+    if (count > 0) {
+      // Check if we've already alerted about these specific reviews
+      const reviewIds = pendingReviews.map(r => r.id).sort().join(',');
+      const lastAlertedIds = issueTracker.lastAlertSent.discountReviewIds || '';
+
+      // Alert if there are new reviews we haven't alerted about
+      if (reviewIds !== lastAlertedIds) {
+        await sendWarningAlert(
+          `${count} Discount Review Request${count > 1 ? 's' : ''} Pending`,
+          `<p>The following organisations have requested a discount:</p>
+           <ul>
+             ${pendingReviews.map(r => `
+               <li>
+                 <strong>${r.name}</strong><br>
+                 Plan: ${r.subscription_tier || 'Unknown'}<br>
+                 Contact: ${r.contact_name || 'Unknown'}<br>
+                 Requested: ${new Date(r.discount_review_requested_at).toLocaleString()}<br>
+                 ${r.discount_review_reason ? `Reason: ${r.discount_review_reason}` : 'No reason provided'}
+               </li>
+             `).join('')}
+           </ul>
+           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/customers?charity=discounted">
+             Review in Dashboard
+           </a></p>`
+        );
+        issueTracker.lastAlertSent.discountReviewIds = reviewIds;
+      }
+    }
+
+    return { count, reviews: pendingReviews || [] };
+  } catch (error) {
+    console.error('Error checking discount reviews:', error);
+    return { error: error.message };
+  }
+}
+
+/**
  * Run all monitoring checks
  */
 export async function runAllChecks() {
@@ -381,6 +433,7 @@ export async function runAllChecks() {
     paymentIssues: await checkPaymentIssues(),
     usageAnomalies: await checkUsageAnomalies(),
     charityReviews: await checkPendingCharityReviews(),
+    discountReviews: await checkPendingDiscountReviews(),
   };
 
   // Log performance summary

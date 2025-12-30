@@ -53,6 +53,10 @@ router.get('/', async (req, res) => {
           // Non-charity organisations with a discount
           query = query.eq('charity_verified', false).gt('discount_percent', 0);
           break;
+        case 'discount_pending':
+          // Non-charity organisations requesting a discount
+          query = query.eq('discount_review_requested', true).eq('discount_percent', 0);
+          break;
         case 'pending':
           query = query.eq('charity_review_requested', true).eq('charity_verified', false);
           break;
@@ -955,7 +959,8 @@ router.post('/:id/set-discount', async (req, res) => {
         discount_type: discountType,
         discount_reason: reason || null,
         discount_approved_by: 'Admin Dashboard',
-        discount_approved_at: new Date().toISOString()
+        discount_approved_at: new Date().toISOString(),
+        discount_review_requested: false // Clear the review request when discount is approved
       })
       .eq('id', id)
       .select()
@@ -992,7 +997,8 @@ router.post('/:id/remove-discount', async (req, res) => {
         discount_type: null,
         discount_reason: reason ? `Removed: ${reason}` : 'Discount removed by admin',
         discount_approved_by: null,
-        discount_approved_at: null
+        discount_approved_at: null,
+        discount_review_requested: false
       })
       .eq('id', id)
       .select()
@@ -1010,6 +1016,40 @@ router.post('/:id/remove-discount', async (req, res) => {
   } catch (error) {
     console.error('Error removing discount:', error);
     res.status(500).json({ error: 'Failed to remove discount' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/deny-discount-request
+ * Deny a pending discount request
+ */
+router.post('/:id/deny-discount-request', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        discount_review_requested: false,
+        discount_review_reason: reason ? `Denied: ${reason}` : 'Discount request denied'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`🚫 Discount request denied for: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: 'Discount request denied',
+      data,
+    });
+  } catch (error) {
+    console.error('Error denying discount request:', error);
+    res.status(500).json({ error: 'Failed to deny discount request' });
   }
 });
 

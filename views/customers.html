@@ -122,7 +122,8 @@
             <option value="">All Discount Status</option>
             <option value="verified">Verified Charities</option>
             <option value="discounted">Has Discount (Non-Charity)</option>
-            <option value="pending">Pending Review</option>
+            <option value="discount_pending">Discount Request Pending</option>
+            <option value="pending">Charity Review Pending</option>
             <option value="claimed">Claims Charity</option>
             <option value="none">No Discount</option>
           </select>
@@ -323,9 +324,11 @@
                   ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
                   : customer.discount_percent > 0
                     ? `<span class="badge" style="margin-left: 4px; font-size: 9px; background: #2563eb; color: white;">${customer.discount_percent}%</span>`
-                    : customer.charity_review_requested
-                      ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Review</span>'
-                      : ''
+                    : customer.discount_review_requested
+                      ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Discount Request</span>'
+                      : customer.charity_review_requested
+                        ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Charity Review</span>'
+                        : ''
                 }
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
@@ -485,9 +488,26 @@
                 ? `<span class="badge badge-success" style="font-size: 12px; padding: 6px 12px;">Charity ${customer.charity_discount_percent || 50}% Discount</span>`
                 : customer.discount_percent > 0
                   ? `<span class="badge" style="font-size: 12px; padding: 6px 12px; background: #2563eb; color: white;">${customer.discount_type ? customer.discount_type.charAt(0).toUpperCase() + customer.discount_type.slice(1) : 'General'} ${customer.discount_percent}% Discount</span>`
-                  : '<span class="badge badge-gray" style="font-size: 12px; padding: 6px 12px;">No Discount</span>'
+                  : customer.discount_review_requested
+                    ? '<span class="badge badge-warning" style="font-size: 12px; padding: 6px 12px;">Discount Request Pending</span>'
+                    : '<span class="badge badge-gray" style="font-size: 12px; padding: 6px 12px;">No Discount</span>'
               }
             </div>
+
+            <!-- Pending Discount Request -->
+            ${customer.discount_review_requested && customer.discount_percent === 0 ? `
+              <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #92400e;">Discount Request Pending</div>
+                <div style="font-size: 0.85rem; color: #78350f;">
+                  ${customer.discount_review_reason ? `<div style="margin-bottom: 8px;"><strong>Reason:</strong> ${customer.discount_review_reason}</div>` : '<div style="margin-bottom: 8px;">No reason provided</div>'}
+                  ${customer.discount_review_requested_at ? `<div><strong>Requested:</strong> ${formatDate(customer.discount_review_requested_at)}</div>` : ''}
+                </div>
+                <div style="margin-top: 10px; display: flex; gap: 8px;">
+                  <button class="btn btn-sm btn-success" onclick="setDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Approve & Set Discount</button>
+                  <button class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;" onclick="denyDiscountRequest('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Deny Request</button>
+                </div>
+              </div>
+            ` : ''}
 
             <!-- Non-charity discount details -->
             ${!customer.charity_verified && customer.discount_percent > 0 ? `
@@ -958,6 +978,30 @@
         loadCustomers(); // Refresh list
       } catch (error) {
         alert('Error removing discount: ' + error.message);
+      }
+    }
+
+    // Deny pending discount request
+    async function denyDiscountRequest(id, name) {
+      if (!confirm(`Deny discount request from "${name}"?\n\nThey will not receive a discount.`)) return;
+
+      const reason = prompt('Enter reason for denial (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/deny-discount-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Discount request denied for ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error denying discount request: ' + error.message);
       }
     }
 

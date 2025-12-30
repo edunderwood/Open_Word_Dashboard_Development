@@ -428,4 +428,32 @@ router.get('/pending-charity-reviews', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/pending-discount-reviews
+ * Get organisations with pending discount review requests (non-charities)
+ */
+router.get('/pending-discount-reviews', async (req, res) => {
+  try {
+    const { data: pendingReviews, error } = await supabase
+      .from('organisations')
+      .select('id, name, discount_review_reason, discount_review_requested_at, contact_name, subscription_tier')
+      .eq('discount_review_requested', true)
+      .eq('discount_percent', 0)
+      .order('discount_review_requested_at', { ascending: true });
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        count: pendingReviews?.length || 0,
+        reviews: pendingReviews || []
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pending discount reviews:', error);
+    res.status(500).json({ error: 'Failed to fetch pending discount reviews' });
+  }
+});
+
 export default router;
