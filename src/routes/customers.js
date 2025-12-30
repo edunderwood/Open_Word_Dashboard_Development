@@ -867,7 +867,9 @@ router.post('/:id/grant-charity-discount', async (req, res) => {
       .from('organisations')
       .update({
         charity_verified: true,
-        charity_discount_percent: discount,
+        // Use unified discount fields
+        discount_percent: discount,
+        discount_type: 'charity',
         charity_review_requested: false,
         charity_review_completed_at: new Date().toISOString(),
         charity_review_notes: reason || 'Discount granted by admin'
@@ -945,7 +947,7 @@ router.post('/:id/set-discount', async (req, res) => {
     }
 
     // Validate discount type
-    const validTypes = ['partner', 'promotional', 'negotiated', 'nonprofit', 'educational', 'community', 'other'];
+    const validTypes = ['charity', 'church', 'partner', 'promotional', 'negotiated', 'nonprofit', 'educational', 'community', 'other'];
     if (!validTypes.includes(discountType)) {
       return res.status(400).json({
         error: `Invalid discount type. Must be one of: ${validTypes.join(', ')}`
@@ -1066,7 +1068,9 @@ router.post('/:id/revoke-charity-discount', async (req, res) => {
       .from('organisations')
       .update({
         charity_verified: false,
-        charity_discount_percent: 0,
+        // Clear unified discount fields
+        discount_percent: 0,
+        discount_type: null,
         charity_review_notes: reason || 'Discount revoked by admin'
       })
       .eq('id', id)

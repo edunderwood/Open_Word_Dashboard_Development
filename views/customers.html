@@ -926,12 +926,12 @@
         return;
       }
 
-      const discountType = prompt(`Select discount type for "${name}":\n\n• partner - Partnership agreement\n• promotional - Promotional offer\n• negotiated - Negotiated rate\n• other - Other reason\n\nEnter type (partner, promotional, negotiated, or other):`, 'negotiated');
+      const discountType = prompt(`Select discount type for "${name}":\n\n• charity - Registered charity\n• church - Church or religious organisation\n• partner - Partnership agreement\n• nonprofit - Non-profit organisation\n• educational - Educational institution\n• community - Community organisation\n• promotional - Promotional offer\n• negotiated - Negotiated rate\n• other - Other reason\n\nEnter type:`, 'charity');
       if (discountType === null) return;
 
-      const validTypes = ['partner', 'promotional', 'negotiated', 'other'];
+      const validTypes = ['charity', 'church', 'partner', 'nonprofit', 'educational', 'community', 'promotional', 'negotiated', 'other'];
       if (!validTypes.includes(discountType)) {
-        alert('Invalid type. Please enter partner, promotional, negotiated, or other.');
+        alert('Invalid type. Please enter one of: charity, church, partner, nonprofit, educational, community, promotional, negotiated, or other.');
         return;
       }
 

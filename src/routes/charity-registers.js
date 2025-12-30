@@ -257,7 +257,9 @@ router.post('/reviews/:id/approve', async (req, res) => {
                 charity_review_requested: false,
                 charity_verified: true,
                 charity_verified_at: new Date().toISOString(),
-                charity_discount_percent: 50,
+                // Use unified discount fields
+                discount_percent: 50,
+                discount_type: 'charity',
                 charity_registered_name: registeredName || null,
                 charity_review_reason: notes || null
             })
@@ -295,7 +297,9 @@ router.post('/reviews/:id/reject', async (req, res) => {
             .update({
                 charity_review_requested: false,
                 charity_verified: false,
-                charity_discount_percent: 0,
+                // Clear unified discount fields
+                discount_percent: 0,
+                discount_type: null,
                 charity_review_reason: reason || 'Review rejected'
             })
             .eq('id', id)
