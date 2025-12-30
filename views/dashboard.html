@@ -117,6 +117,34 @@
         </div>
       </div>
 
+      <!-- Pending Discount Reviews Alert -->
+      <div id="discountReviewAlert" class="card" style="display: none; border-left: 4px solid #3b82f6; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
+        <div class="card-header" style="border-bottom: 1px solid rgba(0,0,0,0.1);">
+          <h3 style="color: #1e40af; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Pending Discount Requests
+          </h3>
+          <span class="badge" id="discountReviewCount" style="font-size: 14px; background: #3b82f6; color: white;">0</span>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Organisation</th>
+                <th>Plan</th>
+                <th>Contact</th>
+                <th>Reason</th>
+                <th>Requested</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="discountReviewsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Key Stats -->
       <div class="stats-grid">
         <div class="stat-card primary">
@@ -579,6 +607,124 @@
       }
     }
 
+    // Load pending discount reviews
+    async function loadDiscountReviews() {
+      try {
+        const response = await fetch('/api/dashboard/pending-discount-reviews');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const alertDiv = document.getElementById('discountReviewAlert');
+        const countBadge = document.getElementById('discountReviewCount');
+        const tableBody = document.getElementById('discountReviewsTable');
+
+        if (data.data.count === 0) {
+          alertDiv.style.display = 'none';
+          return;
+        }
+
+        // Show the alert section
+        alertDiv.style.display = 'block';
+        countBadge.textContent = data.data.count;
+
+        // Populate table
+        tableBody.innerHTML = data.data.reviews.map(review => `
+          <tr>
+            <td>
+              <a href="/customers/${review.id}" style="color: #1e40af; font-weight: 600;">${review.name}</a>
+            </td>
+            <td>${review.subscription_tier ? review.subscription_tier.charAt(0).toUpperCase() + review.subscription_tier.slice(1) : 'Unknown'}</td>
+            <td>${review.contact_name || 'Unknown'}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${review.discount_review_reason || 'No reason provided'}">
+              ${review.discount_review_reason || '<span class="text-muted">No reason provided</span>'}
+            </td>
+            <td>${formatDate(review.discount_review_requested_at)}</td>
+            <td style="white-space: nowrap;">
+              <button onclick="approveDiscount('${review.id}', '${review.name.replace(/'/g, "\\'")}')"
+                      class="btn btn-sm" style="background: #10b981; color: white; margin-right: 4px;">
+                Approve
+              </button>
+              <button onclick="denyDiscount('${review.id}', '${review.name.replace(/'/g, "\\'")}')"
+                      class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;">
+                Deny
+              </button>
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading discount reviews:', error);
+      }
+    }
+
+    // Approve discount request
+    async function approveDiscount(orgId, orgName) {
+      const discountPercent = prompt(`Approve discount for "${orgName}".\n\nEnter discount percentage (10, 20, 30, 40, or 50):`, '20');
+
+      if (discountPercent === null) return; // User cancelled
+
+      const discount = parseInt(discountPercent);
+      if (![10, 20, 30, 40, 50].includes(discount)) {
+        alert('Invalid discount. Please enter 10, 20, 30, 40, or 50.');
+        return;
+      }
+
+      const discountType = prompt('Enter discount type (e.g., "nonprofit", "educational", "community"):', 'nonprofit');
+      if (discountType === null) return;
+
+      const reason = prompt('Enter reason for granting discount:');
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/set-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discountPercent: discount,
+            discountType: discountType || 'general',
+            reason: reason || `Approved discount request`
+          })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error || data.message);
+
+        alert(`${discount}% discount granted to ${orgName}`);
+        loadDiscountReviews(); // Refresh the list
+      } catch (error) {
+        console.error('Error granting discount:', error);
+        alert('Failed to grant discount: ' + error.message);
+      }
+    }
+
+    // Deny discount request
+    async function denyDiscount(orgId, orgName) {
+      if (!confirm(`Deny discount request for "${orgName}"?`)) {
+        return;
+      }
+
+      const reason = prompt('Enter reason for denial:');
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/deny-discount-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason || 'Request denied' })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error || data.message);
+
+        alert(`Discount request denied for ${orgName}`);
+        loadDiscountReviews(); // Refresh the list
+      } catch (error) {
+        console.error('Error denying discount:', error);
+        alert('Failed to deny discount: ' + error.message);
+      }
+    }
+
     // Load low balance customers
     async function loadLowBalanceCustomers() {
       try {
@@ -681,6 +827,7 @@
       loadRevenue();
       loadCredits();
       loadCharityReviews();
+      loadDiscountReviews();
       loadLowBalanceCustomers();
       loadActivity();
     }

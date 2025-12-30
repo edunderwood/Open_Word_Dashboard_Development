@@ -945,7 +945,7 @@ router.post('/:id/set-discount', async (req, res) => {
     }
 
     // Validate discount type
-    const validTypes = ['partner', 'promotional', 'negotiated', 'other'];
+    const validTypes = ['partner', 'promotional', 'negotiated', 'nonprofit', 'educational', 'community', 'other'];
     if (!validTypes.includes(discountType)) {
       return res.status(400).json({
         error: `Invalid discount type. Must be one of: ${validTypes.join(', ')}`

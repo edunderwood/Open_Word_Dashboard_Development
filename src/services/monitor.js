@@ -404,7 +404,7 @@ async function checkPendingDiscountReviews() {
                </li>
              `).join('')}
            </ul>
-           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/customers?charity=discounted">
+           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/dashboard">
              Review in Dashboard
            </a></p>`
         );
