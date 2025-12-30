@@ -42,12 +42,16 @@ router.get('/', async (req, res) => {
       query = query.eq('subscription_tier', plan);
     }
 
-    // Charity filter
+    // Charity/Discount filter
     const charity = req.query.charity || '';
     if (charity) {
       switch (charity) {
         case 'verified':
           query = query.eq('charity_verified', true);
+          break;
+        case 'discounted':
+          // Non-charity organisations with a discount
+          query = query.eq('charity_verified', false).gt('discount_percent', 0);
           break;
         case 'pending':
           query = query.eq('charity_review_requested', true).eq('charity_verified', false);
@@ -56,7 +60,10 @@ router.get('/', async (req, res) => {
           query = query.eq('is_registered_charity', true).eq('charity_verified', false);
           break;
         case 'none':
-          query = query.eq('is_registered_charity', false);
+          // No charity status AND no non-charity discount
+          query = query.eq('is_registered_charity', false).eq('charity_verified', false);
+          // Note: We can't easily filter discount_percent = 0 OR NULL in this query builder
+          // So 'none' will show all non-charity orgs (some may have discounts)
           break;
       }
     }
@@ -912,6 +919,97 @@ router.post('/:id/deny-charity-review', async (req, res) => {
   } catch (error) {
     console.error('Error denying charity review:', error);
     res.status(500).json({ error: 'Failed to deny charity review' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/set-discount
+ * Set a non-charity discount for an organisation
+ * Requires: discountPercent (10, 20, 30, 40, or 50), discountType, reason
+ */
+router.post('/:id/set-discount', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { discountPercent, discountType, reason } = req.body;
+
+    // Validate discount percentage (must be one of the predefined values)
+    const validPercentages = [10, 20, 30, 40, 50];
+    if (!validPercentages.includes(discountPercent)) {
+      return res.status(400).json({
+        error: `Invalid discount percentage. Must be one of: ${validPercentages.join(', ')}`
+      });
+    }
+
+    // Validate discount type
+    const validTypes = ['partner', 'promotional', 'negotiated', 'other'];
+    if (!validTypes.includes(discountType)) {
+      return res.status(400).json({
+        error: `Invalid discount type. Must be one of: ${validTypes.join(', ')}`
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        discount_percent: discountPercent,
+        discount_type: discountType,
+        discount_reason: reason || null,
+        discount_approved_by: 'Admin Dashboard',
+        discount_approved_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`💰 ${discountPercent}% ${discountType} discount set for: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: `${discountPercent}% ${discountType} discount applied successfully`,
+      data,
+    });
+  } catch (error) {
+    console.error('Error setting discount:', error);
+    res.status(500).json({ error: 'Failed to set discount' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/remove-discount
+ * Remove a non-charity discount from an organisation
+ */
+router.post('/:id/remove-discount', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update({
+        discount_percent: 0,
+        discount_type: null,
+        discount_reason: reason ? `Removed: ${reason}` : 'Discount removed by admin',
+        discount_approved_by: null,
+        discount_approved_at: null
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`❌ Discount removed from: ${data.name} (${id}) - ${reason || 'No reason'}`);
+
+    res.json({
+      success: true,
+      message: 'Discount removed successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('Error removing discount:', error);
+    res.status(500).json({ error: 'Failed to remove discount' });
   }
 });
 

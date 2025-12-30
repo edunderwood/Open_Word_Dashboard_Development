@@ -119,11 +119,12 @@
             <option value="enterprise">Enterprise</option>
           </select>
           <select id="charityFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
-            <option value="">All Charity Status</option>
+            <option value="">All Discount Status</option>
             <option value="verified">Verified Charities</option>
+            <option value="discounted">Has Discount (Non-Charity)</option>
             <option value="pending">Pending Review</option>
             <option value="claimed">Claims Charity</option>
-            <option value="none">Not Charity</option>
+            <option value="none">No Discount</option>
           </select>
         </div>
       </div>
@@ -320,9 +321,11 @@
                 <strong>${customer.name || 'Unnamed'}</strong>
                 ${customer.charity_verified
                   ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
-                  : customer.charity_review_requested
-                    ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Review</span>'
-                    : ''
+                  : customer.discount_percent > 0
+                    ? `<span class="badge" style="margin-left: 4px; font-size: 9px; background: #2563eb; color: white;">${customer.discount_percent}%</span>`
+                    : customer.charity_review_requested
+                      ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Review</span>'
+                      : ''
                 }
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
@@ -472,34 +475,72 @@
             ` : ''}
           </div>
 
-          <!-- Charity Status Section -->
+          <!-- Discounts Section (combines charity and non-charity discounts) -->
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
-            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Charity Status</h4>
-            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-              <div>
-                ${customer.charity_verified
-                  ? `<span class="badge badge-success" style="font-size: 12px; padding: 6px 12px;">Verified - ${customer.charity_discount_percent || 50}% Discount</span>`
-                  : customer.charity_review_requested
-                    ? '<span class="badge badge-warning" style="font-size: 12px; padding: 6px 12px;">Review Pending</span>'
-                    : customer.is_registered_charity
-                      ? '<span class="badge badge-info" style="font-size: 12px; padding: 6px 12px;">Claims Charity (Unverified)</span>'
-                      : '<span class="badge badge-gray" style="font-size: 12px; padding: 6px 12px;">Not a Charity</span>'
-                }
-              </div>
-              ${customer.charity_number ? `<div><strong>Charity No:</strong> ${customer.charity_number}</div>` : ''}
-              ${customer.charity_region ? `<div><strong>Region:</strong> ${customer.charity_region}</div>` : ''}
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Discounts</h4>
+
+            <!-- Current Discount Status -->
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+              ${customer.charity_verified
+                ? `<span class="badge badge-success" style="font-size: 12px; padding: 6px 12px;">Charity ${customer.charity_discount_percent || 50}% Discount</span>`
+                : customer.discount_percent > 0
+                  ? `<span class="badge" style="font-size: 12px; padding: 6px 12px; background: #2563eb; color: white;">${customer.discount_type ? customer.discount_type.charAt(0).toUpperCase() + customer.discount_type.slice(1) : 'General'} ${customer.discount_percent}% Discount</span>`
+                  : '<span class="badge badge-gray" style="font-size: 12px; padding: 6px 12px;">No Discount</span>'
+              }
             </div>
-            <div style="margin-top: 15px; display: flex; gap: 10px;">
+
+            <!-- Non-charity discount details -->
+            ${!customer.charity_verified && customer.discount_percent > 0 ? `
+              <div style="background: #eff6ff; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.85rem;">
+                  <div><strong>Type:</strong> ${customer.discount_type || 'N/A'}</div>
+                  <div><strong>Amount:</strong> ${customer.discount_percent}%</div>
+                  ${customer.discount_reason ? `<div style="grid-column: span 2;"><strong>Reason:</strong> ${customer.discount_reason}</div>` : ''}
+                  ${customer.discount_approved_at ? `<div><strong>Approved:</strong> ${formatDate(customer.discount_approved_at)}</div>` : ''}
+                  ${customer.discount_approved_by ? `<div><strong>By:</strong> ${customer.discount_approved_by}</div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Charity Status (if applicable) -->
+            ${customer.is_registered_charity || customer.charity_verified || customer.charity_review_requested ? `
+              <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Charity Status</div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.85rem;">
+                  ${customer.charity_verified
+                    ? '<span class="badge badge-success">Verified</span>'
+                    : customer.charity_review_requested
+                      ? '<span class="badge badge-warning">Review Pending</span>'
+                      : '<span class="badge badge-info">Claims Charity (Unverified)</span>'
+                  }
+                  ${customer.charity_number ? `<span><strong>No:</strong> ${customer.charity_number}</span>` : ''}
+                  ${customer.charity_region ? `<span><strong>Region:</strong> ${customer.charity_region}</span>` : ''}
+                </div>
+                ${customer.charity_review_notes ? `<div style="margin-top: 8px; font-size: 0.8rem; color: var(--gray-500);"><strong>Notes:</strong> ${customer.charity_review_notes}</div>` : ''}
+              </div>
+            ` : ''}
+
+            <!-- Discount Actions -->
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              ${!customer.charity_verified ? `
+                <!-- Non-charity discount actions -->
+                ${customer.discount_percent > 0
+                  ? `<button class="btn btn-sm btn-warning" onclick="removeDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Remove Discount</button>
+                     <button class="btn btn-sm btn-outline" onclick="setDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Change Discount</button>`
+                  : `<button class="btn btn-sm" style="background: #2563eb; color: white;" onclick="setDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Set Discount</button>`
+                }
+              ` : ''}
+
+              <!-- Charity discount actions -->
               ${!customer.charity_verified
                 ? `<button class="btn btn-sm btn-success" onclick="grantCharityDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Grant Charity Discount</button>`
-                : `<button class="btn btn-sm btn-danger" onclick="revokeCharityDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Revoke Discount</button>`
+                : `<button class="btn btn-sm btn-danger" onclick="revokeCharityDiscount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Revoke Charity Discount</button>`
               }
               ${customer.charity_review_requested && !customer.charity_verified
                 ? `<button class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;" onclick="denyCharityReview('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Deny Review</button>`
                 : ''
               }
             </div>
-            ${customer.charity_review_notes ? `<div style="margin-top: 10px; font-size: 0.85rem; color: var(--gray-500);"><strong>Notes:</strong> ${customer.charity_review_notes}</div>` : ''}
           </div>
 
           <!-- Credit Balance Section -->
@@ -849,6 +890,74 @@
         viewCustomer(id); // Refresh modal
       } catch (error) {
         alert('Error deducting credits: ' + error.message);
+      }
+    }
+
+    // Set non-charity discount
+    async function setDiscount(id, name) {
+      // Create a custom dialog for discount selection
+      const discountPercent = prompt(`Set discount for "${name}".\n\nSelect discount percentage:\n• 10%\n• 20%\n• 30%\n• 40%\n• 50%\n\nEnter percentage (10, 20, 30, 40, or 50):`, '20');
+      if (discountPercent === null) return;
+
+      const validPercentages = [10, 20, 30, 40, 50];
+      const percent = parseInt(discountPercent);
+      if (!validPercentages.includes(percent)) {
+        alert('Invalid percentage. Please enter 10, 20, 30, 40, or 50.');
+        return;
+      }
+
+      const discountType = prompt(`Select discount type for "${name}":\n\n• partner - Partnership agreement\n• promotional - Promotional offer\n• negotiated - Negotiated rate\n• other - Other reason\n\nEnter type (partner, promotional, negotiated, or other):`, 'negotiated');
+      if (discountType === null) return;
+
+      const validTypes = ['partner', 'promotional', 'negotiated', 'other'];
+      if (!validTypes.includes(discountType)) {
+        alert('Invalid type. Please enter partner, promotional, negotiated, or other.');
+        return;
+      }
+
+      const reason = prompt('Enter reason for this discount (optional):');
+
+      if (!confirm(`Apply ${percent}% ${discountType} discount to ${name}?\n\n${reason ? 'Reason: ' + reason : ''}`)) return;
+
+      try {
+        const response = await fetch(`/api/customers/${id}/set-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discountPercent: percent, discountType, reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`${percent}% ${discountType} discount applied to ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error setting discount: ' + error.message);
+      }
+    }
+
+    // Remove non-charity discount
+    async function removeDiscount(id, name) {
+      if (!confirm(`Remove discount from "${name}"?\n\nThey will no longer receive discounted pricing.`)) return;
+
+      const reason = prompt('Enter reason for removing discount (optional):');
+
+      try {
+        const response = await fetch(`/api/customers/${id}/remove-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Discount removed from ${name}`);
+        viewCustomer(id); // Refresh modal
+        loadCustomers(); // Refresh list
+      } catch (error) {
+        alert('Error removing discount: ' + error.message);
       }
     }
 
