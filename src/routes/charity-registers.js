@@ -318,21 +318,24 @@ router.post('/reviews/:id/reject', async (req, res) => {
     }
 });
 
+// Track OSCR sync status
+let oscrSyncStatus = {
+    inProgress: false,
+    startedAt: null,
+    completedAt: null,
+    success: null,
+    message: null,
+    stats: null
+};
+
 /**
- * POST /api/charity-registers/scotland/sync
- * Sync Scottish charity register from OSCR API
+ * Background function to sync OSCR data
  */
-router.post('/scotland/sync', async (req, res) => {
+async function runOscrSync() {
+    const oscrApiKey = process.env.OSCR_API_KEY;
+
     try {
-        const oscrApiKey = process.env.OSCR_API_KEY;
-
-        if (!oscrApiKey) {
-            return res.status(400).json({
-                error: 'OSCR API key not configured. Add OSCR_API_KEY to environment variables.'
-            });
-        }
-
-        console.log('🔄 Starting OSCR API sync...');
+        console.log('🔄 Starting OSCR API sync (background)...');
 
         // Fetch all charities from OSCR API (paginated)
         const allCharities = [];
@@ -378,9 +381,7 @@ router.post('/scotland/sync', async (req, res) => {
         console.log(`   Retrieved ${allCharities.length} charities from OSCR API`);
 
         if (allCharities.length === 0) {
-            return res.status(500).json({
-                error: 'No charities retrieved from OSCR API. Check API key and connectivity.'
-            });
+            throw new Error('No charities retrieved from OSCR API. Check API key and connectivity.');
         }
 
         // Map OSCR API response to our schema
@@ -401,8 +402,7 @@ router.post('/scotland/sync', async (req, res) => {
             .neq('id', 0);
 
         if (deleteError) {
-            console.error('Error clearing Scotland register:', deleteError);
-            return res.status(500).json({ error: 'Error clearing existing records' });
+            throw new Error('Error clearing existing records: ' + deleteError.message);
         }
 
         // Insert in batches of 1000
@@ -437,21 +437,107 @@ router.post('/scotland/sync', async (req, res) => {
 
         console.log(`✅ Scotland register synced from API: ${insertedCount} records`);
 
-        res.json({
+        oscrSyncStatus = {
+            inProgress: false,
+            startedAt: oscrSyncStatus.startedAt,
+            completedAt: new Date().toISOString(),
             success: true,
-            message: 'Scotland charity register synced from OSCR API',
+            message: 'Scotland charity register synced successfully',
             stats: {
                 fetchedFromApi: allCharities.length,
                 validRecords: charities.length,
                 insertedRecords: insertedCount,
                 errors: errors.length > 0 ? errors : undefined
             }
+        };
+
+    } catch (error) {
+        console.error('❌ Error syncing from OSCR API:', error);
+        oscrSyncStatus = {
+            inProgress: false,
+            startedAt: oscrSyncStatus.startedAt,
+            completedAt: new Date().toISOString(),
+            success: false,
+            message: error.message,
+            stats: null
+        };
+    }
+}
+
+/**
+ * POST /api/charity-registers/scotland/sync
+ * Start OSCR API sync (runs in background to avoid timeout)
+ */
+router.post('/scotland/sync', async (req, res) => {
+    try {
+        const oscrApiKey = process.env.OSCR_API_KEY;
+
+        if (!oscrApiKey) {
+            return res.status(400).json({
+                error: 'OSCR API key not configured. Add OSCR_API_KEY to environment variables.'
+            });
+        }
+
+        // Check if sync is already in progress
+        if (oscrSyncStatus.inProgress) {
+            return res.status(409).json({
+                error: 'Sync already in progress',
+                startedAt: oscrSyncStatus.startedAt
+            });
+        }
+
+        // Test API connection first with a small request
+        console.log('🔍 Testing OSCR API connection...');
+        const testUrl = 'https://oscrapi.azurewebsites.net/api/all_charities?$top=1';
+        const testResponse = await fetch(testUrl, {
+            headers: {
+                'x-functions-key': oscrApiKey,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!testResponse.ok) {
+            const errorText = await testResponse.text();
+            return res.status(400).json({
+                error: `OSCR API connection failed: ${testResponse.status} - ${errorText}`
+            });
+        }
+
+        // Start sync in background
+        oscrSyncStatus = {
+            inProgress: true,
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            success: null,
+            message: 'Sync in progress...',
+            stats: null
+        };
+
+        // Run sync without awaiting (background)
+        runOscrSync();
+
+        // Return immediately
+        res.json({
+            success: true,
+            message: 'OSCR sync started. This may take several minutes. Check status at /api/charity-registers/scotland/sync-status',
+            startedAt: oscrSyncStatus.startedAt
         });
 
     } catch (error) {
-        console.error('Error syncing from OSCR API:', error);
-        res.status(500).json({ error: `Error syncing from API: ${error.message}` });
+        console.error('Error starting OSCR sync:', error);
+        res.status(500).json({ error: `Error starting sync: ${error.message}` });
     }
+});
+
+/**
+ * GET /api/charity-registers/scotland/sync-status
+ * Check OSCR sync status
+ */
+router.get('/scotland/sync-status', (req, res) => {
+    res.json({
+        success: true,
+        data: oscrSyncStatus
+    });
 });
 
 /**

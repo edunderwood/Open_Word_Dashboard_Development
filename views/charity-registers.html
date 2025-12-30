@@ -445,9 +445,11 @@
       }
     }
 
-    // Sync Scotland from OSCR API
+    // Sync Scotland from OSCR API (runs in background)
+    let syncPollInterval = null;
+
     async function syncScotlandFromApi() {
-      if (!confirm('Sync the Scotland charity register from the OSCR API? This may take a few minutes.')) {
+      if (!confirm('Sync the Scotland charity register from the OSCR API? This may take several minutes.')) {
         return;
       }
 
@@ -456,11 +458,12 @@
       const progressText = document.getElementById('scotlandProgressText');
 
       btn.disabled = true;
-      btn.textContent = 'Syncing...';
+      btn.textContent = 'Starting...';
       progress.classList.add('active');
-      progressText.textContent = 'Fetching charities from OSCR API... This may take a few minutes.';
+      progressText.textContent = 'Testing OSCR API connection...';
 
       try {
+        // Start the sync (returns immediately, runs in background)
         const response = await fetch('/api/charity-registers/scotland/sync', {
           method: 'POST'
         });
@@ -469,15 +472,99 @@
 
         if (!response.ok) throw new Error(data.error);
 
-        alert(`Success! ${data.stats.insertedRecords.toLocaleString()} Scottish charities synced from OSCR API.`);
-        loadRegisterData();
+        // Sync started successfully - poll for status
+        progressText.textContent = 'Sync started. Fetching charities from OSCR API... This may take several minutes.';
+        btn.textContent = 'Syncing...';
+
+        // Poll for status every 5 seconds
+        syncPollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await fetch('/api/charity-registers/scotland/sync-status');
+            const statusData = await statusResponse.json();
+
+            if (statusData.success && statusData.data) {
+              const status = statusData.data;
+
+              if (!status.inProgress) {
+                // Sync completed
+                clearInterval(syncPollInterval);
+                syncPollInterval = null;
+
+                if (status.success) {
+                  const stats = status.stats;
+                  alert(`Success! ${stats.insertedRecords.toLocaleString()} Scottish charities synced from OSCR API.`);
+                  loadRegisterData();
+                } else {
+                  alert('Sync failed: ' + status.message);
+                }
+
+                btn.disabled = false;
+                btn.textContent = 'Sync from OSCR API';
+                progress.classList.remove('active');
+              } else {
+                // Still in progress
+                progressText.textContent = 'Sync in progress... Fetching charities from OSCR API. Please wait.';
+              }
+            }
+          } catch (pollError) {
+            console.error('Error polling sync status:', pollError);
+          }
+        }, 5000);
 
       } catch (error) {
-        alert('Error syncing: ' + error.message);
-      } finally {
+        alert('Error starting sync: ' + error.message);
         btn.disabled = false;
         btn.textContent = 'Sync from OSCR API';
         progress.classList.remove('active');
+      }
+    }
+
+    // Check if sync is already in progress on page load
+    async function checkSyncStatus() {
+      try {
+        const response = await fetch('/api/charity-registers/scotland/sync-status');
+        const data = await response.json();
+
+        if (data.success && data.data && data.data.inProgress) {
+          // Sync is in progress - show status and start polling
+          const btn = document.getElementById('scotlandSyncBtn');
+          const progress = document.getElementById('scotlandProgress');
+          const progressText = document.getElementById('scotlandProgressText');
+
+          btn.disabled = true;
+          btn.textContent = 'Syncing...';
+          progress.classList.add('active');
+          progressText.textContent = 'Sync in progress... Fetching charities from OSCR API. Please wait.';
+
+          // Start polling
+          syncPollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await fetch('/api/charity-registers/scotland/sync-status');
+              const statusData = await statusResponse.json();
+
+              if (statusData.success && statusData.data && !statusData.data.inProgress) {
+                clearInterval(syncPollInterval);
+                syncPollInterval = null;
+
+                if (statusData.data.success) {
+                  const stats = statusData.data.stats;
+                  alert(`Sync completed! ${stats.insertedRecords.toLocaleString()} Scottish charities synced.`);
+                  loadRegisterData();
+                } else {
+                  alert('Sync failed: ' + statusData.data.message);
+                }
+
+                btn.disabled = false;
+                btn.textContent = 'Sync from OSCR API';
+                progress.classList.remove('active');
+              }
+            } catch (pollError) {
+              console.error('Error polling sync status:', pollError);
+            }
+          }, 5000);
+        }
+      } catch (error) {
+        console.error('Error checking sync status:', error);
       }
     }
 
@@ -769,6 +856,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadRegisterData();
       loadReviews();
+      checkSyncStatus(); // Check if OSCR sync is already in progress
       setupDragDrop('scotlandUploadZone', 'scotlandFile', uploadScotland, { allowZip: true });
       setupDragDrop('niUploadZone', 'niFile', uploadNI, {});
       setupDragDrop('irelandUploadZone', 'irelandFile', uploadIreland, { allowZip: true, allowExcel: true });
