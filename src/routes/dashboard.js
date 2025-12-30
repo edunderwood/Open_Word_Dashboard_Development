@@ -134,29 +134,47 @@ router.get('/recent-activity', async (req, res) => {
     // Get recent signups
     const { data: recentSignups, error: signupError } = await supabase
       .from('organisations')
-      .select('id, name, created_at, subscription_plan, subscription_status')
+      .select('id, name, created_at, subscription_tier, subscription_status')
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    // Get recent usage
+    if (signupError) {
+      console.error('Error fetching recent signups:', signupError);
+    }
+
+    // Get recent usage from streaming_sessions (more reliable than translation_usage)
     const { data: recentUsage, error: usageError } = await supabase
-      .from('translation_usage')
+      .from('streaming_sessions')
       .select(`
         id,
-        created_at,
-        character_count,
-        operation_type,
+        started_at,
+        total_characters,
+        status,
         organisation_id,
         organisations (name)
       `)
-      .order('created_at', { ascending: false })
+      .order('started_at', { ascending: false })
       .limit(limit);
+
+    if (usageError) {
+      console.error('Error fetching recent usage:', usageError);
+    }
+
+    // Format usage data for frontend
+    const formattedUsage = (recentUsage || []).map(session => ({
+      id: session.id,
+      created_at: session.started_at,
+      character_count: session.total_characters || 0,
+      operation_type: session.status === 'active' ? 'Streaming' : 'Session',
+      organisation_id: session.organisation_id,
+      organisations: session.organisations
+    }));
 
     res.json({
       success: true,
       data: {
         recentSignups: recentSignups || [],
-        recentUsage: recentUsage || [],
+        recentUsage: formattedUsage,
       }
     });
   } catch (error) {

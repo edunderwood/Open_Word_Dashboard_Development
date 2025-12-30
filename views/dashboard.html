@@ -795,7 +795,7 @@
           signupsTable.innerHTML = data.data.recentSignups.map(signup => `
             <tr>
               <td><a href="/customers/${signup.id}">${signup.name || 'Unnamed'}</a></td>
-              <td>${signup.subscription_plan || '-'}</td>
+              <td>${signup.subscription_tier || '-'}</td>
               <td>${getStatusBadge(signup.subscription_status)}</td>
               <td>${formatDate(signup.created_at)}</td>
             </tr>
