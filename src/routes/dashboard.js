@@ -142,8 +142,8 @@ router.get('/recent-activity', async (req, res) => {
       console.error('Error fetching recent signups:', signupError);
     }
 
-    // Get recent usage from streaming_sessions (more reliable than translation_usage)
-    const { data: recentUsage, error: usageError } = await supabase
+    // Get recent usage from streaming_sessions
+    const { data: recentSessions, error: sessionsError } = await supabase
       .from('streaming_sessions')
       .select(`
         id,
@@ -156,19 +156,50 @@ router.get('/recent-activity', async (req, res) => {
       .order('started_at', { ascending: false })
       .limit(limit);
 
-    if (usageError) {
-      console.error('Error fetching recent usage:', usageError);
+    if (sessionsError) {
+      console.error('Error fetching streaming sessions:', sessionsError);
     }
 
-    // Format usage data for frontend
-    const formattedUsage = (recentUsage || []).map(session => ({
-      id: session.id,
-      created_at: session.started_at,
-      character_count: session.total_characters || 0,
-      operation_type: session.status === 'active' ? 'Streaming' : 'Session',
-      organisation_id: session.organisation_id,
-      organisations: session.organisations
-    }));
+    // Also get recent credit usage as fallback
+    const { data: recentCredits, error: creditsError } = await supabase
+      .from('credit_usage')
+      .select(`
+        id,
+        session_start,
+        total_billable_characters,
+        credits_used,
+        organisation_id,
+        organisations (name)
+      `)
+      .order('session_start', { ascending: false })
+      .limit(limit);
+
+    if (creditsError) {
+      console.error('Error fetching credit usage:', creditsError);
+    }
+
+    // Combine and format usage data - prefer streaming_sessions, fall back to credit_usage
+    let formattedUsage = [];
+
+    if (recentSessions && recentSessions.length > 0) {
+      formattedUsage = recentSessions.map(session => ({
+        id: session.id,
+        created_at: session.started_at,
+        character_count: session.total_characters || 0,
+        operation_type: session.status === 'active' ? 'Streaming' : 'Session',
+        organisation_id: session.organisation_id,
+        organisations: session.organisations
+      }));
+    } else if (recentCredits && recentCredits.length > 0) {
+      formattedUsage = recentCredits.map(usage => ({
+        id: usage.id,
+        created_at: usage.session_start,
+        character_count: usage.total_billable_characters || 0,
+        operation_type: `${(usage.credits_used || 0).toFixed(1)} credits`,
+        organisation_id: usage.organisation_id,
+        organisations: usage.organisations
+      }));
+    }
 
     res.json({
       success: true,

@@ -288,14 +288,6 @@
         </div>
       </div>
 
-      <!-- Plan Breakdown (Legacy) -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Customers by Plan</h3>
-        </div>
-        <div id="planBreakdown" class="stats-grid" style="margin-bottom: 0;"></div>
-      </div>
-
       <!-- Recent Activity -->
       <div class="grid grid-2">
         <div class="card">
@@ -433,19 +425,6 @@
           document.getElementById('usageChange').textContent = changeText;
           document.getElementById('usageChange').style.color = changePercent > 0 ? 'var(--success)' : 'var(--danger)';
         }
-
-        // Update plan breakdown
-        const planDiv = document.getElementById('planBreakdown');
-        planDiv.innerHTML = '';
-        Object.entries(planBreakdown).forEach(([plan, count]) => {
-          const planName = plan.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          planDiv.innerHTML += `
-            <div>
-              <div class="text-muted mb-2">${planName}</div>
-              <div style="font-size: 1.5rem; font-weight: 700;">${count}</div>
-            </div>
-          `;
-        });
 
         document.getElementById('lastUpdated').textContent = formatDate(data.data.timestamp);
       } catch (error) {
