@@ -286,12 +286,6 @@ router.get('/credits', async (req, res) => {
       tierCounts[tier] = (tierCounts[tier] || 0) + 1;
     });
 
-    // Get charity breakdown
-    const { count: charityCount } = await supabase
-      .from('organisations')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_registered_charity', true);
-
     res.json({
       success: true,
       data: {
@@ -310,7 +304,6 @@ router.get('/credits', async (req, res) => {
           charactersProcessed: charsThisMonth
         },
         tiers: tierCounts,
-        charities: charityCount || 0,
         charsPerCredit: CHARS_PER_CREDIT
       }
     });

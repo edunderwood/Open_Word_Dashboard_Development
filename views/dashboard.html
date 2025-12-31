@@ -281,10 +281,6 @@
             <div class="text-muted mb-2">Enterprise</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #8b5cf6;" id="tierEnterprise">-</div>
           </div>
-          <div>
-            <div class="text-muted mb-2">Charities</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;" id="charityCount">-</div>
-          </div>
         </div>
       </div>
 
@@ -457,7 +453,7 @@
 
         if (!data.success) throw new Error(data.error);
 
-        const { balances, thisMonth, tiers, charities } = data.data;
+        const { balances, thisMonth, tiers } = data.data;
 
         // Update credit stats
         document.getElementById('totalCredits').textContent = formatNumber(balances.totalCurrent.toFixed(1));
@@ -470,7 +466,6 @@
         document.getElementById('tierStandard').textContent = tiers.standard || 0;
         document.getElementById('tierPro').textContent = tiers.pro || 0;
         document.getElementById('tierEnterprise').textContent = tiers.enterprise || 0;
-        document.getElementById('charityCount').textContent = charities || 0;
 
       } catch (error) {
         console.error('Error loading credit stats:', error);

@@ -139,6 +139,7 @@
                 <th>Organisation</th>
                 <th>Key</th>
                 <th>Tier</th>
+                <th>Discount</th>
                 <th>Credits</th>
                 <th>Status</th>
                 <th>Last Login</th>
@@ -146,7 +147,7 @@
               </tr>
             </thead>
             <tbody id="customersTable">
-              <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+              <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -311,28 +312,31 @@
         // Update table
         const table = document.getElementById('customersTable');
         if (customers.length === 0) {
-          table.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No customers found</td></tr>';
+          table.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No customers found</td></tr>';
         } else {
           table.innerHTML = customers.map(customer => {
             const creditBalance = customer.credit_balance ?? 0;
             const tier = customer.subscription_tier || 'basic';
+            // Discount display
+            const discountDisplay = customer.discount_percent > 0
+              ? `<span class="badge" style="background: ${customer.charity_verified ? '#10b981' : '#2563eb'}; color: white;">${customer.discount_percent}%</span>`
+              : customer.discount_review_requested
+                ? '<span class="badge badge-warning" style="font-size: 9px;">Pending</span>'
+                : '<span class="text-muted">-</span>';
             return `
             <tr>
               <td>
                 <strong>${customer.name || 'Unnamed'}</strong>
                 ${customer.charity_verified
                   ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
-                  : customer.discount_percent > 0
-                    ? `<span class="badge" style="margin-left: 4px; font-size: 9px; background: #2563eb; color: white;">${customer.discount_percent}%</span>`
-                    : customer.discount_review_requested
-                      ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Discount Request</span>'
-                      : customer.charity_review_requested
-                        ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Charity Review</span>'
-                        : ''
+                  : customer.charity_review_requested
+                    ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Charity Review</span>'
+                    : ''
                 }
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
               <td><span class="badge" style="background: ${getTierColor(tier)}; color: white;">${tier.charAt(0).toUpperCase() + tier.slice(1)}</span></td>
+              <td>${discountDisplay}</td>
               <td style="font-weight: 600; color: ${creditBalance <= 0 ? 'var(--danger)' : creditBalance <= 10 ? 'var(--warning)' : 'inherit'};">
                 ${creditBalance.toFixed(1)}
               </td>
