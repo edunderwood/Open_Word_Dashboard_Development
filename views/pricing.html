@@ -73,62 +73,10 @@
       font-weight: 500;
       color: var(--gray-900);
     }
-    .tier-features {
-      margin-top: 16px;
-    }
-    .tier-features h4 {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: var(--gray-500);
-      margin-bottom: 8px;
-    }
-    .feature-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 0;
-      font-size: 0.875rem;
-    }
-    .feature-item.enabled {
-      color: var(--success);
-    }
-    .feature-item.disabled {
-      color: var(--gray-400);
-    }
     .tier-actions {
       margin-top: 16px;
       display: flex;
       gap: 8px;
-    }
-    .charity-card {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-      padding: 24px;
-      border-radius: 12px;
-      margin-bottom: 30px;
-    }
-    .charity-card h3 {
-      margin: 0 0 8px 0;
-    }
-    .charity-card .discount-value {
-      font-size: 2rem;
-      font-weight: 700;
-    }
-    .info-card {
-      background: var(--gray-50);
-      border-radius: 8px;
-      padding: 20px;
-      margin-top: 20px;
-    }
-    .info-card h4 {
-      margin: 0 0 12px 0;
-      color: var(--gray-700);
-    }
-    .info-card ul {
-      margin: 0;
-      padding-left: 20px;
-      color: var(--gray-600);
-      line-height: 1.8;
     }
   </style>
 </head>
@@ -202,143 +150,20 @@
       <div class="page-header">
         <div>
           <h2>Plan Pricing</h2>
-          <p>Manage subscription tiers, credit pricing, and charity discounts</p>
+          <p>View subscription tier pricing from Stripe</p>
         </div>
       </div>
 
-      <!-- Charity Discount Card -->
-      <div class="charity-card">
-        <h3>Default Charity Discount</h3>
-        <p>Verified charities receive a discount on all pricing. Each tier can have a different default.</p>
-        <div class="discount-value" id="charityDiscount">50%</div>
-        <small>This is the default from the Basic tier. Edit individual tiers below to change their charity discount.</small>
-      </div>
-
       <!-- Pricing Tiers Grid -->
-      <h3 style="margin-bottom: 16px;">Subscription Tiers</h3>
+      <h3 style="margin-bottom: 16px;">Subscription Tiers (from Stripe)</h3>
+      <p style="color: var(--gray-500); margin-bottom: 16px;">Prices are managed in Stripe. Edit products in your <a href="https://dashboard.stripe.com/products" target="_blank" style="color: var(--primary);">Stripe Dashboard</a> to change pricing.</p>
       <div class="pricing-grid" id="tiersGrid">
         <div class="tier-card">
           <p class="text-muted text-center">Loading pricing tiers...</p>
         </div>
       </div>
 
-      <!-- Info Card -->
-      <div class="info-card">
-        <h4>Pricing Model</h4>
-        <ul>
-          <li><strong>Monthly Fee:</strong> Fixed subscription cost per month (in pence)</li>
-          <li><strong>Credit Price:</strong> Cost per credit for regular customers (in pence)</li>
-          <li><strong>Charity Discount:</strong> Percentage discount applied to credit price for verified charities</li>
-          <li><strong>Chars per Credit:</strong> Number of characters included per credit (default: 23,000)</li>
-          <li>Changes here update the <code>pricing_tiers</code> table used by Open Word</li>
-        </ul>
-      </div>
     </main>
-  </div>
-
-  <!-- Edit Tier Modal -->
-  <div class="modal-overlay" id="editModal">
-    <div class="modal" style="max-width: 600px;">
-      <div class="modal-header">
-        <h3 id="editModalTitle">Edit Pricing Tier</h3>
-        <button class="modal-close" onclick="closeEditModal()">&times;</button>
-      </div>
-      <form id="editForm" onsubmit="saveTier(event)">
-        <div class="modal-body">
-          <input type="hidden" id="tierId">
-          <input type="hidden" id="isNewTier" value="false">
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label for="tierIdInput">Tier ID</label>
-              <input type="text" id="tierIdInput" class="form-input" required pattern="[a-z_]+" title="Lowercase letters and underscores only" placeholder="e.g., basic">
-              <small class="text-muted">Cannot be changed after creation</small>
-            </div>
-            <div class="form-group">
-              <label for="tierName">Display Name</label>
-              <input type="text" id="tierName" class="form-input" required placeholder="e.g., Basic">
-            </div>
-          </div>
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label for="monthlyFeePence">Monthly Fee (pence)</label>
-              <input type="number" id="monthlyFeePence" class="form-input" min="0" step="0.01" required placeholder="1200">
-              <small class="text-muted">e.g., 1200 = £12.00</small>
-            </div>
-            <div class="form-group">
-              <label for="charsPerCredit">Characters per Credit</label>
-              <input type="number" id="charsPerCredit" class="form-input" min="1000" required placeholder="23000">
-            </div>
-          </div>
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label for="creditPricePence">Credit Price (pence)</label>
-              <input type="number" id="creditPricePence" class="form-input" min="0" step="0.01" required placeholder="118">
-              <small class="text-muted">e.g., 118 = £1.18</small>
-            </div>
-            <div class="form-group">
-              <label for="charityDiscountPercent">Default Charity Discount (%)</label>
-              <input type="number" id="charityDiscountPercent" class="form-input" min="0" max="100" required placeholder="50">
-              <small class="text-muted">Applied to credit price for verified charities</small>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="description">Description</label>
-            <input type="text" id="description" class="form-input" placeholder="Brief description of this tier">
-          </div>
-
-          <h4 style="margin: 20px 0 12px 0; font-size: 0.875rem; color: var(--gray-600);">Features</h4>
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label for="maxConcurrentSessions">Max Concurrent Sessions</label>
-              <input type="number" id="maxConcurrentSessions" class="form-input" min="1" required placeholder="1">
-            </div>
-            <div class="form-group">
-              <label for="displayOrder">Display Order</label>
-              <input type="number" id="displayOrder" class="form-input" min="0" placeholder="1">
-            </div>
-          </div>
-
-          <div class="grid grid-2" style="margin-top: 12px;">
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="canCustomizeBranding">
-                Custom Branding
-              </label>
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="canReceiveFeedback">
-                Participant Feedback
-              </label>
-            </div>
-          </div>
-
-          <div class="grid grid-2">
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="aiAudioEnabled">
-                AI Audio
-              </label>
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="isActive" checked>
-                Active (visible to customers)
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Changes</button>
-        </div>
-      </form>
-    </div>
   </div>
 
   <script>
@@ -350,72 +175,32 @@
       }).format(pence / 100);
     }
 
-    // Load pricing tiers
+    // Load pricing tiers from Stripe
     async function loadTiers() {
       try {
-        const response = await fetch('/api/pricing');
+        const response = await fetch('/api/pricing/stripe');
         const data = await response.json();
 
         if (!data.success) throw new Error(data.error);
 
         const grid = document.getElementById('tiersGrid');
         if (data.data.length === 0) {
-          grid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No pricing tiers found.</p></div>';
+          grid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No products found in Stripe. Create products in your Stripe Dashboard.</p></div>';
         } else {
           grid.innerHTML = data.data.map(tier => `
-            <div class="tier-card ${tier.is_active ? '' : 'inactive'}">
+            <div class="tier-card">
               <div class="tier-header">
                 <div>
                   <div class="tier-name">${tier.name}</div>
-                  <div class="tier-id">${tier.id}</div>
+                  <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${tier.stripeProductId}</div>
                 </div>
                 <div class="tier-price">
-                  ${formatPence(tier.monthly_fee_pence)}<small>/mo</small>
+                  ${formatPence(tier.monthlyPricePence)}<small>/${tier.interval || 'mo'}</small>
                 </div>
               </div>
-
-              <div class="tier-details">
-                <div class="tier-detail">
-                  <label>Credit Price</label>
-                  <span>${formatPence(tier.credit_price_pence)}</span>
-                </div>
-                <div class="tier-detail">
-                  <label>Charity Discount</label>
-                  <span style="color: #10b981; font-weight: 600;">${tier.charity_discount_percent || 50}%</span>
-                </div>
-                <div class="tier-detail">
-                  <label>Charity Price</label>
-                  <span style="color: #10b981;">${formatPence(Math.round(tier.credit_price_pence * (1 - (tier.charity_discount_percent || 50) / 100)))}</span>
-                </div>
-                <div class="tier-detail">
-                  <label>Chars/Credit</label>
-                  <span>${tier.chars_per_credit.toLocaleString()}</span>
-                </div>
-                <div class="tier-detail">
-                  <label>Max Sessions</label>
-                  <span>${tier.max_concurrent_sessions}</span>
-                </div>
-              </div>
-
-              <div class="tier-features">
-                <h4>Features</h4>
-                <div class="feature-item ${tier.can_customize_branding ? 'enabled' : 'disabled'}">
-                  ${tier.can_customize_branding ? '✓' : '✗'} Custom Branding
-                </div>
-                <div class="feature-item ${tier.can_receive_feedback ? 'enabled' : 'disabled'}">
-                  ${tier.can_receive_feedback ? '✓' : '✗'} Participant Feedback
-                </div>
-                <div class="feature-item ${tier.ai_audio_enabled ? 'enabled' : 'disabled'}">
-                  ${tier.ai_audio_enabled ? '✓' : '✗'} AI Audio
-                </div>
-              </div>
-
-              <div class="tier-actions">
-                <button class="btn btn-sm btn-outline" onclick="editTier('${tier.id}')">Edit</button>
-                ${tier.is_active
-                  ? `<button class="btn btn-sm btn-danger" onclick="disableTier('${tier.id}')">Disable</button>`
-                  : `<span class="badge badge-gray">Inactive</span>`
-                }
+              ${tier.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${tier.description}</p>` : ''}
+              <div class="tier-actions" style="margin-top: 16px;">
+                <a href="https://dashboard.stripe.com/products/${tier.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
               </div>
             </div>
           `).join('');
@@ -423,126 +208,8 @@
       } catch (error) {
         console.error('Error loading tiers:', error);
         document.getElementById('tiersGrid').innerHTML =
-          '<div class="tier-card"><p class="text-danger text-center">Error loading pricing tiers</p></div>';
+          '<div class="tier-card"><p class="text-danger text-center">Error loading pricing from Stripe</p></div>';
       }
-    }
-
-    // Load charity discount from basic tier
-    async function loadCharityDiscount() {
-      try {
-        const response = await fetch('/api/pricing');
-        const data = await response.json();
-
-        if (data.success && data.data.length > 0) {
-          // Find the basic tier, or use the first tier as fallback
-          const basicTier = data.data.find(t => t.id === 'basic') || data.data[0];
-          const discount = basicTier.charity_discount_percent || 50;
-          document.getElementById('charityDiscount').textContent = `${discount}%`;
-        }
-      } catch (error) {
-        console.error('Error loading charity discount:', error);
-      }
-    }
-
-    // Edit tier
-    async function editTier(id) {
-      try {
-        const response = await fetch(`/api/pricing/${id}`);
-        const data = await response.json();
-
-        if (!data.success) throw new Error(data.error);
-
-        const tier = data.data;
-        document.getElementById('editModalTitle').textContent = 'Edit Pricing Tier';
-        document.getElementById('tierId').value = tier.id;
-        document.getElementById('isNewTier').value = 'false';
-        document.getElementById('tierIdInput').value = tier.id;
-        document.getElementById('tierIdInput').disabled = true;
-        document.getElementById('tierName').value = tier.name || '';
-        document.getElementById('monthlyFeePence').value = tier.monthly_fee_pence || 0;
-        document.getElementById('charsPerCredit').value = tier.chars_per_credit || 23000;
-        document.getElementById('creditPricePence').value = tier.credit_price_pence || 118;
-        document.getElementById('charityDiscountPercent').value = tier.charity_discount_percent || 50;
-        document.getElementById('maxConcurrentSessions').value = tier.max_concurrent_sessions || 1;
-        document.getElementById('displayOrder').value = tier.display_order || 0;
-        document.getElementById('description').value = tier.description || '';
-        document.getElementById('canCustomizeBranding').checked = tier.can_customize_branding || false;
-        document.getElementById('canReceiveFeedback').checked = tier.can_receive_feedback || false;
-        document.getElementById('aiAudioEnabled').checked = tier.ai_audio_enabled || false;
-        document.getElementById('isActive').checked = tier.is_active;
-        document.getElementById('editModal').classList.add('active');
-      } catch (error) {
-        alert('Error loading tier: ' + error.message);
-      }
-    }
-
-    // Save tier
-    async function saveTier(event) {
-      event.preventDefault();
-
-      const isNew = document.getElementById('isNewTier').value === 'true';
-      const id = isNew ? document.getElementById('tierIdInput').value : document.getElementById('tierId').value;
-
-      const tier = {
-        id: document.getElementById('tierIdInput').value,
-        name: document.getElementById('tierName').value,
-        monthlyFeePence: parseFloat(document.getElementById('monthlyFeePence').value) || 0,
-        charsPerCredit: parseInt(document.getElementById('charsPerCredit').value),
-        creditPricePence: parseFloat(document.getElementById('creditPricePence').value) || 0,
-        charityDiscountPercent: parseInt(document.getElementById('charityDiscountPercent').value) || 50,
-        maxConcurrentSessions: parseInt(document.getElementById('maxConcurrentSessions').value),
-        displayOrder: parseInt(document.getElementById('displayOrder').value) || 0,
-        description: document.getElementById('description').value,
-        canCustomizeBranding: document.getElementById('canCustomizeBranding').checked,
-        canReceiveFeedback: document.getElementById('canReceiveFeedback').checked,
-        aiAudioEnabled: document.getElementById('aiAudioEnabled').checked,
-        isActive: document.getElementById('isActive').checked,
-      };
-
-      try {
-        const url = isNew ? '/api/pricing' : `/api/pricing/${id}`;
-        const method = isNew ? 'POST' : 'PUT';
-
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(tier),
-        });
-
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error);
-
-        alert(data.message);
-        closeEditModal();
-        loadTiers();
-        loadCharityDiscount();
-      } catch (error) {
-        alert('Error saving tier: ' + error.message);
-      }
-    }
-
-    // Disable tier
-    async function disableTier(id) {
-      if (!confirm('Are you sure you want to disable this pricing tier?')) return;
-
-      try {
-        const response = await fetch(`/api/pricing/${id}`, {
-          method: 'DELETE',
-        });
-
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error);
-
-        alert(data.message);
-        loadTiers();
-      } catch (error) {
-        alert('Error disabling tier: ' + error.message);
-      }
-    }
-
-    // Close modal
-    function closeEditModal() {
-      document.getElementById('editModal').classList.remove('active');
     }
 
     // Logout
@@ -555,19 +222,9 @@
       }
     }
 
-    // Close modal on overlay click
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-          overlay.classList.remove('active');
-        }
-      });
-    });
-
     // Load data on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadTiers();
-      loadCharityDiscount();
     });
   </script>
 </body>

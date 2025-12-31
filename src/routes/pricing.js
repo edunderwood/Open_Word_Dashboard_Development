@@ -1,10 +1,12 @@
 /**
  * Pricing Tiers Management Routes
  * Manages the pricing_tiers table used by the main OpenWord system
+ * Fetches pricing from Stripe as the source of truth
  */
 
 import express from 'express';
 import supabase from '../services/supabase.js';
+import stripe from '../services/stripe.js';
 
 const router = express.Router();
 
@@ -28,6 +30,60 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching pricing tiers:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch pricing tiers' });
+  }
+});
+
+/**
+ * GET /api/pricing/stripe
+ * Get pricing from Stripe products/prices (source of truth)
+ * NOTE: This route must be defined BEFORE /:id to avoid being matched as an ID
+ */
+router.get('/stripe', async (req, res) => {
+  try {
+    // Fetch all active products from Stripe
+    const products = await stripe.products.list({
+      active: true,
+      limit: 20
+    });
+
+    // Fetch all active prices
+    const prices = await stripe.prices.list({
+      active: true,
+      type: 'recurring',
+      limit: 100
+    });
+
+    // Build a map of product ID to price
+    const priceMap = {};
+    for (const price of prices.data) {
+      // Use the first active recurring price for each product
+      if (!priceMap[price.product] || price.created > priceMap[price.product].created) {
+        priceMap[price.product] = price;
+      }
+    }
+
+    // Combine products with their prices
+    const tiers = products.data.map(product => {
+      const price = priceMap[product.id];
+      return {
+        stripeProductId: product.id,
+        name: product.name,
+        description: product.description || '',
+        monthlyPricePence: price ? price.unit_amount : 0,
+        currency: price ? price.currency : 'gbp',
+        interval: price ? price.recurring?.interval : 'month',
+        stripePriceId: price ? price.id : null,
+        metadata: product.metadata || {}
+      };
+    }).sort((a, b) => a.monthlyPricePence - b.monthlyPricePence);
+
+    res.json({
+      success: true,
+      data: tiers
+    });
+  } catch (error) {
+    console.error('Error fetching Stripe pricing:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch Stripe pricing' });
   }
 });
 
