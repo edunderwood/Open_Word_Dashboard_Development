@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
 /**
  * GET /api/pricing/stripe
  * Get pricing from Stripe products/prices (source of truth)
+ * Returns plans (subscriptions) and credits (one-time) separately
  * NOTE: This route must be defined BEFORE /:id to avoid being matched as an ID
  */
 router.get('/stripe', async (req, res) => {
@@ -43,43 +44,91 @@ router.get('/stripe', async (req, res) => {
     // Fetch all active products from Stripe
     const products = await stripe.products.list({
       active: true,
-      limit: 20
+      limit: 50
     });
 
-    // Fetch all active prices
-    const prices = await stripe.prices.list({
+    // Fetch all active recurring prices (for plans/subscriptions)
+    const recurringPrices = await stripe.prices.list({
       active: true,
       type: 'recurring',
       limit: 100
     });
 
-    // Build a map of product ID to price
-    const priceMap = {};
-    for (const price of prices.data) {
-      // Use the first active recurring price for each product
-      if (!priceMap[price.product] || price.created > priceMap[price.product].created) {
-        priceMap[price.product] = price;
+    // Fetch all active one-time prices (for credits)
+    const oneTimePrices = await stripe.prices.list({
+      active: true,
+      type: 'one_time',
+      limit: 100
+    });
+
+    // Build maps of product ID to price
+    const recurringPriceMap = {};
+    for (const price of recurringPrices.data) {
+      if (!recurringPriceMap[price.product] || price.created > recurringPriceMap[price.product].created) {
+        recurringPriceMap[price.product] = price;
       }
     }
 
-    // Combine products with their prices
-    const tiers = products.data.map(product => {
-      const price = priceMap[product.id];
-      return {
-        stripeProductId: product.id,
-        name: product.name,
-        description: product.description || '',
-        monthlyPricePence: price ? price.unit_amount : 0,
-        currency: price ? price.currency : 'gbp',
-        interval: price ? price.recurring?.interval : 'month',
-        stripePriceId: price ? price.id : null,
-        metadata: product.metadata || {}
-      };
-    }).sort((a, b) => a.monthlyPricePence - b.monthlyPricePence);
+    const oneTimePriceMap = {};
+    for (const price of oneTimePrices.data) {
+      if (!oneTimePriceMap[price.product] || price.created > oneTimePriceMap[price.product].created) {
+        oneTimePriceMap[price.product] = price;
+      }
+    }
+
+    // Separate products into plans and credits
+    const plans = [];
+    const credits = [];
+
+    for (const product of products.data) {
+      const recurringPrice = recurringPriceMap[product.id];
+      const oneTimePrice = oneTimePriceMap[product.id];
+
+      // Check if it's a credit product (has one-time price or name contains "Credit")
+      const isCredit = oneTimePrice || product.name.toLowerCase().includes('credit');
+
+      if (isCredit && oneTimePrice) {
+        // Extract credit quantity from name (e.g., "100 Open Word Credits" -> 100)
+        const creditMatch = product.name.match(/(\d+)/);
+        const creditQuantity = creditMatch ? parseInt(creditMatch[1], 10) : 0;
+
+        credits.push({
+          stripeProductId: product.id,
+          name: product.name,
+          description: product.description || '',
+          pricePence: oneTimePrice.unit_amount,
+          currency: oneTimePrice.currency || 'gbp',
+          stripePriceId: oneTimePrice.id,
+          creditQuantity,
+          metadata: product.metadata || {}
+        });
+      } else if (recurringPrice) {
+        // It's a subscription plan
+        plans.push({
+          stripeProductId: product.id,
+          name: product.name,
+          description: product.description || '',
+          monthlyPricePence: recurringPrice.unit_amount,
+          currency: recurringPrice.currency || 'gbp',
+          interval: recurringPrice.recurring?.interval || 'month',
+          stripePriceId: recurringPrice.id,
+          metadata: product.metadata || {}
+        });
+      }
+    }
+
+    // Sort plans by price (ascending)
+    plans.sort((a, b) => a.monthlyPricePence - b.monthlyPricePence);
+
+    // Sort credits by quantity (ascending: 1, 5, 10, 25, 50, 100)
+    credits.sort((a, b) => a.creditQuantity - b.creditQuantity);
 
     res.json({
       success: true,
-      data: tiers
+      data: {
+        plans,
+        credits
+      }
     });
   } catch (error) {
     console.error('Error fetching Stripe pricing:', error);

@@ -154,12 +154,21 @@
         </div>
       </div>
 
-      <!-- Pricing Tiers Grid -->
-      <h3 style="margin-bottom: 16px;">Subscription Tiers (from Stripe)</h3>
-      <p style="color: var(--gray-500); margin-bottom: 16px;">Prices are managed in Stripe. Edit products in your <a href="https://dashboard.stripe.com/products" target="_blank" style="color: var(--primary);">Stripe Dashboard</a> to change pricing.</p>
-      <div class="pricing-grid" id="tiersGrid">
+      <p style="color: var(--gray-500); margin-bottom: 24px;">Prices are managed in Stripe. Edit products in your <a href="https://dashboard.stripe.com/products" target="_blank" style="color: var(--primary);">Stripe Dashboard</a> to change pricing.</p>
+
+      <!-- Subscription Plans Grid -->
+      <h3 style="margin-bottom: 16px;">Subscription Plans</h3>
+      <div class="pricing-grid" id="plansGrid">
         <div class="tier-card">
-          <p class="text-muted text-center">Loading pricing tiers...</p>
+          <p class="text-muted text-center">Loading plans...</p>
+        </div>
+      </div>
+
+      <!-- Credit Packages Grid -->
+      <h3 style="margin-bottom: 16px; margin-top: 32px;">Credit Packages</h3>
+      <div class="pricing-grid" id="creditsGrid">
+        <div class="tier-card">
+          <p class="text-muted text-center">Loading credits...</p>
         </div>
       </div>
 
@@ -175,40 +184,69 @@
       }).format(pence / 100);
     }
 
-    // Load pricing tiers from Stripe
-    async function loadTiers() {
+    // Load pricing from Stripe (plans and credits)
+    async function loadPricing() {
       try {
         const response = await fetch('/api/pricing/stripe');
         const data = await response.json();
 
         if (!data.success) throw new Error(data.error);
 
-        const grid = document.getElementById('tiersGrid');
-        if (data.data.length === 0) {
-          grid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No products found in Stripe. Create products in your Stripe Dashboard.</p></div>';
+        const { plans, credits } = data.data;
+
+        // Render subscription plans
+        const plansGrid = document.getElementById('plansGrid');
+        if (plans.length === 0) {
+          plansGrid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No subscription plans found in Stripe.</p></div>';
         } else {
-          grid.innerHTML = data.data.map(tier => `
+          plansGrid.innerHTML = plans.map(plan => `
             <div class="tier-card">
               <div class="tier-header">
                 <div>
-                  <div class="tier-name">${tier.name}</div>
-                  <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${tier.stripeProductId}</div>
+                  <div class="tier-name">${plan.name}</div>
+                  <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${plan.stripeProductId}</div>
                 </div>
                 <div class="tier-price">
-                  ${formatPence(tier.monthlyPricePence)}<small>/${tier.interval || 'mo'}</small>
+                  ${formatPence(plan.monthlyPricePence)}<small>/${plan.interval === 'month' ? 'mo' : plan.interval}</small>
                 </div>
               </div>
-              ${tier.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${tier.description}</p>` : ''}
+              ${plan.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${plan.description}</p>` : ''}
               <div class="tier-actions" style="margin-top: 16px;">
-                <a href="https://dashboard.stripe.com/products/${tier.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
+                <a href="https://dashboard.stripe.com/products/${plan.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Render credit packages
+        const creditsGrid = document.getElementById('creditsGrid');
+        if (credits.length === 0) {
+          creditsGrid.innerHTML = '<div class="tier-card"><p class="text-muted text-center">No credit packages found in Stripe.</p></div>';
+        } else {
+          creditsGrid.innerHTML = credits.map(credit => `
+            <div class="tier-card">
+              <div class="tier-header">
+                <div>
+                  <div class="tier-name">${credit.name}</div>
+                  <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${credit.stripeProductId}</div>
+                </div>
+                <div class="tier-price">
+                  ${formatPence(credit.pricePence)}
+                </div>
+              </div>
+              ${credit.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${credit.description}</p>` : ''}
+              <div class="tier-actions" style="margin-top: 16px;">
+                <a href="https://dashboard.stripe.com/products/${credit.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
               </div>
             </div>
           `).join('');
         }
       } catch (error) {
-        console.error('Error loading tiers:', error);
-        document.getElementById('tiersGrid').innerHTML =
-          '<div class="tier-card"><p class="text-danger text-center">Error loading pricing from Stripe</p></div>';
+        console.error('Error loading pricing:', error);
+        document.getElementById('plansGrid').innerHTML =
+          '<div class="tier-card"><p class="text-danger text-center">Error loading plans from Stripe</p></div>';
+        document.getElementById('creditsGrid').innerHTML =
+          '<div class="tier-card"><p class="text-danger text-center">Error loading credits from Stripe</p></div>';
       }
     }
 
@@ -224,7 +262,7 @@
 
     // Load data on page load
     document.addEventListener('DOMContentLoaded', () => {
-      loadTiers();
+      loadPricing();
     });
   </script>
 </body>
