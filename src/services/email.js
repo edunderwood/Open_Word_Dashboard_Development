@@ -1,5 +1,15 @@
 /**
  * Email Service for Admin Alerts
+ *
+ * Uses SendGrid via SMTP (recommended) or any SMTP provider
+ *
+ * Required env vars:
+ *   SMTP_HOST=smtp.sendgrid.net
+ *   SMTP_PORT=587
+ *   SMTP_USER=apikey
+ *   SMTP_PASS=SG.your_api_key
+ *   SENDER_EMAIL=alerts@yourdomain.com (must be verified in SendGrid)
+ *   ALERT_EMAIL=recipient@example.com
  */
 
 import nodemailer from 'nodemailer';
@@ -9,7 +19,7 @@ dotenv.config();
 
 // Create transporter
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: false,
   auth: {
@@ -72,8 +82,11 @@ export async function sendAlert(subject, message, priority = 'info') {
       return { success: true, simulated: true };
     }
 
+    // SENDER_EMAIL must be verified in SendGrid (or use SMTP_USER for other providers)
+    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER;
+
     await transporter.sendMail({
-      from: `"OpenWord Dashboard" <${process.env.SMTP_USER}>`,
+      from: `"OpenWord Dashboard" <${senderEmail}>`,
       to: alertEmail,
       subject: fullSubject,
       html: htmlBody,
