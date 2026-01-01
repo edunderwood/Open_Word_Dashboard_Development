@@ -108,7 +108,8 @@ app.get('/customers', requireAuth, (req, res) => {
 });
 
 app.get('/customers/:id', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, '../views/customer-detail.html'));
+  // Redirect to customers page with view parameter to auto-open modal
+  res.redirect(`/customers?view=${req.params.id}`);
 });
 
 app.get('/pricing', requireAuth, (req, res) => {
