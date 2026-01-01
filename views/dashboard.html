@@ -498,14 +498,11 @@
           <tr>
             <td>
               <a href="/customers/${review.id}" style="color: #92400e; font-weight: 600;">${review.name}</a>
-              ${review.is_registered_charity ? '<span class="badge badge-info" style="margin-left: 4px; font-size: 10px;">Claims Charity</span>' : ''}
+              ${review.is_charity ? '<span class="badge badge-info" style="margin-left: 4px; font-size: 10px;">Claims Charity</span>' : ''}
             </td>
             <td>${review.charity_number || '<span class="text-muted">Not provided</span>'}</td>
             <td>${review.charity_region || '<span class="text-muted">Unknown</span>'}</td>
-            <td>
-              ${review.contact_name || 'Unknown'}
-              ${review.contact_email ? `<br><small class="text-muted">${review.contact_email}</small>` : ''}
-            </td>
+            <td>${review.contact_name || 'Unknown'}</td>
             <td>${formatDate(review.charity_review_requested_at)}</td>
             <td style="white-space: nowrap;">
               <button onclick="grantCharityDiscount('${review.id}', '${review.name.replace(/'/g, "\\'")}')"

@@ -61,11 +61,11 @@ router.get('/', async (req, res) => {
           query = query.eq('charity_review_requested', true).eq('charity_verified', false);
           break;
         case 'claimed':
-          query = query.eq('is_registered_charity', true).eq('charity_verified', false);
+          query = query.eq('is_charity', true).eq('charity_verified', false);
           break;
         case 'none':
           // No charity status AND no non-charity discount
-          query = query.eq('is_registered_charity', false).eq('charity_verified', false);
+          query = query.eq('is_charity', false).eq('charity_verified', false);
           // Note: We can't easily filter discount_percent = 0 OR NULL in this query builder
           // So 'none' will show all non-charity orgs (some may have discounts)
           break;
@@ -603,7 +603,7 @@ router.get('/:id/credits', async (req, res) => {
     // Get organisation tier info
     const { data: org } = await supabase
       .from('organisations')
-      .select('subscription_tier, is_registered_charity')
+      .select('subscription_tier, is_charity')
       .eq('id', id)
       .single();
 
@@ -627,7 +627,7 @@ router.get('/:id/credits', async (req, res) => {
           lowBalanceThreshold: 10
         },
         tier: org?.subscription_tier || 'basic',
-        isCharity: org?.is_registered_charity || false,
+        isCharity: org?.is_charity || false,
         thisMonth: {
           creditsUsed: creditsUsedThisMonth,
           charactersProcessed: charsThisMonth

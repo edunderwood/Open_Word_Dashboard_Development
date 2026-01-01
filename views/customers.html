@@ -527,7 +527,7 @@
             ` : ''}
 
             <!-- Charity Status (if applicable) -->
-            ${customer.is_registered_charity || customer.charity_verified || customer.charity_review_requested ? `
+            ${customer.is_charity || customer.charity_verified || customer.charity_review_requested ? `
               <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
                 <div style="font-weight: 600; margin-bottom: 8px;">Charity Status</div>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.85rem;">

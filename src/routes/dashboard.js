@@ -335,7 +335,7 @@ router.get('/low-balance-customers', async (req, res) => {
           name,
           organisation_key,
           subscription_tier,
-          is_registered_charity
+          is_charity
         )
       `)
       .lte('current_balance', threshold)
@@ -349,7 +349,7 @@ router.get('/low-balance-customers', async (req, res) => {
       name: b.organisations?.name || 'Unknown',
       organisationKey: b.organisations?.organisation_key,
       tier: b.organisations?.subscription_tier || 'basic',
-      isCharity: b.organisations?.is_registered_charity || false,
+      isCharity: b.organisations?.is_charity || false,
       currentBalance: parseFloat(b.current_balance) || 0,
       lifetimeUsed: parseFloat(b.lifetime_used) || 0,
       lastUpdated: b.updated_at
@@ -468,7 +468,7 @@ router.get('/pending-charity-reviews', async (req, res) => {
   try {
     const { data: pendingReviews, error } = await supabase
       .from('organisations')
-      .select('id, name, charity_number, charity_region, charity_review_reason, charity_review_requested_at, contact_name, contact_email, is_registered_charity')
+      .select('id, name, charity_number, charity_region, charity_review_reason, charity_review_requested_at, contact_name, is_charity')
       .eq('charity_review_requested', true)
       .eq('charity_verified', false)
       .order('charity_review_requested_at', { ascending: true });
