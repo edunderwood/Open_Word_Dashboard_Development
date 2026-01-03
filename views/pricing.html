@@ -54,6 +54,34 @@
       font-weight: 400;
       color: var(--gray-500);
     }
+    .tier-prices {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--gray-50);
+      border-radius: 8px;
+    }
+    .tier-prices .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+    .tier-prices .price-row .currency-label {
+      font-weight: 500;
+      color: var(--gray-600);
+      min-width: 40px;
+    }
+    .tier-prices .price-row .price-value {
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .tier-prices .price-row .price-missing {
+      color: var(--gray-400);
+      font-style: italic;
+    }
     .tier-details {
       margin: 16px 0;
       padding: 16px 0;
@@ -176,12 +204,44 @@
   </div>
 
   <script>
-    // Format currency from pence
-    function formatPence(pence) {
-      return new Intl.NumberFormat('en-GB', {
+    // Currency configuration
+    const CURRENCIES = ['gbp', 'usd', 'eur'];
+    const CURRENCY_CONFIG = {
+      gbp: { symbol: '£', locale: 'en-GB', name: 'GBP' },
+      usd: { symbol: '$', locale: 'en-US', name: 'USD' },
+      eur: { symbol: '€', locale: 'de-DE', name: 'EUR' }
+    };
+
+    // Format currency from smallest unit (pence/cents)
+    function formatCurrency(amount, currency = 'gbp') {
+      const config = CURRENCY_CONFIG[currency.toLowerCase()] || CURRENCY_CONFIG.gbp;
+      return new Intl.NumberFormat(config.locale, {
         style: 'currency',
-        currency: 'GBP'
-      }).format(pence / 100);
+        currency: currency.toUpperCase()
+      }).format(amount / 100);
+    }
+
+    // Render price rows for all currencies
+    function renderPriceRows(prices, suffix = '') {
+      return CURRENCIES.map(currency => {
+        const price = prices[currency];
+        const config = CURRENCY_CONFIG[currency];
+        if (price && price.amount) {
+          return `
+            <div class="price-row">
+              <span class="currency-label">${config.name}</span>
+              <span class="price-value">${formatCurrency(price.amount, currency)}${suffix}</span>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="price-row">
+              <span class="currency-label">${config.name}</span>
+              <span class="price-missing">Not configured</span>
+            </div>
+          `;
+        }
+      }).join('');
     }
 
     // Load pricing from Stripe (plans and credits)
@@ -206,11 +266,12 @@
                   <div class="tier-name">${plan.name}</div>
                   <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${plan.stripeProductId}</div>
                 </div>
-                <div class="tier-price">
-                  ${formatPence(plan.monthlyPricePence)}<small>/${plan.interval === 'month' ? 'mo' : plan.interval}</small>
-                </div>
               </div>
-              ${plan.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${plan.description}</p>` : ''}
+              ${plan.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 8px;">${plan.description}</p>` : ''}
+              <div class="tier-prices">
+                <div style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 4px;">Monthly Prices</div>
+                ${renderPriceRows(plan.prices, '/mo')}
+              </div>
               <div class="tier-actions" style="margin-top: 16px;">
                 <a href="https://dashboard.stripe.com/products/${plan.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
               </div>
@@ -230,11 +291,12 @@
                   <div class="tier-name">${credit.name}</div>
                   <div class="tier-id" style="font-size: 0.7rem; color: var(--gray-400);">${credit.stripeProductId}</div>
                 </div>
-                <div class="tier-price">
-                  ${formatPence(credit.pricePence)}
-                </div>
               </div>
-              ${credit.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 12px;">${credit.description}</p>` : ''}
+              ${credit.description ? `<p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 8px;">${credit.description}</p>` : ''}
+              <div class="tier-prices">
+                <div style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 4px;">Package Prices</div>
+                ${renderPriceRows(credit.prices, '')}
+              </div>
               <div class="tier-actions" style="margin-top: 16px;">
                 <a href="https://dashboard.stripe.com/products/${credit.stripeProductId}" target="_blank" class="btn btn-sm btn-outline">Edit in Stripe</a>
               </div>
