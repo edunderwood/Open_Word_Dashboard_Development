@@ -1092,4 +1092,102 @@ router.post('/:id/revoke-charity-discount', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/customers/:id/referrals
+ * Get customer referral data (code, stats, referrals made, and who referred them)
+ */
+router.get('/:id/referrals', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get customer's referral code
+    const { data: referralCode, error: codeError } = await supabase
+      .from('referral_codes')
+      .select('*')
+      .eq('organisation_id', id)
+      .single();
+
+    // Get referrals this customer has made (as referrer)
+    const { data: referralsMade, error: referralsMadeError } = await supabase
+      .from('referral_tracking')
+      .select(`
+        id,
+        referred_organisation_id,
+        referred_organisation_name,
+        status,
+        credits_awarded,
+        created_at,
+        completed_at
+      `)
+      .eq('referrer_organisation_id', id)
+      .order('created_at', { ascending: false });
+
+    // Check if this customer was referred by someone
+    const { data: referredBy, error: referredByError } = await supabase
+      .from('referral_tracking')
+      .select(`
+        id,
+        referrer_organisation_id,
+        status,
+        created_at,
+        referral_codes (
+          code,
+          organisations (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('referred_organisation_id', id)
+      .single();
+
+    // Get the organisation's referred_by_code
+    const { data: org } = await supabase
+      .from('organisations')
+      .select('referred_by_code')
+      .eq('id', id)
+      .single();
+
+    res.json({
+      success: true,
+      data: {
+        // This customer's referral code
+        referralCode: referralCode ? {
+          code: referralCode.code,
+          totalReferrals: referralCode.total_referrals || 0,
+          totalCreditsEarned: referralCode.total_credits_earned || 0,
+          isActive: referralCode.is_active,
+          createdAt: referralCode.created_at
+        } : null,
+
+        // Referrals this customer has made
+        referralsMade: (referralsMade || []).map(r => ({
+          id: r.id,
+          organisationId: r.referred_organisation_id,
+          organisationName: r.referred_organisation_name,
+          status: r.status,
+          creditsAwarded: r.credits_awarded || 0,
+          referredAt: r.created_at,
+          completedAt: r.completed_at
+        })),
+
+        // Who referred this customer
+        referredBy: referredBy ? {
+          referrerOrganisationId: referredBy.referral_codes?.organisations?.id,
+          referrerOrganisationName: referredBy.referral_codes?.organisations?.name || 'Unknown',
+          referralCode: referredBy.referral_codes?.code,
+          status: referredBy.status,
+          referredAt: referredBy.created_at
+        } : null,
+
+        // Raw referred_by_code from organisation record
+        referredByCode: org?.referred_by_code || null
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching customer referrals:', error);
+    res.status(500).json({ error: 'Failed to fetch customer referrals' });
+  }
+});
+
 export default router;
