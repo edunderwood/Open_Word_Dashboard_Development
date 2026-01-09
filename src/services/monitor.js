@@ -27,6 +27,8 @@ const issueTracker = {
   consecutiveSlowResponses: 0,
   lastResponseTime: null,
   lastAlertSent: {},
+  lastNewCustomerCheck: null,
+  knownOrganisationIds: new Set(),
 };
 
 /**
@@ -368,6 +370,156 @@ async function checkPendingCharityReviews() {
 }
 
 /**
+ * Check for new customer registrations
+ */
+async function checkNewRegistrations() {
+  try {
+    // Get all organisation IDs
+    const { data: orgs, error } = await supabase
+      .from('organisations')
+      .select('id, name, contact_name, contact_email, subscription_tier, charity_verified, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const currentIds = new Set(orgs?.map(o => o.id) || []);
+
+    // First run - just populate the known IDs
+    if (issueTracker.knownOrganisationIds.size === 0) {
+      issueTracker.knownOrganisationIds = currentIds;
+      issueTracker.lastNewCustomerCheck = new Date();
+      console.log(`📋 Initialized with ${currentIds.size} known organisations`);
+      return { newCustomers: [], count: 0 };
+    }
+
+    // Find new organisations
+    const newOrgs = orgs?.filter(o => !issueTracker.knownOrganisationIds.has(o.id)) || [];
+
+    if (newOrgs.length > 0) {
+      // Send email notification for each new customer
+      for (const org of newOrgs) {
+        await sendWarningAlert(
+          'New Customer Registration',
+          `<p>A new customer has registered with Open Word!</p>
+           <table style="border-collapse: collapse; margin: 15px 0;">
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Organisation</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${org.name}</td></tr>
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Name</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_name || 'Not provided'}</td></tr>
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Email</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_email || 'Not provided'}</td></tr>
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Plan</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${org.subscription_tier || 'Trial'}</td></tr>
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Charity</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${org.charity_verified ? 'Yes (verified)' : 'No'}</td></tr>
+             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Registered</strong></td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${new Date(org.created_at).toLocaleString()}</td></tr>
+           </table>
+           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/customers/${org.id}">
+             View in Dashboard
+           </a></p>`
+        );
+        console.log(`📧 New customer notification sent: ${org.name}`);
+      }
+    }
+
+    // Update known IDs
+    issueTracker.knownOrganisationIds = currentIds;
+    issueTracker.lastNewCustomerCheck = new Date();
+
+    return { newCustomers: newOrgs, count: newOrgs.length };
+  } catch (error) {
+    console.error('Error checking new registrations:', error);
+    return { error: error.message };
+  }
+}
+
+/**
+ * Check for Stripe payment failures
+ */
+async function checkStripePaymentErrors() {
+  try {
+    if (!stripe) {
+      return { error: 'Stripe not configured' };
+    }
+
+    // Get recent failed payment intents (last 24 hours)
+    const oneDayAgo = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+
+    const paymentIntents = await stripe.paymentIntents.list({
+      limit: 50,
+      created: { gte: oneDayAgo },
+    });
+
+    const failedPayments = paymentIntents.data.filter(pi =>
+      pi.status === 'requires_payment_method' ||
+      pi.status === 'canceled' ||
+      pi.last_payment_error
+    );
+
+    if (failedPayments.length > 0) {
+      // Only alert once per hour for payment failures
+      const shouldAlert = !issueTracker.lastAlertSent.stripeFailures ||
+        (Date.now() - issueTracker.lastAlertSent.stripeFailures) > 60 * 60 * 1000;
+
+      if (shouldAlert) {
+        // Get customer details for each failed payment
+        const failureDetails = [];
+        for (const pi of failedPayments.slice(0, 5)) { // Limit to 5 in email
+          let customerName = 'Unknown';
+          if (pi.customer) {
+            try {
+              const customer = await stripe.customers.retrieve(pi.customer);
+              customerName = customer.name || customer.email || 'Unknown';
+            } catch (e) {
+              // Customer may not exist
+            }
+          }
+          failureDetails.push({
+            customer: customerName,
+            amount: (pi.amount / 100).toFixed(2),
+            currency: pi.currency?.toUpperCase() || 'GBP',
+            error: pi.last_payment_error?.message || pi.status,
+            created: new Date(pi.created * 1000).toLocaleString(),
+          });
+        }
+
+        await sendCriticalAlert(
+          `${failedPayments.length} Payment Failure${failedPayments.length > 1 ? 's' : ''} Detected`,
+          `<p>The following payment failures occurred in the last 24 hours:</p>
+           <table style="border-collapse: collapse; width: 100%; margin: 15px 0;">
+             <tr style="background: #f5f5f5;">
+               <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Customer</th>
+               <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Amount</th>
+               <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Error</th>
+               <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Time</th>
+             </tr>
+             ${failureDetails.map(f => `
+               <tr>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${f.customer}</td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${f.currency} ${f.amount}</td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${f.error}</td>
+                 <td style="padding: 8px; border: 1px solid #ddd;">${f.created}</td>
+               </tr>
+             `).join('')}
+           </table>
+           ${failedPayments.length > 5 ? `<p><em>Showing first 5 of ${failedPayments.length} failures</em></p>` : ''}
+           <p><a href="https://dashboard.stripe.com/payments?status%5B0%5D=canceled&status%5B1%5D=incomplete">
+             View in Stripe Dashboard
+           </a></p>`
+        );
+        issueTracker.lastAlertSent.stripeFailures = Date.now();
+      }
+    }
+
+    return { failedCount: failedPayments.length, failures: failedPayments.slice(0, 5) };
+  } catch (error) {
+    console.error('Error checking Stripe payment errors:', error);
+    return { error: error.message };
+  }
+}
+
+/**
  * Check for pending discount review requests (non-charities)
  */
 async function checkPendingDiscountReviews() {
@@ -431,6 +583,8 @@ export async function runAllChecks() {
     performance: await checkServerPerformance(),
     database: await checkDatabaseHealth(),
     paymentIssues: await checkPaymentIssues(),
+    stripePaymentErrors: await checkStripePaymentErrors(),
+    newRegistrations: await checkNewRegistrations(),
     usageAnomalies: await checkUsageAnomalies(),
     charityReviews: await checkPendingCharityReviews(),
     discountReviews: await checkPendingDiscountReviews(),
