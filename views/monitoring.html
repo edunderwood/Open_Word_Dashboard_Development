@@ -242,6 +242,42 @@
         </div>
       </div>
 
+      <!-- Email Alerts Section -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Email Alerts</h3>
+          <span class="badge" id="emailConfigBadge">Checking...</span>
+        </div>
+        <div style="padding: 20px;">
+          <div id="emailConfigStatus" style="margin-bottom: 20px;">
+            <p class="text-muted">Checking email configuration...</p>
+          </div>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-outline" onclick="sendTestEmail('info')">
+              <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: text-bottom;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Test Info Email
+            </button>
+            <button class="btn btn-outline" onclick="sendTestEmail('warning')" style="border-color: #f59e0b; color: #f59e0b;">
+              <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: text-bottom;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Test Warning Email
+            </button>
+            <button class="btn btn-outline" onclick="sendTestEmail('critical')" style="border-color: #dc2626; color: #dc2626;">
+              <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: text-bottom;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Test Critical Email
+            </button>
+          </div>
+
+          <div id="emailTestResult" style="margin-top: 15px; display: none;"></div>
+        </div>
+      </div>
+
       <!-- Last Check Info -->
       <p class="text-muted text-center mt-4">
         Last check: <span id="lastCheck">-</span>
@@ -454,11 +490,77 @@
       }
     }
 
+    // Load email configuration status
+    async function loadEmailConfig() {
+      try {
+        const response = await fetch('/api/monitoring/email-config');
+        const data = await response.json();
+
+        const badge = document.getElementById('emailConfigBadge');
+        const status = document.getElementById('emailConfigStatus');
+
+        if (data.success) {
+          badge.textContent = data.configured ? 'Configured' : 'Not Configured';
+          badge.className = `badge ${data.configured ? 'badge-success' : 'badge-warning'}`;
+
+          const config = data.config;
+          status.innerHTML = `
+            <table style="font-size: 0.875rem; width: 100%; max-width: 400px;">
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">SMTP Host:</td><td>${config.smtpHost}</td></tr>
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">SMTP Port:</td><td>${config.smtpPort}</td></tr>
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">SMTP User:</td><td>${config.smtpUser}</td></tr>
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">SMTP Pass:</td><td>${config.smtpPass}</td></tr>
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">Recipient:</td><td>${config.alertRecipient}</td></tr>
+              <tr><td style="padding: 4px 10px 4px 0; color: var(--gray-500);">From:</td><td>${config.fromAddress}</td></tr>
+            </table>
+          `;
+        }
+      } catch (error) {
+        console.error('Error loading email config:', error);
+        document.getElementById('emailConfigBadge').textContent = 'Error';
+        document.getElementById('emailConfigBadge').className = 'badge badge-danger';
+      }
+    }
+
+    // Send test email
+    async function sendTestEmail(type) {
+      const resultDiv = document.getElementById('emailTestResult');
+      resultDiv.style.display = 'block';
+      resultDiv.className = 'alert alert-info';
+      resultDiv.textContent = `Sending ${type} test email...`;
+
+      try {
+        const response = await fetch('/api/monitoring/test-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          resultDiv.className = 'alert alert-success';
+          resultDiv.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} test email sent successfully! Check your inbox.`;
+        } else {
+          resultDiv.className = 'alert alert-danger';
+          resultDiv.textContent = `Failed to send email: ${data.error}`;
+        }
+      } catch (error) {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.textContent = `Error: ${error.message}`;
+      }
+
+      // Hide result after 10 seconds
+      setTimeout(() => {
+        resultDiv.style.display = 'none';
+      }, 10000);
+    }
+
     // Load data on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadStatus();
       loadIssues();
       loadHistory();
+      loadEmailConfig();
 
       // Auto-refresh every minute
       setInterval(() => {

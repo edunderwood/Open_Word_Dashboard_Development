@@ -4,6 +4,7 @@
 
 import express from 'express';
 import { runAllChecks } from '../services/monitor.js';
+import { sendAlert, sendCriticalAlert, sendWarningAlert } from '../services/email.js';
 
 const router = express.Router();
 
@@ -167,6 +168,90 @@ function getActiveIssues() {
 
   return issues;
 }
+
+/**
+ * POST /api/monitoring/test-email
+ * Send a test email to verify email configuration
+ */
+router.post('/test-email', async (req, res) => {
+  try {
+    const { type = 'info' } = req.body;
+
+    console.log(`📧 Test email requested (type: ${type})`);
+
+    let result;
+    const timestamp = new Date().toISOString();
+
+    switch (type) {
+      case 'critical':
+        result = await sendCriticalAlert(
+          'Test Critical Alert',
+          `This is a test critical alert sent at ${timestamp}.\n\nIf you received this email, your critical alert system is working correctly.`
+        );
+        break;
+      case 'warning':
+        result = await sendWarningAlert(
+          'Test Warning Alert',
+          `This is a test warning alert sent at ${timestamp}.\n\nIf you received this email, your warning alert system is working correctly.`
+        );
+        break;
+      default:
+        result = await sendAlert(
+          'Test Email Notification',
+          `This is a test email from OpenWord Dashboard sent at ${timestamp}.\n\nIf you received this email, your email notification system is configured correctly.`
+        );
+    }
+
+    if (result.success) {
+      console.log(`✅ Test email sent successfully (type: ${type})`);
+      res.json({
+        success: true,
+        message: `Test ${type} email sent successfully`,
+        timestamp
+      });
+    } else {
+      console.error(`❌ Test email failed:`, result.error);
+      res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to send test email'
+      });
+    }
+  } catch (error) {
+    console.error('Error sending test email:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send test email'
+    });
+  }
+});
+
+/**
+ * GET /api/monitoring/email-config
+ * Check email configuration status (without exposing credentials)
+ */
+router.get('/email-config', async (req, res) => {
+  try {
+    const config = {
+      smtpHost: process.env.SMTP_HOST ? '✓ Configured' : '✗ Missing',
+      smtpPort: process.env.SMTP_PORT ? '✓ Configured' : '✗ Missing (using default 587)',
+      smtpUser: process.env.SMTP_USER ? '✓ Configured' : '✗ Missing',
+      smtpPass: process.env.SMTP_PASS ? '✓ Configured' : '✗ Missing',
+      alertRecipient: process.env.ALERT_EMAIL || process.env.ADMIN_EMAIL || 'Not configured',
+      fromAddress: process.env.SMTP_FROM || process.env.SMTP_USER || 'Not configured'
+    };
+
+    const isConfigured = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+
+    res.json({
+      success: true,
+      configured: isConfigured,
+      config
+    });
+  } catch (error) {
+    console.error('Error checking email config:', error);
+    res.status(500).json({ error: 'Failed to check email configuration' });
+  }
+});
 
 /**
  * Update stored results (called by monitor service)
