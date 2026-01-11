@@ -371,33 +371,30 @@ async function checkPendingCharityReviews() {
 
 /**
  * Check for new customer registrations
+ * Uses time-based detection (orgs created in last 10 minutes) to survive restarts
  */
 async function checkNewRegistrations() {
   try {
-    // Get all organisation IDs
-    const { data: orgs, error } = await supabase
+    // Look for organisations created in the last 10 minutes
+    // This survives dashboard restarts unlike in-memory tracking
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data: newOrgs, error } = await supabase
       .from('organisations')
       .select('id, name, contact_name, contact_email, subscription_tier, charity_verified, created_at')
+      .gte('created_at', tenMinutesAgo)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    const currentIds = new Set(orgs?.map(o => o.id) || []);
+    // Track which orgs we've already notified about (to avoid duplicates within session)
+    const newOrgsToNotify = newOrgs?.filter(o => !issueTracker.knownOrganisationIds.has(o.id)) || [];
 
-    // First run - just populate the known IDs
-    if (issueTracker.knownOrganisationIds.size === 0) {
-      issueTracker.knownOrganisationIds = currentIds;
-      issueTracker.lastNewCustomerCheck = new Date();
-      console.log(`📋 Initialized with ${currentIds.size} known organisations`);
-      return { newCustomers: [], count: 0 };
-    }
+    if (newOrgsToNotify.length > 0) {
+      console.log(`🆕 Found ${newOrgsToNotify.length} new registration(s) in last 10 minutes`);
 
-    // Find new organisations
-    const newOrgs = orgs?.filter(o => !issueTracker.knownOrganisationIds.has(o.id)) || [];
-
-    if (newOrgs.length > 0) {
       // Send email notification for each new customer
-      for (const org of newOrgs) {
+      for (const org of newOrgsToNotify) {
         await sendWarningAlert(
           'New Customer Registration',
           `<p>A new customer has registered with Open Word!</p>
@@ -420,14 +417,15 @@ async function checkNewRegistrations() {
            </a></p>`
         );
         console.log(`📧 New customer notification sent: ${org.name}`);
+
+        // Mark as notified to avoid duplicate emails within this session
+        issueTracker.knownOrganisationIds.add(org.id);
       }
     }
 
-    // Update known IDs
-    issueTracker.knownOrganisationIds = currentIds;
     issueTracker.lastNewCustomerCheck = new Date();
 
-    return { newCustomers: newOrgs, count: newOrgs.length };
+    return { newCustomers: newOrgsToNotify, count: newOrgsToNotify.length };
   } catch (error) {
     console.error('Error checking new registrations:', error);
     return { error: error.message };
