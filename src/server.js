@@ -22,6 +22,7 @@ import analyticsRoutes from './routes/analytics.js';
 import costsRoutes from './routes/costs.js';
 import charityRegistersRoutes from './routes/charity-registers.js';
 import logsRoutes from './routes/logs.js';
+import communicationsRoutes from './routes/communications.js';
 
 // Import services
 import { startMonitoring } from './services/monitor.js';
@@ -86,6 +87,7 @@ app.use('/api/logs', requireAuth, logsRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/costs', costsRoutes);
 app.use('/api/charity-registers', requireAuth, charityRegistersRoutes);
+app.use('/', requireAuth, communicationsRoutes);
 
 // Page routes
 app.get('/login', (req, res) => {

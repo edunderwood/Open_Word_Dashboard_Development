@@ -1,5 +1,5 @@
 /**
- * Email Service for Admin Alerts
+ * Email Service for Admin Alerts and Customer Communications
  *
  * Uses SendGrid via SMTP (recommended) or any SMTP provider
  *
@@ -9,6 +9,7 @@
  *   SMTP_USER=apikey
  *   SMTP_PASS=SG.your_api_key
  *   SENDER_EMAIL=alerts@yourdomain.com (must be verified in SendGrid)
+ *   SUPPORT_EMAIL=support@openword.live (for customer communications)
  *   ALERT_EMAIL=recipient@example.com
  */
 
@@ -114,4 +115,136 @@ export async function sendWarningAlert(subject, message) {
   return sendAlert(subject, message, 'warning');
 }
 
-export default { sendAlert, sendCriticalAlert, sendWarningAlert };
+/**
+ * Send email to a customer
+ * @param {string} to - Recipient email address
+ * @param {string} subject - Email subject
+ * @param {string} bodyHtml - Email body (HTML)
+ * @param {string} recipientName - Customer/org name for personalization
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = 'Customer') {
+  const supportEmail = process.env.SUPPORT_EMAIL || 'support@openword.live';
+
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .email-wrapper { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+        .header p { margin: 10px 0 0 0; opacity: 0.9; font-size: 14px; }
+        .content { padding: 30px 25px; background: white; }
+        .content p { margin: 0 0 15px 0; }
+        .footer { background: #f9fafb; padding: 20px 25px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
+        .footer a { color: #667eea; text-decoration: none; }
+        .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 10px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="email-wrapper">
+          <div class="header">
+            <h1>Open Word</h1>
+            <p>Real-time Translation for Live Events</p>
+          </div>
+          <div class="content">
+            ${bodyHtml}
+          </div>
+          <div class="footer">
+            <p>This email was sent by Open Word</p>
+            <p><a href="https://openword.live">openword.live</a> | <a href="mailto:${supportEmail}">${supportEmail}</a></p>
+            <p style="margin-top: 15px; font-size: 11px; color: #9ca3af;">
+              If you no longer wish to receive these emails, please contact us at ${supportEmail}
+            </p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log(`📧 [Email disabled] Would send to ${to}: ${subject}`);
+      console.log(`   Body preview: ${bodyHtml.replace(/<[^>]*>/g, '').substring(0, 200)}...`);
+      return { success: true, simulated: true };
+    }
+
+    await transporter.sendMail({
+      from: `"Open Word Support" <${supportEmail}>`,
+      replyTo: supportEmail,
+      to: to,
+      subject: subject,
+      html: htmlBody,
+    });
+
+    console.log(`📧 Customer email sent to ${to}: ${subject}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Failed to send customer email to ${to}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send bulk emails to multiple customers
+ * @param {Array<{email: string, name: string, orgId: string}>} recipients - List of recipients
+ * @param {string} subject - Email subject
+ * @param {string} bodyHtml - Email body (HTML)
+ * @param {number} delayMs - Delay between emails to avoid rate limiting (default 100ms)
+ * @returns {Promise<{sent: number, failed: number, errors: Array}>}
+ */
+export async function sendBulkCustomerEmail(recipients, subject, bodyHtml, delayMs = 100) {
+  const results = {
+    sent: 0,
+    failed: 0,
+    errors: []
+  };
+
+  console.log(`📧 Starting bulk email to ${recipients.length} recipients...`);
+
+  for (const recipient of recipients) {
+    try {
+      const result = await sendCustomerEmail(
+        recipient.email,
+        subject,
+        bodyHtml,
+        recipient.name
+      );
+
+      if (result.success) {
+        results.sent++;
+      } else {
+        results.failed++;
+        results.errors.push({
+          email: recipient.email,
+          orgId: recipient.orgId,
+          error: result.error
+        });
+      }
+
+      // Delay between emails to avoid rate limiting
+      if (delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        email: recipient.email,
+        orgId: recipient.orgId,
+        error: error.message
+      });
+    }
+  }
+
+  console.log(`📧 Bulk email complete: ${results.sent} sent, ${results.failed} failed`);
+  return results;
+}
+
+export default { sendAlert, sendCriticalAlert, sendWarningAlert, sendCustomerEmail, sendBulkCustomerEmail };
