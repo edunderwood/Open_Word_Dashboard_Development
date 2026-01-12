@@ -87,7 +87,7 @@ app.use('/api/logs', requireAuth, logsRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/costs', costsRoutes);
 app.use('/api/charity-registers', requireAuth, charityRegistersRoutes);
-app.use('/', requireAuth, communicationsRoutes);
+app.use('/api/communications', requireAuth, communicationsRoutes);
 
 // Page routes
 app.get('/login', (req, res) => {
@@ -128,6 +128,10 @@ app.get('/logs', requireAuth, (req, res) => {
 
 app.get('/charity-registers', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../views/charity-registers.html'));
+});
+
+app.get('/communications', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, '../views/communications.html'));
 });
 
 app.get('/logout', (req, res) => {

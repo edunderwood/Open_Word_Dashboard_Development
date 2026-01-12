@@ -11,21 +11,10 @@ import { sendCustomerEmail, sendBulkCustomerEmail } from '../services/email.js';
 const router = express.Router();
 
 /**
- * GET /communications
- * Render the communications page
- */
-router.get('/', (req, res) => {
-    res.render('communications', {
-        title: 'Customer Communications',
-        user: req.session.user
-    });
-});
-
-/**
- * GET /api/communications/customers
+ * GET /customers
  * Get all customers with their email addresses for selection
  */
-router.get('/api/communications/customers', async (req, res) => {
+router.get('/customers', async (req, res) => {
     try {
         // Get all organisations with user IDs
         const { data: orgs, error: orgsError } = await supabase
@@ -76,10 +65,10 @@ router.get('/api/communications/customers', async (req, res) => {
 });
 
 /**
- * POST /api/communications/send-bulk
+ * POST /send-bulk
  * Send email to multiple customers
  */
-router.post('/api/communications/send-bulk', async (req, res) => {
+router.post('/send-bulk', async (req, res) => {
     try {
         const { customerIds, subject, body, emailType } = req.body;
 
@@ -171,10 +160,10 @@ router.post('/api/communications/send-bulk', async (req, res) => {
 });
 
 /**
- * POST /api/communications/send-individual/:id
+ * POST /send-individual/:id
  * Send email to a single customer
  */
-router.post('/api/communications/send-individual/:id', async (req, res) => {
+router.post('/send-individual/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { subject, body, emailType } = req.body;
@@ -251,10 +240,10 @@ router.post('/api/communications/send-individual/:id', async (req, res) => {
 });
 
 /**
- * GET /api/communications/history
+ * GET /history
  * Get email send history
  */
-router.get('/api/communications/history', async (req, res) => {
+router.get('/history', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const offset = parseInt(req.query.offset) || 0;
@@ -281,10 +270,10 @@ router.get('/api/communications/history', async (req, res) => {
 });
 
 /**
- * GET /api/communications/templates
+ * GET /templates
  * Get available email templates
  */
-router.get('/api/communications/templates', (req, res) => {
+router.get('/templates', (req, res) => {
     const templates = [
         {
             id: 'maintenance',
