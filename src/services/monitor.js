@@ -371,61 +371,83 @@ async function checkPendingCharityReviews() {
 
 /**
  * Check for new customer registrations
- * Uses time-based detection (orgs created in last 10 minutes) to survive restarts
+ * Uses database flag (registration_notified_at) for reliable tracking that survives restarts
+ * Only notifies for customers who have completed payment (payment_status = 'paid')
  */
 async function checkNewRegistrations() {
   try {
-    // Look for organisations created in the last 10 minutes
-    // This survives dashboard restarts unlike in-memory tracking
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-
+    // Query for paid organisations that haven't been notified yet
+    // Using database flag ensures we never miss a notification, even after restarts
     const { data: newOrgs, error } = await supabase
       .from('organisations')
-      .select('id, name, contact_name, contact_email, subscription_tier, charity_verified, created_at')
-      .gte('created_at', tenMinutesAgo)
-      .order('created_at', { ascending: false });
+      .select('id, name, contact_name, contact_phone, user_id, subscription_tier, charity_verified, payment_status, created_at')
+      .is('registration_notified_at', null)
+      .eq('payment_status', 'paid')
+      .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error querying new registrations:', error);
+      throw error;
+    }
 
-    // Track which orgs we've already notified about (to avoid duplicates within session)
-    const newOrgsToNotify = newOrgs?.filter(o => !issueTracker.knownOrganisationIds.has(o.id)) || [];
+    if (!newOrgs || newOrgs.length === 0) {
+      return { newCustomers: [], count: 0 };
+    }
 
-    if (newOrgsToNotify.length > 0) {
-      console.log(`🆕 Found ${newOrgsToNotify.length} new registration(s) in last 10 minutes`);
+    console.log(`🆕 Found ${newOrgs.length} new paid registration(s) to notify`);
 
-      // Send email notification for each new customer
-      for (const org of newOrgsToNotify) {
-        await sendWarningAlert(
-          'New Customer Registration',
-          `<p>A new customer has registered with Open Word!</p>
-           <table style="border-collapse: collapse; margin: 15px 0;">
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Organisation</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${org.name}</td></tr>
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Name</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_name || 'Not provided'}</td></tr>
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Email</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_email || 'Not provided'}</td></tr>
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Plan</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${org.subscription_tier || 'Trial'}</td></tr>
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Charity</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${org.charity_verified ? 'Yes (verified)' : 'No'}</td></tr>
-             <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Registered</strong></td>
-                 <td style="padding: 8px; border: 1px solid #ddd;">${new Date(org.created_at).toLocaleString()}</td></tr>
-           </table>
-           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/customers/${org.id}">
-             View in Dashboard
-           </a></p>`
-        );
-        console.log(`📧 New customer notification sent: ${org.name}`);
+    // Send email notification for each new customer
+    for (const org of newOrgs) {
+      // Fetch the email from auth.users (not stored in organisations table)
+      let contactEmail = 'Not available';
+      if (org.user_id) {
+        try {
+          const { data: authUser } = await supabase.auth.admin.getUserById(org.user_id);
+          contactEmail = authUser?.user?.email || 'Not available';
+        } catch (authError) {
+          console.error(`Failed to get auth user for org ${org.id}:`, authError.message);
+        }
+      }
 
-        // Mark as notified to avoid duplicate emails within this session
-        issueTracker.knownOrganisationIds.add(org.id);
+      await sendWarningAlert(
+        'New Customer Registration',
+        `<p>A new customer has completed registration with Open Word!</p>
+         <table style="border-collapse: collapse; margin: 15px 0;">
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Organisation</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${org.name}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Name</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_name || 'Not provided'}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Email</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${contactEmail}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Contact Phone</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${org.contact_phone || 'Not provided'}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Plan</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${org.subscription_tier || 'Trial'}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Charity</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${org.charity_verified ? 'Yes (verified)' : 'No'}</td></tr>
+           <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Registered</strong></td>
+               <td style="padding: 8px; border: 1px solid #ddd;">${new Date(org.created_at).toLocaleString()}</td></tr>
+         </table>
+         <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/customers/${org.id}">
+           View in Dashboard
+         </a></p>`
+      );
+      console.log(`📧 New customer notification sent: ${org.name} (${contactEmail})`);
+
+      // Mark as notified in database - this is the reliable flag that survives restarts
+      const { error: updateError } = await supabase
+        .from('organisations')
+        .update({ registration_notified_at: new Date().toISOString() })
+        .eq('id', org.id);
+
+      if (updateError) {
+        console.error(`Failed to mark org ${org.id} as notified:`, updateError);
       }
     }
 
     issueTracker.lastNewCustomerCheck = new Date();
 
-    return { newCustomers: newOrgsToNotify, count: newOrgsToNotify.length };
+    return { newCustomers: newOrgs, count: newOrgs.length };
   } catch (error) {
     console.error('Error checking new registrations:', error);
     return { error: error.message };
