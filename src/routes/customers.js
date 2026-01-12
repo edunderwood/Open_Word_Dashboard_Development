@@ -187,7 +187,7 @@ router.get('/:id', async (req, res) => {
 
 /**
  * GET /api/customers/:id/usage
- * Get customer usage statistics
+ * Get customer usage statistics from streaming_sessions (faster than translation_usage)
  */
 router.get('/:id/usage', async (req, res) => {
   try {
@@ -218,45 +218,47 @@ router.get('/:id/usage', async (req, res) => {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    const { data: usage, error } = await supabase
-      .from('translation_usage')
-      .select('*')
+    // Query streaming_sessions for pre-aggregated data (much faster)
+    const { data: sessions, error } = await supabase
+      .from('streaming_sessions')
+      .select('started_at, characters_transcribed, characters_translated, characters_per_language, active_minutes')
       .eq('organisation_id', id)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false });
+      .in('status', ['completed', 'recovered'])
+      .gte('started_at', startDate.toISOString())
+      .order('started_at', { ascending: false });
 
     if (error) throw error;
 
-    // Aggregate statistics
+    // Aggregate statistics from pre-aggregated session data
     let totalCharacters = 0;
-    let totalCost = 0;
     let transcriptionChars = 0;
     let translationChars = 0;
     const byLanguage = {};
     const byDate = {};
 
-    usage?.forEach(u => {
-      totalCharacters += u.character_count || 0;
-      totalCost += parseFloat(u.estimated_cost) || 0;
+    sessions?.forEach(s => {
+      transcriptionChars += s.characters_transcribed || 0;
+      translationChars += s.characters_translated || 0;
+      totalCharacters += (s.characters_transcribed || 0) + (s.characters_translated || 0);
 
-      if (u.operation_type === 'transcription') {
-        transcriptionChars += u.character_count || 0;
-      } else {
-        translationChars += u.character_count || 0;
+      // Aggregate by language from characters_per_language JSONB field
+      const langBreakdown = s.characters_per_language || {};
+      for (const [lang, chars] of Object.entries(langBreakdown)) {
+        byLanguage[lang] = (byLanguage[lang] || 0) + chars;
       }
 
-      // By language
-      const lang = u.target_language || 'transcript';
-      byLanguage[lang] = (byLanguage[lang] || 0) + (u.character_count || 0);
-
-      // By date
-      const date = u.created_at.split('T')[0];
+      // Aggregate by date
+      const date = s.started_at.split('T')[0];
       if (!byDate[date]) {
-        byDate[date] = { characters: 0, cost: 0 };
+        byDate[date] = { characters: 0, cost: 0, sessions: 0 };
       }
-      byDate[date].characters += u.character_count || 0;
-      byDate[date].cost += parseFloat(u.estimated_cost) || 0;
+      byDate[date].characters += (s.characters_transcribed || 0) + (s.characters_translated || 0);
+      byDate[date].cost += totalCharacters * 0.000024; // Estimate at standard rate
+      byDate[date].sessions += 1;
     });
+
+    // Estimate total cost at £0.000024/char (standard rate)
+    const totalCost = totalCharacters * 0.000024;
 
     res.json({
       success: true,
@@ -268,7 +270,7 @@ router.get('/:id/usage', async (req, res) => {
         translationChars,
         byLanguage,
         byDate,
-        records: usage?.length || 0,
+        records: sessions?.length || 0, // Now represents session count
       }
     });
   } catch (error) {

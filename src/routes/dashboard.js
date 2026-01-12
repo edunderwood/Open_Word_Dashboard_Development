@@ -42,32 +42,33 @@ router.get('/summary', async (req, res) => {
       planCounts[plan] = (planCounts[plan] || 0) + 1;
     });
 
-    // Get usage this month
-    const { data: usageThisMonth, error: usageError } = await supabase
-      .from('translation_usage')
-      .select('character_count, estimated_cost')
-      .gte('created_at', startOfMonth);
+    // Get usage this month from streaming_sessions (faster than translation_usage)
+    const { data: sessionsThisMonth, error: usageError } = await supabase
+      .from('streaming_sessions')
+      .select('characters_transcribed, characters_translated')
+      .in('status', ['completed', 'recovered'])
+      .gte('started_at', startOfMonth);
 
     let totalCharactersThisMonth = 0;
-    let totalCostThisMonth = 0;
-    usageThisMonth?.forEach(u => {
-      totalCharactersThisMonth += u.character_count || 0;
-      totalCostThisMonth += parseFloat(u.estimated_cost) || 0;
+    sessionsThisMonth?.forEach(s => {
+      totalCharactersThisMonth += (s.characters_transcribed || 0) + (s.characters_translated || 0);
     });
+    // Estimate cost at £0.000024/char (standard rate)
+    const totalCostThisMonth = totalCharactersThisMonth * 0.000024;
 
-    // Get usage last month
-    const { data: usageLastMonth, error: usageLastError } = await supabase
-      .from('translation_usage')
-      .select('character_count, estimated_cost')
-      .gte('created_at', startOfLastMonth)
-      .lte('created_at', endOfLastMonth);
+    // Get usage last month from streaming_sessions
+    const { data: sessionsLastMonth, error: usageLastError } = await supabase
+      .from('streaming_sessions')
+      .select('characters_transcribed, characters_translated')
+      .in('status', ['completed', 'recovered'])
+      .gte('started_at', startOfLastMonth)
+      .lte('started_at', endOfLastMonth);
 
     let totalCharactersLastMonth = 0;
-    let totalCostLastMonth = 0;
-    usageLastMonth?.forEach(u => {
-      totalCharactersLastMonth += u.character_count || 0;
-      totalCostLastMonth += parseFloat(u.estimated_cost) || 0;
+    sessionsLastMonth?.forEach(s => {
+      totalCharactersLastMonth += (s.characters_transcribed || 0) + (s.characters_translated || 0);
     });
+    const totalCostLastMonth = totalCharactersLastMonth * 0.000024;
 
     // Get customers with issues
     const { count: pausedCustomers } = await supabase
