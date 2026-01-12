@@ -19,7 +19,7 @@ router.get('/customers', async (req, res) => {
         // Get all organisations with user IDs
         const { data: orgs, error: orgsError } = await supabase
             .from('organisations')
-            .select('id, name, subscription_tier, subscription_status, user_id, created_at')
+            .select('id, name, subscription_tier, subscription_status, email_opt_out, user_id, created_at')
             .order('name');
 
         if (orgsError) throw orgsError;
@@ -42,6 +42,7 @@ router.get('/customers', async (req, res) => {
                     email: email,
                     tier: org.subscription_tier || 'trial',
                     status: org.subscription_status || 'active',
+                    emailOptOut: org.email_opt_out || false,
                     createdAt: org.created_at
                 };
             })
@@ -53,7 +54,8 @@ router.get('/customers', async (req, res) => {
         res.json({
             success: true,
             customers: validCustomers,
-            total: validCustomers.length
+            total: validCustomers.length,
+            optedOut: validCustomers.filter(c => c.emailOptOut).length
         });
     } catch (error) {
         console.error('Error fetching customers for communications:', error);
