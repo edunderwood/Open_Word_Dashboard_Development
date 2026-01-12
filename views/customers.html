@@ -188,6 +188,35 @@
     </div>
   </div>
 
+  <!-- Email Customer Modal -->
+  <div class="modal-overlay" id="emailModal">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="emailModalTitle">Email Customer</h3>
+        <button class="modal-close" onclick="closeEmailModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="emailTo">To:</label>
+          <input type="text" id="emailTo" class="form-input" readonly style="background: var(--gray-100);">
+        </div>
+        <div class="form-group">
+          <label for="emailSubject">Subject: *</label>
+          <input type="text" id="emailSubject" class="form-input" placeholder="Enter email subject...">
+        </div>
+        <div class="form-group">
+          <label for="emailBody">Message: *</label>
+          <textarea id="emailBody" class="form-input" rows="10" placeholder="Enter your message..."></textarea>
+        </div>
+        <input type="hidden" id="emailCustomerId">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEmailModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="sendCustomerEmail()">Send Email</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Usage Modal -->
   <div class="modal-overlay" id="usageModal">
     <div class="modal" style="max-width: 800px;">
@@ -666,7 +695,15 @@
           <div style="display: flex; gap: 12px;">
             ${leftButtons.join('')}
           </div>
-          <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+          <div style="display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="emailCustomer('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: middle;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Email Customer
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+          </div>
         `;
         document.getElementById('modalFooter').style.justifyContent = 'space-between';
       } catch (error) {
@@ -1091,6 +1128,68 @@
       } catch (error) {
         alert('Error denying review: ' + error.message);
       }
+    }
+
+    // Email customer
+    let currentCustomerEmail = null;
+
+    async function emailCustomer(id, name) {
+      // First fetch the customer email
+      try {
+        const response = await fetch(`/api/customers/${id}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        currentCustomerEmail = data.data.email;
+        if (!currentCustomerEmail) {
+          alert('No email address found for this customer');
+          return;
+        }
+
+        document.getElementById('emailModalTitle').textContent = `Email: ${name}`;
+        document.getElementById('emailTo').value = currentCustomerEmail;
+        document.getElementById('emailSubject').value = '';
+        document.getElementById('emailBody').value = '';
+        document.getElementById('emailCustomerId').value = id;
+        document.getElementById('emailModal').classList.add('active');
+      } catch (error) {
+        alert('Error loading customer email: ' + error.message);
+      }
+    }
+
+    async function sendCustomerEmail() {
+      const id = document.getElementById('emailCustomerId').value;
+      const subject = document.getElementById('emailSubject').value.trim();
+      const body = document.getElementById('emailBody').value.trim();
+
+      if (!subject) {
+        alert('Please enter a subject');
+        return;
+      }
+      if (!body) {
+        alert('Please enter a message');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/communications/send-individual/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body, emailType: 'individual_from_customer_page' })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert('Email sent successfully!');
+        closeEmailModal();
+      } catch (error) {
+        alert('Error sending email: ' + error.message);
+      }
+    }
+
+    function closeEmailModal() {
+      document.getElementById('emailModal').classList.remove('active');
     }
 
     // Close modals
