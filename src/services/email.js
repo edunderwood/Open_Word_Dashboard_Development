@@ -125,6 +125,7 @@ export async function sendWarningAlert(subject, message) {
  */
 export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = 'Customer') {
   const supportEmail = process.env.SUPPORT_EMAIL || 'support@openword.live';
+  const serverUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
 
   const htmlBody = `
     <!DOCTYPE html>
@@ -136,20 +137,22 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .email-wrapper { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header img { width: 60px; height: auto; margin-bottom: 10px; }
         .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
         .header p { margin: 10px 0 0 0; opacity: 0.9; font-size: 14px; }
         .content { padding: 30px 25px; background: white; }
         .content p { margin: 0 0 15px 0; }
         .footer { background: #f9fafb; padding: 20px 25px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
-        .footer a { color: #667eea; text-decoration: none; }
-        .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 10px 0; }
+        .footer a { color: #2563eb; text-decoration: none; }
+        .button { display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 10px 0; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="email-wrapper">
           <div class="header">
+            <img src="${serverUrl}/img/logo_white_bkgnd.png" alt="Open Word" style="width: 60px; height: auto;">
             <h1>Open Word</h1>
             <p>Real-time Translation for Live Events</p>
           </div>
