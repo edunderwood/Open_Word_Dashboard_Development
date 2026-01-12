@@ -26,6 +26,7 @@ import communicationsRoutes from './routes/communications.js';
 
 // Import services
 import { startMonitoring } from './services/monitor.js';
+import { startConsolidationCron } from './services/usage-consolidation.js';
 
 dotenv.config();
 
@@ -170,8 +171,9 @@ app.listen(PORT, () => {
 ╚═══════════════════════════════════════════════════════════╝
   `);
 
-  // Start background monitoring
+  // Start background services
   startMonitoring();
+  startConsolidationCron();
 });
 
 export default app;
