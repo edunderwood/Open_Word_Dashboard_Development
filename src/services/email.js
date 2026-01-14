@@ -151,8 +151,10 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
           <div class="header">
             <table cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
-                <td width="70" valign="middle" style="padding-right: 15px;">
-                  <img src="https://openword.live/images/logo.png" alt="Open Word" width="60" height="60" style="display: block; border-radius: 8px;">
+                <td width="80" valign="middle" style="padding-right: 15px;">
+                  <div style="background: white; padding: 8px; border-radius: 8px; display: inline-block;">
+                    <img src="https://openword.live/images/logo.png" alt="Open Word" width="60" height="60" style="display: block;">
+                  </div>
                 </td>
                 <td valign="middle">
                   <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: white;">Open Word</h1>
