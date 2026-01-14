@@ -137,10 +137,7 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .email-wrapper { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 30px 20px; text-align: center; }
-        .header img { width: 60px; height: auto; margin-bottom: 10px; }
-        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-        .header p { margin: 10px 0 0 0; opacity: 0.9; font-size: 14px; }
+        .header { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 20px 25px; }
         .content { padding: 30px 25px; background: white; }
         .content p { margin: 0 0 15px 0; }
         .footer { background: #f9fafb; padding: 20px 25px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
@@ -152,9 +149,17 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
       <div class="container">
         <div class="email-wrapper">
           <div class="header">
-            <img src="${serverUrl}/img/logo_white_bkgnd.png" alt="Open Word" style="width: 60px; height: auto;">
-            <h1>Open Word</h1>
-            <p>Real-time Translation for Live Events</p>
+            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="70" valign="middle" style="padding-right: 15px;">
+                  <img src="https://openword.live/images/logo.png" alt="Open Word" width="60" height="60" style="display: block; border-radius: 8px;">
+                </td>
+                <td valign="middle">
+                  <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: white;">Open Word</h1>
+                  <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; color: white;">Real-time Translation for Live Events</p>
+                </td>
+              </tr>
+            </table>
           </div>
           <div class="content">
             ${bodyHtml}
