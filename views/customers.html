@@ -1175,7 +1175,7 @@
         const response = await fetch(`/api/communications/send-individual/${id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, body, emailType: 'individual_from_customer_page' })
+          body: JSON.stringify({ subject, body, emailType: 'individual' })
         });
 
         const data = await response.json();
