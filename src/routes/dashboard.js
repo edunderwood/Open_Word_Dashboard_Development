@@ -149,7 +149,8 @@ router.get('/recent-activity', async (req, res) => {
       .select(`
         id,
         started_at,
-        total_characters,
+        characters_transcribed,
+        characters_translated,
         status,
         organisation_id,
         organisations (name)
@@ -186,7 +187,7 @@ router.get('/recent-activity', async (req, res) => {
       formattedUsage = recentSessions.map(session => ({
         id: session.id,
         created_at: session.started_at,
-        character_count: session.total_characters || 0,
+        character_count: (session.characters_transcribed || 0) + (session.characters_translated || 0),
         operation_type: session.status === 'active' ? 'Streaming' : 'Session',
         organisation_id: session.organisation_id,
         organisations: session.organisations
