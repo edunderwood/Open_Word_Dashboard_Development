@@ -38,15 +38,15 @@ COMMENT ON TABLE dashboard_admins IS 'Controls which users can access the OpenWo
 
 -- Then insert them as an admin:
 -- INSERT INTO dashboard_admins (user_id, email, role) VALUES
--- ('user-uuid-here', 'david@firmustech.com', 'super_admin');
+-- ('user-uuid-here', 'admin@openword.live', 'super_admin');
 
--- Example: Add david@firmustech.com as super admin
+-- Example: Add admin@openword.live as super admin
 -- (Replace the UUID with the actual user_id from auth.users)
 --
 -- INSERT INTO dashboard_admins (user_id, email, role)
 -- SELECT id, email, 'super_admin'
 -- FROM auth.users
--- WHERE email = 'david@firmustech.com';
+-- WHERE email = 'admin@openword.live';
 
 -- ============================================================
 -- QUICK SETUP: Run this to add an admin by email
@@ -55,7 +55,7 @@ COMMENT ON TABLE dashboard_admins IS 'Controls which users can access the OpenWo
 
 DO $$
 DECLARE
-  admin_email TEXT := 'david@firmustech.com';  -- CHANGE THIS to your email
+  admin_email TEXT := 'admin@openword.live';  -- CHANGE THIS to your email
   admin_role TEXT := 'super_admin';
   found_user_id UUID;
 BEGIN

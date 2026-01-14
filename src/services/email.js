@@ -36,7 +36,7 @@ const transporter = nodemailer.createTransport({
  * @param {string} priority - 'critical', 'warning', 'info'
  */
 export async function sendAlert(subject, message, priority = 'info') {
-  const alertEmail = process.env.ALERT_EMAIL || 'david@firmustech.com';
+  const alertEmail = process.env.ALERT_EMAIL || 'support@openword.live';
 
   // Priority prefixes
   const prefixes = {
