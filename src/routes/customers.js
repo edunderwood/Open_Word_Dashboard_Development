@@ -155,6 +155,17 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
+    // Get email from auth.users table
+    let email = null;
+    if (customer.user_id) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(customer.user_id);
+        email = authUser?.user?.email || null;
+      } catch (authError) {
+        console.error('Error fetching auth user email:', authError);
+      }
+    }
+
     // Get Stripe subscription details if available
     let stripeData = null;
     if (customer.stripe_subscription_id) {
@@ -176,6 +187,7 @@ router.get('/:id', async (req, res) => {
       success: true,
       data: {
         ...customer,
+        email,
         stripe: stripeData,
       }
     });
