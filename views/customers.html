@@ -233,6 +233,58 @@
     </div>
   </div>
 
+  <!-- Discount Modal -->
+  <div class="modal-overlay" id="discountModal">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3 id="discountModalTitle">Set Discount</h3>
+        <button class="modal-close" onclick="closeDiscountModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="discountModalCustomerName" style="margin-bottom: 16px; color: var(--gray-600);"></p>
+
+        <div class="form-group">
+          <label for="discountPercentSelect">Discount Percentage: *</label>
+          <select id="discountPercentSelect" class="form-input" style="width: 100%; padding: 10px; font-size: 14px;">
+            <option value="">Select percentage...</option>
+            <option value="10">10%</option>
+            <option value="20">20%</option>
+            <option value="30">30%</option>
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="discountTypeSelect">Discount Type: *</label>
+          <select id="discountTypeSelect" class="form-input" style="width: 100%; padding: 10px; font-size: 14px;">
+            <option value="">Select type...</option>
+            <option value="charity">Charity - Registered charity</option>
+            <option value="church">Church - Church or religious organisation</option>
+            <option value="nonprofit">Nonprofit - Non-profit organisation</option>
+            <option value="educational">Educational - Educational institution</option>
+            <option value="community">Community - Community organisation</option>
+            <option value="partner">Partner - Partnership agreement</option>
+            <option value="promotional">Promotional - Promotional offer</option>
+            <option value="negotiated">Negotiated - Negotiated rate</option>
+            <option value="other">Other - Other reason</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="discountReasonInput">Reason (optional):</label>
+          <input type="text" id="discountReasonInput" class="form-input" placeholder="Enter reason for discount..." style="width: 100%;">
+        </div>
+
+        <input type="hidden" id="discountCustomerId">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDiscountModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitDiscount()">Apply Discount</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentPage = 1;
     let totalPages = 1;
@@ -962,31 +1014,42 @@
       }
     }
 
-    // Set non-charity discount
-    async function setDiscount(id, name) {
-      // Create a custom dialog for discount selection
-      const discountPercent = prompt(`Set discount for "${name}".\n\nSelect discount percentage:\n• 10%\n• 20%\n• 30%\n• 40%\n• 50%\n\nEnter percentage (10, 20, 30, 40, or 50):`, '20');
-      if (discountPercent === null) return;
+    // Set non-charity discount - opens modal with dropdowns
+    function setDiscount(id, name) {
+      document.getElementById('discountCustomerId').value = id;
+      document.getElementById('discountModalCustomerName').textContent = `Setting discount for: ${name}`;
+      document.getElementById('discountModalTitle').textContent = 'Set Discount';
 
-      const validPercentages = [10, 20, 30, 40, 50];
-      const percent = parseInt(discountPercent);
-      if (!validPercentages.includes(percent)) {
-        alert('Invalid percentage. Please enter 10, 20, 30, 40, or 50.');
+      // Reset form
+      document.getElementById('discountPercentSelect').value = '';
+      document.getElementById('discountTypeSelect').value = '';
+      document.getElementById('discountReasonInput').value = '';
+
+      // Show modal
+      document.getElementById('discountModal').classList.add('active');
+    }
+
+    function closeDiscountModal() {
+      document.getElementById('discountModal').classList.remove('active');
+    }
+
+    async function submitDiscount() {
+      const id = document.getElementById('discountCustomerId').value;
+      const percent = parseInt(document.getElementById('discountPercentSelect').value);
+      const discountType = document.getElementById('discountTypeSelect').value;
+      const reason = document.getElementById('discountReasonInput').value.trim();
+
+      // Validate
+      if (!percent) {
+        alert('Please select a discount percentage.');
+        return;
+      }
+      if (!discountType) {
+        alert('Please select a discount type.');
         return;
       }
 
-      const discountType = prompt(`Select discount type for "${name}":\n\n• charity - Registered charity\n• church - Church or religious organisation\n• partner - Partnership agreement\n• nonprofit - Non-profit organisation\n• educational - Educational institution\n• community - Community organisation\n• promotional - Promotional offer\n• negotiated - Negotiated rate\n• other - Other reason\n\nEnter type:`, 'charity');
-      if (discountType === null) return;
-
-      const validTypes = ['charity', 'church', 'partner', 'nonprofit', 'educational', 'community', 'promotional', 'negotiated', 'other'];
-      if (!validTypes.includes(discountType)) {
-        alert('Invalid type. Please enter one of: charity, church, partner, nonprofit, educational, community, promotional, negotiated, or other.');
-        return;
-      }
-
-      const reason = prompt('Enter reason for this discount (optional):');
-
-      if (!confirm(`Apply ${percent}% ${discountType} discount to ${name}?\n\n${reason ? 'Reason: ' + reason : ''}`)) return;
+      const typeLabel = document.getElementById('discountTypeSelect').options[document.getElementById('discountTypeSelect').selectedIndex].text;
 
       try {
         const response = await fetch(`/api/customers/${id}/set-discount`, {
@@ -998,7 +1061,17 @@
         const data = await response.json();
         if (!data.success) throw new Error(data.error);
 
-        alert(`${percent}% ${discountType} discount applied to ${name}`);
+        closeDiscountModal();
+
+        // Show success with Stripe sync status
+        let message = `${percent}% discount applied successfully.`;
+        if (data.stripeCouponApplied) {
+          message += '\n\nStripe subscription updated with discount.';
+        } else if (data.stripeMessage) {
+          message += `\n\nNote: Stripe not updated - ${data.stripeMessage}`;
+        }
+        alert(message);
+
         viewCustomer(id); // Refresh modal
         loadCustomers(); // Refresh list
       } catch (error) {

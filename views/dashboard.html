@@ -637,44 +637,19 @@
       }
     }
 
-    // Approve discount request
-    async function approveDiscount(orgId, orgName) {
-      const discountPercent = prompt(`Approve discount for "${orgName}".\n\nEnter discount percentage (10, 20, 30, 40, or 50):`, '20');
+    // Approve discount request - opens modal with dropdowns
+    function approveDiscount(orgId, orgName) {
+      document.getElementById('discountCustomerId').value = orgId;
+      document.getElementById('discountModalCustomerName').textContent = `Approving discount for: ${orgName}`;
+      document.getElementById('discountModalTitle').textContent = 'Approve Discount';
 
-      if (discountPercent === null) return; // User cancelled
+      // Set defaults for discount requests
+      document.getElementById('discountPercentSelect').value = '20';
+      document.getElementById('discountTypeSelect').value = 'nonprofit';
+      document.getElementById('discountReasonInput').value = '';
 
-      const discount = parseInt(discountPercent);
-      if (![10, 20, 30, 40, 50].includes(discount)) {
-        alert('Invalid discount. Please enter 10, 20, 30, 40, or 50.');
-        return;
-      }
-
-      const discountType = prompt('Enter discount type (e.g., "nonprofit", "educational", "community"):', 'nonprofit');
-      if (discountType === null) return;
-
-      const reason = prompt('Enter reason for granting discount:');
-
-      try {
-        const response = await fetch(`/api/customers/${orgId}/set-discount`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            discountPercent: discount,
-            discountType: discountType || 'general',
-            reason: reason || `Approved discount request`
-          })
-        });
-
-        const data = await response.json();
-
-        if (!data.success) throw new Error(data.error || data.message);
-
-        alert(`${discount}% discount granted to ${orgName}`);
-        loadDiscountReviews(); // Refresh the list
-      } catch (error) {
-        console.error('Error granting discount:', error);
-        alert('Failed to grant discount: ' + error.message);
-      }
+      // Show modal
+      document.getElementById('discountModal').classList.add('active');
     }
 
     // Deny discount request
@@ -828,6 +803,107 @@
       // Auto-refresh every 5 minutes
       setInterval(refreshData, 5 * 60 * 1000);
     });
+
+    // Discount modal functions
+    function closeDiscountModal() {
+      document.getElementById('discountModal').classList.remove('active');
+    }
+
+    async function submitDiscount() {
+      const id = document.getElementById('discountCustomerId').value;
+      const percent = parseInt(document.getElementById('discountPercentSelect').value);
+      const discountType = document.getElementById('discountTypeSelect').value;
+      const reason = document.getElementById('discountReasonInput').value.trim();
+
+      if (!percent) {
+        alert('Please select a discount percentage.');
+        return;
+      }
+      if (!discountType) {
+        alert('Please select a discount type.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/customers/${id}/set-discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discountPercent: percent, discountType, reason: reason || 'Approved discount request' })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || data.message);
+
+        closeDiscountModal();
+
+        let message = `${percent}% discount granted successfully.`;
+        if (data.stripeCouponApplied) {
+          message += '\n\nStripe subscription updated.';
+        }
+        alert(message);
+
+        loadDiscountReviews(); // Refresh the list
+      } catch (error) {
+        console.error('Error granting discount:', error);
+        alert('Failed to grant discount: ' + error.message);
+      }
+    }
   </script>
+
+  <!-- Discount Modal -->
+  <div class="modal-overlay" id="discountModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 12px; max-width: 450px; width: 90%; margin: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <div style="padding: 16px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 18px;" id="discountModalTitle">Approve Discount</h3>
+        <button onclick="closeDiscountModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">&times;</button>
+      </div>
+      <div style="padding: 20px;">
+        <p id="discountModalCustomerName" style="margin-bottom: 16px; color: #6b7280;"></p>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 500;">Discount Percentage: *</label>
+          <select id="discountPercentSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+            <option value="">Select percentage...</option>
+            <option value="10">10%</option>
+            <option value="20" selected>20%</option>
+            <option value="30">30%</option>
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 500;">Discount Type: *</label>
+          <select id="discountTypeSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+            <option value="">Select type...</option>
+            <option value="charity">Charity - Registered charity</option>
+            <option value="church">Church - Church or religious organisation</option>
+            <option value="nonprofit" selected>Nonprofit - Non-profit organisation</option>
+            <option value="educational">Educational - Educational institution</option>
+            <option value="community">Community - Community organisation</option>
+            <option value="partner">Partner - Partnership agreement</option>
+            <option value="promotional">Promotional - Promotional offer</option>
+            <option value="negotiated">Negotiated - Negotiated rate</option>
+            <option value="other">Other - Other reason</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 500;">Reason (optional):</label>
+          <input type="text" id="discountReasonInput" placeholder="Enter reason for discount..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+        </div>
+
+        <input type="hidden" id="discountCustomerId">
+      </div>
+      <div style="padding: 16px 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="closeDiscountModal()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
+        <button onclick="submitDiscount()" style="padding: 10px 20px; border: none; background: #2563eb; color: white; border-radius: 6px; cursor: pointer;">Apply Discount</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #discountModal.active { display: flex !important; }
+  </style>
 </body>
 </html>
