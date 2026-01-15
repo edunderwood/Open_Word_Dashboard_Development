@@ -40,18 +40,26 @@ function getDiscountCouponId(discountPercent) {
  * @returns {Object} { success, message, stripeCouponApplied }
  */
 async function applyStripeCoupon(stripeSubscriptionId, couponId, orgName) {
+  console.log(`🔄 Attempting to apply coupon to Stripe:`);
+  console.log(`   Organisation: ${orgName}`);
+  console.log(`   Subscription ID: ${stripeSubscriptionId || 'NOT SET'}`);
+  console.log(`   Coupon ID: ${couponId}`);
+
   if (!stripeSubscriptionId) {
-    return { success: true, message: 'No Stripe subscription to update', stripeCouponApplied: false };
+    console.log(`   ⚠️ No stripe_subscription_id - cannot apply coupon`);
+    return { success: true, message: 'No Stripe subscription ID - customer may not have completed payment', stripeCouponApplied: false };
   }
 
   try {
-    await stripe.subscriptions.update(stripeSubscriptionId, {
+    const result = await stripe.subscriptions.update(stripeSubscriptionId, {
       discounts: [{ coupon: couponId }]
     });
-    console.log(`💳 Applied coupon ${couponId} to Stripe subscription ${stripeSubscriptionId} (${orgName})`);
+    console.log(`   ✅ Coupon applied successfully`);
+    console.log(`   Subscription status: ${result.status}`);
     return { success: true, message: 'Stripe coupon applied', stripeCouponApplied: true };
   } catch (stripeError) {
-    console.error(`⚠️ Failed to apply coupon to Stripe subscription ${stripeSubscriptionId}:`, stripeError.message);
+    console.error(`   ❌ Stripe error: ${stripeError.message}`);
+    if (stripeError.code) console.error(`   Error code: ${stripeError.code}`);
     return { success: false, message: stripeError.message, stripeCouponApplied: false };
   }
 }
