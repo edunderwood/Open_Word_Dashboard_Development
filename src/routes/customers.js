@@ -9,6 +9,75 @@ import stripe from '../services/stripe.js';
 const router = express.Router();
 
 /**
+ * Stripe Coupon ID Mapping
+ * These coupons must exist in Stripe Dashboard
+ */
+const STRIPE_DISCOUNT_COUPONS = {
+  50: process.env.STRIPE_COUPON_50 || 'DISCOUNT_50',
+  40: process.env.STRIPE_COUPON_40 || 'DISCOUNT_40',
+  30: process.env.STRIPE_COUPON_30 || 'DISCOUNT_30',
+  20: process.env.STRIPE_COUPON_20 || 'DISCOUNT_20',
+  10: process.env.STRIPE_COUPON_10 || 'DISCOUNT_10'
+};
+
+const STRIPE_CHARITY_COUPON = process.env.STRIPE_CHARITY_COUPON || 'CHARITY_50';
+
+/**
+ * Get the Stripe coupon ID for a discount percentage
+ */
+function getDiscountCouponId(discountPercent) {
+  // Find the nearest matching coupon
+  const percentages = [10, 20, 30, 40, 50];
+  const nearest = percentages.reduce((prev, curr) =>
+    Math.abs(curr - discountPercent) < Math.abs(prev - discountPercent) ? curr : prev
+  );
+  return STRIPE_DISCOUNT_COUPONS[nearest];
+}
+
+/**
+ * Apply a discount coupon to a Stripe subscription
+ * Works for both active subscriptions and subscriptions in trial
+ * @returns {Object} { success, message, stripeCouponApplied }
+ */
+async function applyStripeCoupon(stripeSubscriptionId, couponId, orgName) {
+  if (!stripeSubscriptionId) {
+    return { success: true, message: 'No Stripe subscription to update', stripeCouponApplied: false };
+  }
+
+  try {
+    await stripe.subscriptions.update(stripeSubscriptionId, {
+      discounts: [{ coupon: couponId }]
+    });
+    console.log(`💳 Applied coupon ${couponId} to Stripe subscription ${stripeSubscriptionId} (${orgName})`);
+    return { success: true, message: 'Stripe coupon applied', stripeCouponApplied: true };
+  } catch (stripeError) {
+    console.error(`⚠️ Failed to apply coupon to Stripe subscription ${stripeSubscriptionId}:`, stripeError.message);
+    return { success: false, message: stripeError.message, stripeCouponApplied: false };
+  }
+}
+
+/**
+ * Remove all discount coupons from a Stripe subscription
+ * @returns {Object} { success, message, stripeCouponRemoved }
+ */
+async function removeStripeCoupon(stripeSubscriptionId, orgName) {
+  if (!stripeSubscriptionId) {
+    return { success: true, message: 'No Stripe subscription to update', stripeCouponRemoved: false };
+  }
+
+  try {
+    await stripe.subscriptions.update(stripeSubscriptionId, {
+      discounts: [] // Empty array removes all coupons
+    });
+    console.log(`💳 Removed coupon from Stripe subscription ${stripeSubscriptionId} (${orgName})`);
+    return { success: true, message: 'Stripe coupon removed', stripeCouponRemoved: true };
+  } catch (stripeError) {
+    console.error(`⚠️ Failed to remove coupon from Stripe subscription ${stripeSubscriptionId}:`, stripeError.message);
+    return { success: false, message: stripeError.message, stripeCouponRemoved: false };
+  }
+}
+
+/**
  * GET /api/customers
  * List all customers with pagination and filters
  */
@@ -869,6 +938,7 @@ router.post('/:id/cancel-subscription', async (req, res) => {
 /**
  * POST /api/customers/:id/grant-charity-discount
  * Grant charity discount to a customer (even if not a verified charity)
+ * Also updates Stripe subscription with the charity coupon
  */
 router.post('/:id/grant-charity-discount', async (req, res) => {
   try {
@@ -896,10 +966,16 @@ router.post('/:id/grant-charity-discount', async (req, res) => {
 
     console.log(`💚 Charity discount (${discount}%) granted to: ${data.name} (${id}) - ${reason || 'No reason'}`);
 
+    // Apply coupon to Stripe subscription (works for trial and active subscriptions)
+    const couponId = discount === 50 ? STRIPE_CHARITY_COUPON : getDiscountCouponId(discount);
+    const stripeResult = await applyStripeCoupon(data.stripe_subscription_id, couponId, data.name);
+
     res.json({
       success: true,
       message: `${discount}% charity discount granted successfully`,
       data,
+      stripeCouponApplied: stripeResult.stripeCouponApplied,
+      stripeMessage: stripeResult.stripeCouponApplied ? null : stripeResult.message
     });
   } catch (error) {
     console.error('Error granting charity discount:', error);
@@ -946,6 +1022,7 @@ router.post('/:id/deny-charity-review', async (req, res) => {
  * POST /api/customers/:id/set-discount
  * Set a non-charity discount for an organisation
  * Requires: discountPercent (10, 20, 30, 40, or 50), discountType, reason
+ * Also updates Stripe subscription with the appropriate coupon
  */
 router.post('/:id/set-discount', async (req, res) => {
   try {
@@ -986,10 +1063,16 @@ router.post('/:id/set-discount', async (req, res) => {
 
     console.log(`💰 ${discountPercent}% ${discountType} discount set for: ${data.name} (${id}) - ${reason || 'No reason'}`);
 
+    // Apply coupon to Stripe subscription (works for trial and active subscriptions)
+    const couponId = getDiscountCouponId(discountPercent);
+    const stripeResult = await applyStripeCoupon(data.stripe_subscription_id, couponId, data.name);
+
     res.json({
       success: true,
       message: `${discountPercent}% ${discountType} discount applied successfully`,
       data,
+      stripeCouponApplied: stripeResult.stripeCouponApplied,
+      stripeMessage: stripeResult.stripeCouponApplied ? null : stripeResult.message
     });
   } catch (error) {
     console.error('Error setting discount:', error);
@@ -1000,6 +1083,7 @@ router.post('/:id/set-discount', async (req, res) => {
 /**
  * POST /api/customers/:id/remove-discount
  * Remove a non-charity discount from an organisation
+ * Also removes the coupon from the Stripe subscription
  */
 router.post('/:id/remove-discount', async (req, res) => {
   try {
@@ -1024,10 +1108,15 @@ router.post('/:id/remove-discount', async (req, res) => {
 
     console.log(`❌ Discount removed from: ${data.name} (${id}) - ${reason || 'No reason'}`);
 
+    // Remove coupon from Stripe subscription
+    const stripeResult = await removeStripeCoupon(data.stripe_subscription_id, data.name);
+
     res.json({
       success: true,
       message: 'Discount removed successfully',
       data,
+      stripeCouponRemoved: stripeResult.stripeCouponRemoved,
+      stripeMessage: stripeResult.stripeCouponRemoved ? null : stripeResult.message
     });
   } catch (error) {
     console.error('Error removing discount:', error);
@@ -1072,6 +1161,7 @@ router.post('/:id/deny-discount-request', async (req, res) => {
 /**
  * POST /api/customers/:id/revoke-charity-discount
  * Revoke charity discount from a customer
+ * Also removes the coupon from the Stripe subscription
  */
 router.post('/:id/revoke-charity-discount', async (req, res) => {
   try {
@@ -1095,10 +1185,15 @@ router.post('/:id/revoke-charity-discount', async (req, res) => {
 
     console.log(`❌ Charity discount revoked from: ${data.name} (${id}) - ${reason || 'No reason'}`);
 
+    // Remove coupon from Stripe subscription
+    const stripeResult = await removeStripeCoupon(data.stripe_subscription_id, data.name);
+
     res.json({
       success: true,
       message: 'Charity discount revoked',
       data,
+      stripeCouponRemoved: stripeResult.stripeCouponRemoved,
+      stripeMessage: stripeResult.stripeCouponRemoved ? null : stripeResult.message
     });
   } catch (error) {
     console.error('Error revoking charity discount:', error);
