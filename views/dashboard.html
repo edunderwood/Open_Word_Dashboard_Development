@@ -326,12 +326,13 @@
                 <tr>
                   <th>Customer</th>
                   <th>Type</th>
-                  <th>Characters</th>
-                  <th>Time</th>
+                  <th>Duration</th>
+                  <th>Translated</th>
+                  <th>Date</th>
                 </tr>
               </thead>
               <tbody id="recentUsage">
-                <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -364,6 +365,17 @@
         return (num / 1000).toFixed(1) + 'K';
       }
       return num.toLocaleString();
+    }
+
+    // Format duration in minutes to hours and minutes
+    function formatDuration(minutes) {
+      if (!minutes || minutes === 0) return '-';
+      const hours = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      if (hours > 0) {
+        return `${hours}h ${mins}m`;
+      }
+      return `${mins}m`;
     }
 
     // Format date
@@ -759,12 +771,13 @@
         // Recent usage
         const usageTable = document.getElementById('recentUsage');
         if (data.data.recentUsage.length === 0) {
-          usageTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent usage</td></tr>';
+          usageTable.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No recent usage</td></tr>';
         } else {
           usageTable.innerHTML = data.data.recentUsage.map(usage => `
             <tr>
               <td>${usage.organisations?.name || 'Unknown'}</td>
               <td>${usage.operation_type}</td>
+              <td>${formatDuration(usage.duration_minutes)}</td>
               <td>${formatNumber(usage.character_count)}</td>
               <td>${formatDate(usage.created_at)}</td>
             </tr>
