@@ -216,6 +216,27 @@
         </div>
       </div>
 
+      <!-- Credit Configuration Section -->
+      <h3 style="margin-bottom: 16px; margin-top: 32px;">Credit Configuration</h3>
+      <p style="color: var(--gray-500); margin-bottom: 16px;">Configure how many characters equal one credit for each plan tier.</p>
+
+      <div class="tier-card" style="max-width: 600px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--gray-200);">
+              <th style="text-align: left; padding: 12px 8px; color: var(--gray-600); font-weight: 600;">Plan</th>
+              <th style="text-align: left; padding: 12px 8px; color: var(--gray-600); font-weight: 600;">Characters per Credit</th>
+              <th style="text-align: center; padding: 12px 8px; color: var(--gray-600); font-weight: 600;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="creditConfigTable">
+            <tr>
+              <td colspan="3" style="padding: 20px; text-align: center; color: var(--gray-500);">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
     </main>
   </div>
 
@@ -338,9 +359,104 @@
       }
     }
 
+    // Load credit configuration from database
+    async function loadCreditConfig() {
+      try {
+        const response = await fetch('/api/pricing');
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        const tiers = data.data;
+        const tableBody = document.getElementById('creditConfigTable');
+
+        if (tiers.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--gray-500);">No pricing tiers found</td></tr>';
+          return;
+        }
+
+        tableBody.innerHTML = tiers.map(tier => `
+          <tr style="border-bottom: 1px solid var(--gray-100);" data-tier-id="${tier.id}">
+            <td style="padding: 12px 8px;">
+              <div style="font-weight: 500; color: var(--gray-900);">${tier.name}</div>
+              <div style="font-size: 0.75rem; color: var(--gray-500);">${tier.id}</div>
+            </td>
+            <td style="padding: 12px 8px;">
+              <input
+                type="number"
+                id="chars-${tier.id}"
+                value="${tier.chars_per_credit || 23000}"
+                min="1000"
+                max="100000"
+                step="1000"
+                style="width: 120px; padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.9rem;"
+              />
+            </td>
+            <td style="padding: 12px 8px; text-align: center;">
+              <button
+                onclick="saveCharsPerCredit('${tier.id}')"
+                class="btn btn-sm btn-primary"
+                id="save-btn-${tier.id}"
+              >
+                Save
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading credit config:', error);
+        document.getElementById('creditConfigTable').innerHTML =
+          '<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--danger);">Error loading configuration</td></tr>';
+      }
+    }
+
+    // Save chars per credit for a tier
+    async function saveCharsPerCredit(tierId) {
+      const input = document.getElementById(`chars-${tierId}`);
+      const button = document.getElementById(`save-btn-${tierId}`);
+      const newValue = parseInt(input.value, 10);
+
+      if (isNaN(newValue) || newValue < 1000 || newValue > 100000) {
+        alert('Please enter a valid number between 1,000 and 100,000');
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Saving...';
+
+      try {
+        const response = await fetch(`/api/pricing/${tierId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ charsPerCredit: newValue })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        button.textContent = 'Saved!';
+        button.style.background = 'var(--success)';
+
+        setTimeout(() => {
+          button.textContent = 'Save';
+          button.style.background = '';
+          button.disabled = false;
+        }, 2000);
+
+        console.log(`✅ Updated ${tierId} chars_per_credit to ${newValue}`);
+      } catch (error) {
+        console.error('Error saving chars per credit:', error);
+        alert('Failed to save. Please try again.');
+        button.textContent = 'Save';
+        button.disabled = false;
+      }
+    }
+
     // Load data on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadPricing();
+      loadCreditConfig();
     });
   </script>
 </body>
