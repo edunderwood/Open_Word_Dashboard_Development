@@ -151,11 +151,12 @@
                 <th>Credits</th>
                 <th>Status</th>
                 <th>Last Login</th>
+                <th>Trial Ends</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="customersTable">
-              <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
+              <tr><td colspan="9" class="text-center text-muted">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -401,7 +402,7 @@
         // Update table
         const table = document.getElementById('customersTable');
         if (customers.length === 0) {
-          table.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No customers found</td></tr>';
+          table.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No customers found</td></tr>';
         } else {
           table.innerHTML = customers.map(customer => {
             const creditBalance = customer.credit_balance ?? 0;
@@ -431,6 +432,7 @@
               </td>
               <td>${getPaymentStatusBadge(customer)}</td>
               <td>${customer.last_login ? formatDateTime(customer.last_login) : '<span class="text-muted">Never</span>'}</td>
+              <td>${customer.trial_ends_at ? formatDate(customer.trial_ends_at) : '<span class="text-muted">-</span>'}</td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View/Edit</button>
                 ${customer.is_paused
@@ -450,7 +452,7 @@
       } catch (error) {
         console.error('Error loading customers:', error);
         document.getElementById('customersTable').innerHTML =
-          '<tr><td colspan="6" class="text-center text-danger">Error loading customers</td></tr>';
+          '<tr><td colspan="9" class="text-center text-danger">Error loading customers</td></tr>';
       }
     }
 
