@@ -521,17 +521,12 @@ export async function sendMigrationEmails(migrationId, options = {}) {
                     await supabase.from('email_log').insert({
                         organisation_id: customer.organisationId,
                         recipient_email: customer.email,
+                        recipient_name: customer.name,
                         subject: emailSubject,
+                        body_preview: `Price migration: ${migration.name} - ${customer.tier} tier, effective ${effectiveDateStr}`,
                         email_type: 'price_migration',
                         status: 'sent',
-                        sent_at: new Date().toISOString(),
-                        metadata: {
-                            migration_id: migrationId,
-                            migration_name: migration.name,
-                            tier: customer.tier,
-                            effective_date: effectiveDateStr,
-                            discount_percent: customer.discountPercent || 0
-                        }
+                        sent_by: 'price_migration'
                     });
                     sent++;
                 } else {
