@@ -15,6 +15,7 @@ import {
     listMigrations
 } from '../services/price-migration.js';
 import stripe from '../services/stripe.js';
+import supabase from '../services/supabase.js';
 
 const router = express.Router();
 
@@ -135,6 +136,58 @@ router.get('/stripe-prices', async (req, res) => {
 });
 
 /**
+ * GET /api/price-migration/customers-list
+ * Get all available organisations for migration selection
+ * Includes active and trial customers
+ */
+router.get('/customers-list', async (req, res) => {
+    try {
+        const { data: orgs, error } = await supabase
+            .from('organisations')
+            .select(`
+                id, name, subscription_tier, subscription_status, preferred_currency,
+                discount_percent, discount_type,
+                charity_discount_percent, charity_verified, is_charity,
+                stripe_subscription_id
+            `)
+            .in('subscription_tier', ['basic', 'standard', 'pro'])
+            .in('subscription_status', ['active', 'trialing'])
+            .not('stripe_subscription_id', 'is', null)
+            .order('name');
+
+        if (error) throw error;
+
+        // Format response with discount info
+        const customers = (orgs || []).map(org => {
+            const effectiveDiscount = org.charity_verified
+                ? (org.charity_discount_percent || 50)
+                : (org.discount_percent || 0);
+
+            return {
+                id: org.id,
+                name: org.name,
+                tier: org.subscription_tier,
+                status: org.subscription_status,
+                currency: org.preferred_currency || 'gbp',
+                discountPercent: effectiveDiscount,
+                discountType: org.charity_verified ? 'charity' : (org.discount_type || null),
+                isCharity: org.charity_verified || org.is_charity,
+                hasSubscription: !!org.stripe_subscription_id
+            };
+        });
+
+        res.json({
+            success: true,
+            customers,
+            total: customers.length
+        });
+    } catch (error) {
+        console.error('Error fetching customers list:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch customers' });
+    }
+});
+
+/**
  * GET /api/price-migration/:id
  * Get migration details with customer status
  */
@@ -168,7 +221,8 @@ router.post('/', async (req, res) => {
             name,
             oldPricing,
             newPricing,
-            newPriceIds
+            newPriceIds,
+            selectedOrganisationIds  // Optional array of org IDs to include
         } = req.body;
 
         if (!name) {
@@ -176,7 +230,13 @@ router.post('/', async (req, res) => {
         }
 
         const adminEmail = req.session.user?.email || 'admin';
-        const result = await createMigration({ name, oldPricing, newPricing, newPriceIds }, adminEmail);
+        const result = await createMigration({
+            name,
+            oldPricing,
+            newPricing,
+            newPriceIds,
+            selectedOrganisationIds
+        }, adminEmail);
 
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });

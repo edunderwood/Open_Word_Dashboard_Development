@@ -21,6 +21,10 @@ dotenv.config();
  * @returns {string} Formatted price string
  */
 function formatPrice(amountInPence, currency = 'gbp') {
+    // Handle NULL/undefined values
+    if (amountInPence === null || amountInPence === undefined) {
+        return 'N/A';
+    }
     const symbols = { gbp: '£', usd: '$', eur: '€' };
     const symbol = symbols[currency.toLowerCase()] || '£';
     const amount = (amountInPence / 100).toFixed(2);
@@ -40,31 +44,78 @@ function getNewPriceId(migration, tier, currency) {
 }
 
 /**
+ * Fetch actual prices from Stripe using stored price IDs
+ * @param {object} migration - Migration record with price IDs
+ * @returns {Promise<object>} Object with prices organized by tier and currency
+ */
+async function fetchStripePrices(migration) {
+    const stripePrices = {};
+
+    const priceFields = [
+        'new_price_id_basic_gbp', 'new_price_id_basic_usd', 'new_price_id_basic_eur',
+        'new_price_id_standard_gbp', 'new_price_id_standard_usd', 'new_price_id_standard_eur',
+        'new_price_id_pro_gbp', 'new_price_id_pro_usd', 'new_price_id_pro_eur'
+    ];
+
+    for (const field of priceFields) {
+        const priceId = migration[field];
+        if (priceId) {
+            try {
+                const price = await stripe.prices.retrieve(priceId);
+                // Extract tier and currency from field name (e.g., "new_price_id_basic_gbp")
+                const parts = field.replace('new_price_id_', '').split('_');
+                const tier = parts[0];  // basic, standard, pro
+                const currency = parts[1];  // gbp, usd, eur
+
+                if (!stripePrices[tier]) stripePrices[tier] = {};
+                stripePrices[tier][currency] = {
+                    priceId: price.id,
+                    amount: price.unit_amount,  // In pence/cents
+                    currency: price.currency
+                };
+            } catch (err) {
+                console.error(`Failed to fetch Stripe price ${priceId}:`, err.message);
+            }
+        }
+    }
+
+    return stripePrices;
+}
+
+/**
  * Create a new price migration campaign
  * @param {object} config - Migration configuration
  * @param {string} config.name - Migration name
  * @param {object} config.oldPricing - Old pricing { basic_gbp, standard_gbp, pro_gbp, credit_gbp }
  * @param {object} config.newPricing - New pricing { basic_gbp, standard_gbp, pro_gbp, credit_gbp }
  * @param {object} config.newPriceIds - New Stripe Price IDs for each tier/currency
+ * @param {Array} config.selectedOrganisationIds - Optional array of org IDs to include
  * @param {string} adminEmail - Admin who created the migration
  * @returns {Promise<{success: boolean, migration?: object, error?: string}>}
  */
 export async function createMigration(config, adminEmail) {
     try {
-        const { name, oldPricing, newPricing, newPriceIds } = config;
+        const { name, oldPricing, newPricing, newPriceIds, selectedOrganisationIds } = config;
 
         // Validate required fields
         if (!name) {
             return { success: false, error: 'Migration name is required' };
         }
 
-        // Count customers who will be affected (active subscriptions)
-        const { count: totalCustomers, error: countError } = await supabase
+        // Build query for counting customers
+        let countQuery = supabase
             .from('organisations')
             .select('*', { count: 'exact', head: true })
             .in('subscription_tier', ['basic', 'standard', 'pro'])
-            .eq('subscription_status', 'active')
+            .in('subscription_status', ['active', 'trialing'])  // Include trial customers
             .not('stripe_subscription_id', 'is', null);
+
+        // Filter by selected organisations if provided
+        if (selectedOrganisationIds && selectedOrganisationIds.length > 0) {
+            countQuery = countQuery.in('id', selectedOrganisationIds);
+        }
+
+        const { count: totalCustomers, error: countError } = await countQuery;
 
         if (countError) throw countError;
 
@@ -92,7 +143,10 @@ export async function createMigration(config, adminEmail) {
                 new_price_id_pro_usd: newPriceIds?.pro_usd,
                 new_price_id_pro_eur: newPriceIds?.pro_eur,
                 total_customers: totalCustomers || 0,
-                created_by: adminEmail
+                created_by: adminEmail,
+                selected_organisation_ids: selectedOrganisationIds && selectedOrganisationIds.length > 0
+                    ? selectedOrganisationIds
+                    : null
             })
             .select()
             .single();
@@ -110,7 +164,7 @@ export async function createMigration(config, adminEmail) {
 }
 
 /**
- * Get customers to migrate (active subscriptions with valid tiers)
+ * Get customers to migrate (active and trial subscriptions with valid tiers)
  * @param {string} migrationId - Migration ID
  * @returns {Promise<{success: boolean, customers?: Array, error?: string}>}
  */
@@ -128,13 +182,25 @@ export async function getCustomersToMigrate(migrationId) {
             return { success: false, error: 'Migration not found' };
         }
 
-        // Get all organisations with active subscriptions
-        const { data: orgs, error: orgsError } = await supabase
+        // Build query with discount fields
+        let orgsQuery = supabase
             .from('organisations')
-            .select('id, name, user_id, subscription_tier, stripe_customer_id, stripe_subscription_id')
+            .select(`
+                id, name, user_id, subscription_tier, subscription_status,
+                stripe_customer_id, stripe_subscription_id, preferred_currency,
+                discount_percent, discount_type,
+                charity_discount_percent, charity_verified, is_charity
+            `)
             .in('subscription_tier', ['basic', 'standard', 'pro'])
-            .eq('subscription_status', 'active')
+            .in('subscription_status', ['active', 'trialing'])  // Include trial customers
             .not('stripe_subscription_id', 'is', null);
+
+        // Filter by selected organisations if specified in migration
+        if (migration.selected_organisation_ids && migration.selected_organisation_ids.length > 0) {
+            orgsQuery = orgsQuery.in('id', migration.selected_organisation_ids);
+        }
+
+        const { data: orgs, error: orgsError } = await orgsQuery;
 
         if (orgsError) throw orgsError;
 
@@ -171,18 +237,28 @@ export async function getCustomersToMigrate(migrationId) {
                 // Get the new price ID for this customer
                 const newPriceId = getNewPriceId(migration, org.subscription_tier, currency);
 
+                // Calculate effective discount
+                const effectiveDiscount = org.charity_verified
+                    ? (org.charity_discount_percent || 50)
+                    : (org.discount_percent || 0);
+
                 customers.push({
                     organisationId: org.id,
                     name: org.name,
                     email,
                     tier: org.subscription_tier,
+                    subscriptionStatus: org.subscription_status,
                     currency,
                     stripeCustomerId: org.stripe_customer_id,
                     stripeSubscriptionId: org.stripe_subscription_id,
                     subscriptionItemId,
                     currentPriceId,
                     newPriceId,
-                    hasValidNewPrice: !!newPriceId
+                    hasValidNewPrice: !!newPriceId,
+                    // Discount fields
+                    discountPercent: effectiveDiscount,
+                    discountType: org.charity_verified ? 'charity' : (org.discount_type || null),
+                    isCharity: org.charity_verified || org.is_charity
                 });
             } catch (error) {
                 console.error(`Error processing customer ${org.name}:`, error.message);
@@ -210,7 +286,9 @@ function generatePriceChangeEmailBody(params) {
         newPrice,
         currentCredit,
         newCredit,
-        currency
+        currency,
+        discountPercent,
+        discountType
     } = params;
 
     const tierDisplay = {
@@ -219,6 +297,24 @@ function generatePriceChangeEmailBody(params) {
         pro: 'Professional'
     };
 
+    const discountTypeDisplay = {
+        charity: 'Charity',
+        negotiated: 'Negotiated',
+        church: 'Church',
+        partner: 'Partner',
+        promotional: 'Promotional',
+        nonprofit: 'Non-profit',
+        educational: 'Educational',
+        community: 'Community'
+    };
+
+    const discountNote = discountPercent > 0
+        ? `<p style="background: #d1fae5; color: #065f46; padding: 12px 16px; border-radius: 8px; margin: 20px 0;">
+            <strong>${discountTypeDisplay[discountType] || 'Special'} Discount - ${discountPercent}% Applied</strong><br>
+            The prices shown above already include your discount.
+           </p>`
+        : '';
+
     return `
         <p>Dear ${orgName},</p>
 
@@ -226,6 +322,8 @@ function generatePriceChangeEmailBody(params) {
         effective from <strong>${effectiveDate}</strong>.</p>
 
         <h3 style="color: #2563eb; margin-top: 25px;">Your Current Plan: ${tierDisplay[tierName] || tierName}</h3>
+
+        ${discountNote}
 
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #f3f4f6;">
@@ -303,15 +401,48 @@ export async function sendMigrationEmails(migrationId) {
         // Create customer records and send emails
         for (const customer of customers) {
             try {
-                // Determine current and new pricing for this customer's tier
-                const tierPricing = {
-                    basic: { old: migration.old_basic_gbp, new: migration.new_basic_gbp },
-                    standard: { old: migration.old_standard_gbp, new: migration.new_standard_gbp },
-                    pro: { old: migration.old_pro_gbp, new: migration.new_pro_gbp }
+                const customerCurrency = customer.currency || 'gbp';
+                const tier = customer.tier;
+
+                // Fetch NEW price from Stripe using stored price ID for customer's tier/currency
+                const newPriceIdField = `new_price_id_${tier}_${customerCurrency}`;
+                const newPriceId = migration[newPriceIdField];
+                let newPriceAmount = null;
+
+                if (newPriceId) {
+                    try {
+                        const stripePrice = await stripe.prices.retrieve(newPriceId);
+                        newPriceAmount = stripePrice.unit_amount;
+                    } catch (err) {
+                        console.error(`Failed to fetch new price for ${customer.name}:`, err.message);
+                    }
+                }
+
+                // Fetch CURRENT price from customer's Stripe subscription
+                let currentPriceAmount = null;
+                if (customer.stripeSubscriptionId) {
+                    try {
+                        const subscription = await stripe.subscriptions.retrieve(customer.stripeSubscriptionId);
+                        currentPriceAmount = subscription.items?.data?.[0]?.price?.unit_amount || null;
+                    } catch (err) {
+                        console.error(`Failed to fetch subscription for ${customer.name}:`, err.message);
+                    }
+                }
+
+                // Apply customer discount to both prices
+                const discountMultiplier = 1 - (customer.discountPercent || 0) / 100;
+                const pricing = {
+                    old: currentPriceAmount ? Math.round(currentPriceAmount * discountMultiplier) : null,
+                    new: newPriceAmount ? Math.round(newPriceAmount * discountMultiplier) : null
                 };
 
-                const pricing = tierPricing[customer.tier] || tierPricing.basic;
-                const currency = customer.currency || 'gbp';
+                // Credit pricing - still uses database values as credits don't vary by currency
+                const oldCreditWithDiscount = migration.old_credit_gbp
+                    ? Math.round(migration.old_credit_gbp * discountMultiplier)
+                    : null;
+                const newCreditWithDiscount = migration.new_credit_gbp
+                    ? Math.round(migration.new_credit_gbp * discountMultiplier)
+                    : null;
 
                 // Insert customer record
                 const { error: insertError } = await supabase
@@ -320,7 +451,7 @@ export async function sendMigrationEmails(migrationId) {
                         migration_id: migrationId,
                         organisation_id: customer.organisationId,
                         current_tier: customer.tier,
-                        current_currency: currency,
+                        current_currency: customerCurrency,
                         current_price_id: customer.currentPriceId,
                         stripe_subscription_id: customer.stripeSubscriptionId,
                         stripe_subscription_item_id: customer.subscriptionItemId,
@@ -341,22 +472,25 @@ export async function sendMigrationEmails(migrationId) {
                     continue;
                 }
 
-                // Generate email
+                // Generate email with discounted prices in customer's currency
+                const emailSubject = `Important: Open Word Pricing Update - Effective ${effectiveDateStr}`;
                 const emailBody = generatePriceChangeEmailBody({
                     orgName: customer.name,
                     tierName: customer.tier,
                     effectiveDate: effectiveDateStr,
-                    currentPrice: formatPrice(pricing.old, currency),
-                    newPrice: formatPrice(pricing.new, currency),
-                    currentCredit: formatPrice(migration.old_credit_gbp, currency),
-                    newCredit: formatPrice(migration.new_credit_gbp, currency),
-                    currency
+                    currentPrice: formatPrice(pricing.old, customerCurrency),
+                    newPrice: formatPrice(pricing.new, customerCurrency),
+                    currentCredit: formatPrice(oldCreditWithDiscount, customerCurrency),
+                    newCredit: formatPrice(newCreditWithDiscount, customerCurrency),
+                    currency: customerCurrency,
+                    discountPercent: customer.discountPercent || 0,
+                    discountType: customer.discountType
                 });
 
                 // Send email
                 const emailResult = await sendCustomerEmail(
                     customer.email,
-                    `Important: Open Word Pricing Update - Effective ${effectiveDateStr}`,
+                    emailSubject,
                     emailBody,
                     customer.name
                 );
@@ -372,7 +506,23 @@ export async function sendMigrationEmails(migrationId) {
                     .eq('migration_id', migrationId)
                     .eq('organisation_id', customer.organisationId);
 
+                // Log to email_log table for Communications history
                 if (emailResult.success) {
+                    await supabase.from('email_log').insert({
+                        organisation_id: customer.organisationId,
+                        recipient_email: customer.email,
+                        subject: emailSubject,
+                        email_type: 'price_migration',
+                        status: 'sent',
+                        sent_at: new Date().toISOString(),
+                        metadata: {
+                            migration_id: migrationId,
+                            migration_name: migration.name,
+                            tier: customer.tier,
+                            effective_date: effectiveDateStr,
+                            discount_percent: customer.discountPercent || 0
+                        }
+                    });
                     sent++;
                 } else {
                     failed++;
@@ -586,11 +736,14 @@ export async function getMigrationDetails(migrationId) {
 
         if (migrationError) throw migrationError;
 
+        // Fetch actual prices from Stripe using stored price IDs
+        migration.stripePrices = await fetchStripePrices(migration);
+
         const { data: customers, error: customersError } = await supabase
             .from('price_migration_customers')
             .select(`
                 *,
-                organisations (name)
+                organisations (name, subscription_status, discount_percent, discount_type, charity_verified, charity_discount_percent)
             `)
             .eq('migration_id', migrationId);
 

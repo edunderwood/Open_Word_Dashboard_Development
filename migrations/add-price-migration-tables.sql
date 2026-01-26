@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS price_migrations (
     name TEXT NOT NULL,                          -- "January 2026 Price Update"
     status TEXT DEFAULT 'pending',               -- pending, emails_sent, completed, cancelled
 
+    -- Selected organisations for this migration (NULL = all eligible orgs)
+    selected_organisation_ids UUID[],            -- Array of org IDs to include
+
     -- Old pricing (display only, in pence/cents)
     old_basic_gbp INTEGER,                       -- pence (1400 = £14)
     old_standard_gbp INTEGER,
@@ -87,3 +90,66 @@ COMMENT ON TABLE price_migration_customers IS 'Tracks individual customer status
 COMMENT ON COLUMN price_migrations.status IS 'pending = created but not started, emails_sent = warning emails sent awaiting migration, completed = all subscriptions migrated, cancelled = migration aborted';
 COMMENT ON COLUMN price_migration_customers.email_status IS 'sent = email delivered, failed = email failed, skipped = no email address or opted out';
 COMMENT ON COLUMN price_migration_customers.migration_status IS 'pending = awaiting migration, completed = subscription updated, failed = stripe error, skipped = no active subscription';
+
+-- Migration for existing databases: Add selected_organisation_ids column if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'price_migrations'
+                   AND column_name = 'selected_organisation_ids') THEN
+        ALTER TABLE price_migrations ADD COLUMN selected_organisation_ids UUID[];
+        COMMENT ON COLUMN price_migrations.selected_organisation_ids IS 'Array of organisation IDs to include in migration. NULL means all eligible organisations.';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- ROW LEVEL SECURITY (Admin Dashboard only - service_role access)
+-- ============================================================================
+
+-- Enable RLS on price_migrations
+ALTER TABLE price_migrations ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for re-running migration)
+DROP POLICY IF EXISTS "Price migrations viewable by service role" ON price_migrations;
+DROP POLICY IF EXISTS "Price migrations insertable by service role" ON price_migrations;
+DROP POLICY IF EXISTS "Price migrations updatable by service role" ON price_migrations;
+DROP POLICY IF EXISTS "Price migrations deletable by service role" ON price_migrations;
+
+-- Create RLS policies for price_migrations (service_role only)
+CREATE POLICY "Price migrations viewable by service role" ON price_migrations
+    FOR SELECT USING (auth.role() = 'service_role');
+
+CREATE POLICY "Price migrations insertable by service role" ON price_migrations
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
+
+CREATE POLICY "Price migrations updatable by service role" ON price_migrations
+    FOR UPDATE USING (auth.role() = 'service_role');
+
+CREATE POLICY "Price migrations deletable by service role" ON price_migrations
+    FOR DELETE USING (auth.role() = 'service_role');
+
+-- Enable RLS on price_migration_customers
+ALTER TABLE price_migration_customers ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for re-running migration)
+DROP POLICY IF EXISTS "Price migration customers viewable by service role" ON price_migration_customers;
+DROP POLICY IF EXISTS "Price migration customers insertable by service role" ON price_migration_customers;
+DROP POLICY IF EXISTS "Price migration customers updatable by service role" ON price_migration_customers;
+DROP POLICY IF EXISTS "Price migration customers deletable by service role" ON price_migration_customers;
+
+-- Create RLS policies for price_migration_customers (service_role only)
+CREATE POLICY "Price migration customers viewable by service role" ON price_migration_customers
+    FOR SELECT USING (auth.role() = 'service_role');
+
+CREATE POLICY "Price migration customers insertable by service role" ON price_migration_customers
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
+
+CREATE POLICY "Price migration customers updatable by service role" ON price_migration_customers
+    FOR UPDATE USING (auth.role() = 'service_role');
+
+CREATE POLICY "Price migration customers deletable by service role" ON price_migration_customers
+    FOR DELETE USING (auth.role() = 'service_role');
+
+-- Grant access to service_role
+GRANT ALL ON price_migrations TO service_role;
+GRANT ALL ON price_migration_customers TO service_role;

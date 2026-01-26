@@ -298,6 +298,55 @@
       gap: 12px;
       margin-top: 20px;
     }
+
+    /* Customer selection styles */
+    .customer-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--gray-100);
+      cursor: pointer;
+    }
+    .customer-checkbox-item:last-child {
+      border-bottom: none;
+    }
+    .customer-checkbox-item:hover {
+      background: var(--gray-50);
+    }
+    .customer-checkbox-item input[type="checkbox"] {
+      margin-right: 12px;
+      width: 18px;
+      height: 18px;
+    }
+    .customer-checkbox-item .customer-info {
+      flex: 1;
+    }
+    .customer-checkbox-item .customer-name {
+      font-weight: 500;
+      color: var(--gray-900);
+    }
+    .customer-checkbox-item .customer-details {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .customer-checkbox-item .customer-badge {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+    .customer-badge.trial {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .customer-badge.discount {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .customer-badge.charity {
+      background: #dbeafe;
+      color: #1e40af;
+    }
   </style>
 </head>
 <body>
@@ -427,6 +476,19 @@
           <label for="migrationName">Migration Name</label>
           <input type="text" id="migrationName" placeholder="e.g., January 2026 Price Update" required>
           <small>A descriptive name for this price migration</small>
+        </div>
+
+        <h4 style="margin: 24px 0 12px 0;">Select Customers</h4>
+        <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 12px;">
+          Select which customers to include in this migration.
+        </p>
+        <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+          <button type="button" class="btn btn-sm btn-secondary" onclick="selectAllCustomers()">Select All</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="deselectAllCustomers()">Deselect All</button>
+          <span id="customerSelectionCount" style="margin-left: auto; font-size: 0.85rem; color: var(--gray-600); align-self: center;">0 selected</span>
+        </div>
+        <div id="customerSelectionList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 8px; padding: 8px;">
+          <p style="color: var(--gray-500); padding: 8px;">Loading customers...</p>
         </div>
 
         <h4 style="margin: 24px 0 12px 0;">Current Pricing (GBP)</h4>
@@ -561,12 +623,85 @@
 
   <script>
     let currentMigrationId = null;
+    let availableCustomers = [];
 
     // Load migrations on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadMigrations();
       loadCurrentStripePrices();
     });
+
+    // Load available customers for selection
+    async function loadCustomersForSelection() {
+      try {
+        const response = await fetch('/api/price-migration/customers-list');
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        availableCustomers = data.customers || [];
+        renderCustomerCheckboxes();
+      } catch (error) {
+        console.error('Error loading customers:', error);
+        document.getElementById('customerSelectionList').innerHTML =
+          '<p style="color: var(--danger); padding: 8px;">Failed to load customers</p>';
+      }
+    }
+
+    // Render customer checkboxes
+    function renderCustomerCheckboxes() {
+      const listEl = document.getElementById('customerSelectionList');
+
+      if (availableCustomers.length === 0) {
+        listEl.innerHTML = '<p style="color: var(--gray-500); padding: 8px;">No eligible customers found</p>';
+        return;
+      }
+
+      listEl.innerHTML = availableCustomers.map(c => {
+        const badges = [];
+        if (c.status === 'trialing') badges.push('<span class="customer-badge trial">Trial</span>');
+        if (c.isCharity) badges.push('<span class="customer-badge charity">Charity</span>');
+        else if (c.discountPercent > 0) badges.push(`<span class="customer-badge discount">${c.discountPercent}% off</span>`);
+
+        return `
+          <label class="customer-checkbox-item">
+            <input type="checkbox" name="selectedCustomers" value="${c.id}" onchange="updateCustomerCount()">
+            <div class="customer-info">
+              <div class="customer-name">${escapeHtml(c.name)} ${badges.join('')}</div>
+              <div class="customer-details">${c.tier.charAt(0).toUpperCase() + c.tier.slice(1)} • ${c.currency.toUpperCase()} • ${c.status === 'trialing' ? 'On trial' : 'Active'}</div>
+            </div>
+          </label>
+        `;
+      }).join('');
+
+      updateCustomerCount();
+    }
+
+    // Update selected count display
+    function updateCustomerCount() {
+      const checkboxes = document.querySelectorAll('input[name="selectedCustomers"]:checked');
+      document.getElementById('customerSelectionCount').textContent = `${checkboxes.length} selected`;
+    }
+
+    // Select all customers
+    function selectAllCustomers() {
+      document.querySelectorAll('input[name="selectedCustomers"]').forEach(cb => cb.checked = true);
+      updateCustomerCount();
+    }
+
+    // Deselect all customers
+    function deselectAllCustomers() {
+      document.querySelectorAll('input[name="selectedCustomers"]').forEach(cb => cb.checked = false);
+      updateCustomerCount();
+    }
+
+    // Get selected customer IDs
+    function getSelectedCustomerIds() {
+      const checkboxes = document.querySelectorAll('input[name="selectedCustomers"]:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
 
     async function loadMigrations() {
       try {
@@ -677,6 +812,13 @@
       return `${symbol}${(pence / 100).toFixed(2)}`;
     }
 
+    function formatStripePrice(priceData) {
+      if (!priceData || !priceData.amount) return '-';
+      const symbols = { gbp: '£', usd: '$', eur: '€' };
+      const symbol = symbols[priceData.currency] || '';
+      return `${symbol}${(priceData.amount / 100).toFixed(2)}/month`;
+    }
+
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
@@ -695,6 +837,7 @@
 
     function showCreateModal() {
       document.getElementById('createModal').classList.add('active');
+      loadCustomersForSelection();  // Load customers when modal opens
     }
 
     function closeModal(modalId) {
@@ -704,8 +847,27 @@
     async function createMigration(event) {
       event.preventDefault();
 
+      // Validate at least one customer selected
+      const selectedCustomerIds = getSelectedCustomerIds();
+      if (selectedCustomerIds.length === 0) {
+        showAlert('Please select at least one customer', 'error');
+        return;
+      }
+
+      // Validate at least one new price entered
+      const newBasicGbp = parseInt(document.getElementById('newBasicGbp').value) || null;
+      const newStandardGbp = parseInt(document.getElementById('newStandardGbp').value) || null;
+      const newProGbp = parseInt(document.getElementById('newProGbp').value) || null;
+      const newCreditGbp = parseInt(document.getElementById('newCreditGbp').value) || null;
+
+      if (!newBasicGbp && !newStandardGbp && !newProGbp && !newCreditGbp) {
+        showAlert('Please enter at least one new price value', 'error');
+        return;
+      }
+
       const data = {
         name: document.getElementById('migrationName').value,
+        selectedOrganisationIds: selectedCustomerIds,  // Include selected customers
         oldPricing: {
           basic_gbp: parseInt(document.getElementById('oldBasicGbp').value) || null,
           standard_gbp: parseInt(document.getElementById('oldStandardGbp').value) || null,
@@ -713,10 +875,10 @@
           credit_gbp: parseInt(document.getElementById('oldCreditGbp').value) || null
         },
         newPricing: {
-          basic_gbp: parseInt(document.getElementById('newBasicGbp').value) || null,
-          standard_gbp: parseInt(document.getElementById('newStandardGbp').value) || null,
-          pro_gbp: parseInt(document.getElementById('newProGbp').value) || null,
-          credit_gbp: parseInt(document.getElementById('newCreditGbp').value) || null
+          basic_gbp: newBasicGbp,
+          standard_gbp: newStandardGbp,
+          pro_gbp: newProGbp,
+          credit_gbp: newCreditGbp
         },
         newPriceIds: {
           basic_gbp: document.getElementById('priceIdBasicGbp').value || null,
@@ -796,35 +958,34 @@
             </div>
           </div>
 
-          <h4 style="margin: 24px 0 12px 0;">Pricing Changes</h4>
+          <h4 style="margin: 24px 0 12px 0;">New Pricing (from Stripe)</h4>
           <table class="customer-table">
             <thead>
               <tr>
                 <th>Tier</th>
-                <th>Current Price</th>
-                <th>New Price</th>
+                <th>GBP</th>
+                <th>USD</th>
+                <th>EUR</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Basic</td>
-                <td>${m.old_basic_gbp ? formatPrice(m.old_basic_gbp) : '-'}/month</td>
-                <td>${m.new_basic_gbp ? formatPrice(m.new_basic_gbp) : '-'}/month</td>
+                <td>${formatStripePrice(m.stripePrices?.basic?.gbp)}</td>
+                <td>${formatStripePrice(m.stripePrices?.basic?.usd)}</td>
+                <td>${formatStripePrice(m.stripePrices?.basic?.eur)}</td>
               </tr>
               <tr>
                 <td>Standard</td>
-                <td>${m.old_standard_gbp ? formatPrice(m.old_standard_gbp) : '-'}/month</td>
-                <td>${m.new_standard_gbp ? formatPrice(m.new_standard_gbp) : '-'}/month</td>
+                <td>${formatStripePrice(m.stripePrices?.standard?.gbp)}</td>
+                <td>${formatStripePrice(m.stripePrices?.standard?.usd)}</td>
+                <td>${formatStripePrice(m.stripePrices?.standard?.eur)}</td>
               </tr>
               <tr>
                 <td>Pro</td>
-                <td>${m.old_pro_gbp ? formatPrice(m.old_pro_gbp) : '-'}/month</td>
-                <td>${m.new_pro_gbp ? formatPrice(m.new_pro_gbp) : '-'}/month</td>
-              </tr>
-              <tr>
-                <td>Credit</td>
-                <td>${m.old_credit_gbp ? formatPrice(m.old_credit_gbp) : '-'}/credit</td>
-                <td>${m.new_credit_gbp ? formatPrice(m.new_credit_gbp) : '-'}/credit</td>
+                <td>${formatStripePrice(m.stripePrices?.pro?.gbp)}</td>
+                <td>${formatStripePrice(m.stripePrices?.pro?.usd)}</td>
+                <td>${formatStripePrice(m.stripePrices?.pro?.eur)}</td>
               </tr>
             </tbody>
           </table>
@@ -838,20 +999,33 @@
                     <th>Customer</th>
                     <th>Tier</th>
                     <th>Currency</th>
-                    <th>Email Status</th>
-                    <th>Migration Status</th>
+                    <th>Subscription</th>
+                    <th>Discount</th>
+                    <th>Email</th>
+                    <th>Migration</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${customers.map(c => `
+                  ${customers.map(c => {
+                    const org = c.organisations || {};
+                    const subStatus = org.subscription_status || 'active';
+                    const effectiveDiscount = org.charity_verified
+                      ? (org.charity_discount_percent || 50)
+                      : (org.discount_percent || 0);
+                    const discountLabel = effectiveDiscount > 0
+                      ? (org.charity_verified ? `${effectiveDiscount}% (Charity)` : `${effectiveDiscount}%`)
+                      : '-';
+                    return `
                     <tr>
-                      <td>${escapeHtml(c.organisations?.name || c.organisation_id)}</td>
+                      <td>${escapeHtml(org.name || c.organisation_id)}</td>
                       <td>${c.current_tier || '-'}</td>
                       <td>${(c.current_currency || 'gbp').toUpperCase()}</td>
+                      <td><span class="status-badge status-${subStatus === 'trialing' ? 'pending' : 'completed'}">${subStatus === 'trialing' ? 'Trial' : 'Active'}</span></td>
+                      <td>${discountLabel}</td>
                       <td><span class="status-badge status-${c.email_status === 'sent' ? 'completed' : c.email_status === 'failed' ? 'cancelled' : 'pending'}">${c.email_status || 'pending'}</span></td>
                       <td><span class="status-badge status-${c.migration_status}">${c.migration_status || 'pending'}</span></td>
                     </tr>
-                  `).join('')}
+                  `;}).join('')}
                 </tbody>
               </table>
             </div>
