@@ -256,10 +256,13 @@
       left: 0;
       right: 0;
       bottom: 0;
+      width: 100% !important;
+      max-width: none !important;
       background: rgba(0,0,0,0.5);
       z-index: 1000;
       align-items: center;
       justify-content: center;
+      transform: none !important;
     }
     .modal.active {
       display: flex;
@@ -268,7 +271,7 @@
       background: white;
       border-radius: 12px;
       width: 95vw;
-      max-width: none;
+      max-width: 1600px;
       max-height: 90vh;
       overflow-y: auto;
       padding: 24px;
