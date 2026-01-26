@@ -318,14 +318,17 @@ async function checkDatabaseHealth() {
 
 /**
  * Check for pending charity review requests
+ * Uses database flag (charity_review_notified_at) for reliable tracking that survives restarts
  */
 async function checkPendingCharityReviews() {
   try {
+    // Only get charity reviews that haven't been notified yet
     const { data: pendingReviews, error } = await supabase
       .from('organisations')
       .select('id, name, charity_number, charity_region, charity_review_reason, charity_review_requested_at, contact_name')
       .eq('charity_review_requested', true)
       .eq('charity_verified', false)
+      .is('charity_review_notified_at', null)
       .order('charity_review_requested_at', { ascending: true });
 
     if (error) throw error;
@@ -333,33 +336,41 @@ async function checkPendingCharityReviews() {
     const count = pendingReviews?.length || 0;
 
     if (count > 0) {
-      // Check if we've already alerted about these specific reviews
-      const reviewIds = pendingReviews.map(r => r.id).sort().join(',');
-      const lastAlertedIds = issueTracker.lastAlertSent.charityReviewIds || '';
+      console.log(`⛪ Found ${count} new charity review request(s) to notify`);
 
-      // Alert if there are new reviews we haven't alerted about
-      if (reviewIds !== lastAlertedIds) {
-        await sendWarningAlert(
-          `${count} Charity Review Request${count > 1 ? 's' : ''} Pending`,
-          `<p>The following organisations have requested manual charity verification:</p>
-           <ul>
-             ${pendingReviews.map(r => `
-               <li>
-                 <strong>${r.name}</strong><br>
-                 Charity Number: ${r.charity_number || 'Not provided'}<br>
-                 Region: ${r.charity_region || 'Unknown'}<br>
-                 Contact: ${r.contact_name || 'Unknown'}<br>
-                 Requested: ${new Date(r.charity_review_requested_at).toLocaleString()}<br>
-                 ${r.charity_review_reason ? `Reason: ${r.charity_review_reason}` : ''}
-               </li>
-             `).join('')}
-           </ul>
-           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/charity-registers">
-             Review in Dashboard
-           </a></p>`
-        );
-        issueTracker.lastAlertSent.charityReviewIds = reviewIds;
+      await sendWarningAlert(
+        `${count} Charity Review Request${count > 1 ? 's' : ''} Pending`,
+        `<p>The following organisations have requested manual charity verification:</p>
+         <ul>
+           ${pendingReviews.map(r => `
+             <li>
+               <strong>${r.name}</strong><br>
+               Charity Number: ${r.charity_number || 'Not provided'}<br>
+               Region: ${r.charity_region || 'Unknown'}<br>
+               Contact: ${r.contact_name || 'Unknown'}<br>
+               Requested: ${new Date(r.charity_review_requested_at).toLocaleString()}<br>
+               ${r.charity_review_reason ? `Reason: ${r.charity_review_reason}` : ''}
+             </li>
+           `).join('')}
+         </ul>
+         <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/charity-registers">
+           Review in Dashboard
+         </a></p>`
+      );
+
+      // Mark all as notified in database - this survives server restarts
+      for (const review of pendingReviews) {
+        const { error: updateError } = await supabase
+          .from('organisations')
+          .update({ charity_review_notified_at: new Date().toISOString() })
+          .eq('id', review.id);
+
+        if (updateError) {
+          console.error(`Failed to mark charity review ${review.id} as notified:`, updateError);
+        }
       }
+
+      console.log(`📧 Charity review notification sent for ${count} organisation(s)`);
     }
 
     return { count, reviews: pendingReviews || [] };
@@ -541,14 +552,17 @@ async function checkStripePaymentErrors() {
 
 /**
  * Check for pending discount review requests (non-charities)
+ * Uses database flag (discount_review_notified_at) for reliable tracking that survives restarts
  */
 async function checkPendingDiscountReviews() {
   try {
+    // Only get discount reviews that haven't been notified yet
     const { data: pendingReviews, error } = await supabase
       .from('organisations')
       .select('id, name, discount_review_reason, discount_review_requested_at, contact_name, subscription_tier')
       .eq('discount_review_requested', true)
       .eq('discount_percent', 0)
+      .is('discount_review_notified_at', null)
       .order('discount_review_requested_at', { ascending: true });
 
     if (error) throw error;
@@ -556,32 +570,40 @@ async function checkPendingDiscountReviews() {
     const count = pendingReviews?.length || 0;
 
     if (count > 0) {
-      // Check if we've already alerted about these specific reviews
-      const reviewIds = pendingReviews.map(r => r.id).sort().join(',');
-      const lastAlertedIds = issueTracker.lastAlertSent.discountReviewIds || '';
+      console.log(`📋 Found ${count} new discount review request(s) to notify`);
 
-      // Alert if there are new reviews we haven't alerted about
-      if (reviewIds !== lastAlertedIds) {
-        await sendWarningAlert(
-          `${count} Discount Review Request${count > 1 ? 's' : ''} Pending`,
-          `<p>The following organisations have requested a discount:</p>
-           <ul>
-             ${pendingReviews.map(r => `
-               <li>
-                 <strong>${r.name}</strong><br>
-                 Plan: ${r.subscription_tier || 'Unknown'}<br>
-                 Contact: ${r.contact_name || 'Unknown'}<br>
-                 Requested: ${new Date(r.discount_review_requested_at).toLocaleString()}<br>
-                 ${r.discount_review_reason ? `Reason: ${r.discount_review_reason}` : 'No reason provided'}
-               </li>
-             `).join('')}
-           </ul>
-           <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/dashboard">
-             Review in Dashboard
-           </a></p>`
-        );
-        issueTracker.lastAlertSent.discountReviewIds = reviewIds;
+      await sendWarningAlert(
+        `${count} Discount Review Request${count > 1 ? 's' : ''} Pending`,
+        `<p>The following organisations have requested a discount:</p>
+         <ul>
+           ${pendingReviews.map(r => `
+             <li>
+               <strong>${r.name}</strong><br>
+               Plan: ${r.subscription_tier || 'Unknown'}<br>
+               Contact: ${r.contact_name || 'Unknown'}<br>
+               Requested: ${new Date(r.discount_review_requested_at).toLocaleString()}<br>
+               ${r.discount_review_reason ? `Reason: ${r.discount_review_reason}` : 'No reason provided'}
+             </li>
+           `).join('')}
+         </ul>
+         <p><a href="${process.env.DASHBOARD_URL || 'https://openword-dashboard.onrender.com'}/dashboard">
+           Review in Dashboard
+         </a></p>`
+      );
+
+      // Mark all as notified in database - this survives server restarts
+      for (const review of pendingReviews) {
+        const { error: updateError } = await supabase
+          .from('organisations')
+          .update({ discount_review_notified_at: new Date().toISOString() })
+          .eq('id', review.id);
+
+        if (updateError) {
+          console.error(`Failed to mark discount review ${review.id} as notified:`, updateError);
+        }
       }
+
+      console.log(`📧 Discount review notification sent for ${count} organisation(s)`);
     }
 
     return { count, reviews: pendingReviews || [] };
