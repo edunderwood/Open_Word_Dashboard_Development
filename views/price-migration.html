@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Price Migration - Open Word Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .migration-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .migration-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .migration-card h3 {
+      margin: 0 0 16px 0;
+      font-size: 1.1rem;
+      color: var(--gray-900);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-emails_sent { background: #dbeafe; color: #1e40af; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+
+    .migration-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .migration-item {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: border-color 0.2s;
+    }
+    .migration-item:hover {
+      border-color: var(--primary);
+    }
+    .migration-info h4 {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--gray-900);
+    }
+    .migration-info p {
+      margin: 4px 0 0 0;
+      font-size: 0.85rem;
+      color: var(--gray-600);
+    }
+    .migration-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .form-group small {
+      display: block;
+      margin-top: 4px;
+      color: var(--gray-500);
+      font-size: 0.8rem;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .pricing-column {
+      padding: 16px;
+      background: var(--gray-50);
+      border-radius: 8px;
+    }
+    .pricing-column h4 {
+      margin: 0 0 12px 0;
+      font-size: 0.95rem;
+      color: var(--gray-700);
+      border-bottom: 1px solid var(--gray-200);
+      padding-bottom: 8px;
+    }
+    .pricing-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .pricing-row:last-child {
+      border-bottom: none;
+    }
+    .pricing-row label {
+      font-size: 0.85rem;
+      color: var(--gray-600);
+    }
+    .pricing-row .value {
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .pricing-row input {
+      width: 100px;
+      padding: 6px 8px;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      text-align: right;
+    }
+
+    .price-id-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .price-id-group {
+      padding: 12px;
+      background: var(--gray-50);
+      border-radius: 8px;
+    }
+    .price-id-group h5 {
+      margin: 0 0 8px 0;
+      font-size: 0.85rem;
+      color: var(--gray-700);
+    }
+    .price-id-group input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+    .price-id-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      margin-bottom: 2px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: var(--gray-200);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.3s;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 24px;
+      margin: 16px 0;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-item .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .stat-item .label {
+      font-size: 0.8rem;
+      color: var(--gray-600);
+    }
+
+    .customer-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .customer-table th, .customer-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .customer-table th {
+      background: var(--gray-50);
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+    .customer-table tr:hover {
+      background: var(--gray-50);
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .alert-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+    .alert-info {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+    .alert-success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h3 {
+      margin: 0;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--gray-500);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Open Word</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="/dashboard">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/customers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Customers
+            </a>
+          </li>
+          <li>
+            <a href="/pricing">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pricing
+            </a>
+          </li>
+          <li>
+            <a href="/price-migration" class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              Price Migration
+            </a>
+          </li>
+          <li>
+            <a href="/costs">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Costs
+            </a>
+          </li>
+          <li>
+            <a href="/charity-registers">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Charity Registers
+            </a>
+          </li>
+          <li>
+            <a href="/communications">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Communications
+            </a>
+          </li>
+          <li>
+            <a href="/monitoring">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Monitoring
+            </a>
+          </li>
+          <li>
+            <a href="/analytics">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              Analytics
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header migration-header">
+        <div>
+          <h2>Price Migration</h2>
+          <p>Bulk update customer subscriptions to new pricing</p>
+        </div>
+        <button class="btn btn-primary" onclick="showCreateModal()">
+          + New Price Migration
+        </button>
+      </div>
+
+      <!-- Alert container -->
+      <div id="alertContainer"></div>
+
+      <!-- Active Migrations -->
+      <div class="migration-card">
+        <h3>Migrations</h3>
+        <div id="migrationList" class="migration-list">
+          <p style="color: var(--gray-500);">Loading migrations...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Migration Modal -->
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create Price Migration</h3>
+        <button class="modal-close" onclick="closeModal('createModal')">&times;</button>
+      </div>
+
+      <form id="createMigrationForm" onsubmit="createMigration(event)">
+        <div class="form-group">
+          <label for="migrationName">Migration Name</label>
+          <input type="text" id="migrationName" placeholder="e.g., January 2026 Price Update" required>
+          <small>A descriptive name for this price migration</small>
+        </div>
+
+        <h4 style="margin: 24px 0 12px 0;">Current Pricing (GBP)</h4>
+        <div class="pricing-grid">
+          <div class="pricing-column">
+            <h4>Basic</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="oldBasicGbp" placeholder="1400" step="1">
+            </div>
+          </div>
+          <div class="pricing-column">
+            <h4>Standard</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="oldStandardGbp" placeholder="2800" step="1">
+            </div>
+          </div>
+          <div class="pricing-column">
+            <h4>Pro</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="oldProGbp" placeholder="4400" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="oldCreditGbp">Current Credit Price (pence)</label>
+          <input type="number" id="oldCreditGbp" placeholder="122" step="1">
+        </div>
+
+        <h4 style="margin: 24px 0 12px 0;">New Pricing (GBP)</h4>
+        <div class="pricing-grid">
+          <div class="pricing-column">
+            <h4>Basic</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="newBasicGbp" placeholder="1400" step="1">
+            </div>
+          </div>
+          <div class="pricing-column">
+            <h4>Standard</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="newStandardGbp" placeholder="2800" step="1">
+            </div>
+          </div>
+          <div class="pricing-column">
+            <h4>Pro</h4>
+            <div class="pricing-row">
+              <label>Monthly</label>
+              <input type="number" id="newProGbp" placeholder="4400" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="newCreditGbp">New Credit Price (pence)</label>
+          <input type="number" id="newCreditGbp" placeholder="122" step="1">
+        </div>
+
+        <h4 style="margin: 24px 0 12px 0;">New Stripe Price IDs</h4>
+        <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 16px;">
+          Enter the Stripe Price IDs for the new pricing. These are used to update customer subscriptions.
+        </p>
+
+        <div class="price-id-grid">
+          <div class="price-id-group">
+            <h5>Basic</h5>
+            <label>GBP</label>
+            <input type="text" id="priceIdBasicGbp" placeholder="price_xxx">
+            <label>USD</label>
+            <input type="text" id="priceIdBasicUsd" placeholder="price_xxx">
+            <label>EUR</label>
+            <input type="text" id="priceIdBasicEur" placeholder="price_xxx">
+          </div>
+          <div class="price-id-group">
+            <h5>Standard</h5>
+            <label>GBP</label>
+            <input type="text" id="priceIdStandardGbp" placeholder="price_xxx">
+            <label>USD</label>
+            <input type="text" id="priceIdStandardUsd" placeholder="price_xxx">
+            <label>EUR</label>
+            <input type="text" id="priceIdStandardEur" placeholder="price_xxx">
+          </div>
+          <div class="price-id-group">
+            <h5>Pro</h5>
+            <label>GBP</label>
+            <input type="text" id="priceIdProGbp" placeholder="price_xxx">
+            <label>USD</label>
+            <input type="text" id="priceIdProUsd" placeholder="price_xxx">
+            <label>EUR</label>
+            <input type="text" id="priceIdProEur" placeholder="price_xxx">
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('createModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Migration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Migration Details Modal -->
+  <div id="detailsModal" class="modal">
+    <div class="modal-content" style="max-width: 1000px;">
+      <div class="modal-header">
+        <h3 id="detailsTitle">Migration Details</h3>
+        <button class="modal-close" onclick="closeModal('detailsModal')">&times;</button>
+      </div>
+
+      <div id="detailsContent">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div id="confirmModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
+      </div>
+      <p id="confirmMessage"></p>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+        <button id="confirmBtn" class="btn btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentMigrationId = null;
+
+    // Load migrations on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadMigrations();
+      loadCurrentStripePrices();
+    });
+
+    async function loadMigrations() {
+      try {
+        const response = await fetch('/api/price-migration');
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        const listEl = document.getElementById('migrationList');
+
+        if (!data.migrations || data.migrations.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--gray-500);">No migrations found. Click "New Price Migration" to create one.</p>';
+          return;
+        }
+
+        listEl.innerHTML = data.migrations.map(m => `
+          <div class="migration-item">
+            <div class="migration-info">
+              <h4>${escapeHtml(m.name)}</h4>
+              <p>
+                <span class="status-badge status-${m.status}">${formatStatus(m.status)}</span>
+                &nbsp;&middot;&nbsp;
+                Created ${formatDate(m.created_at)}
+                ${m.migration_scheduled_for ? `&nbsp;&middot;&nbsp; Scheduled: ${formatDate(m.migration_scheduled_for)}` : ''}
+              </p>
+              <p style="margin-top: 4px;">
+                ${m.total_customers || 0} customers
+                ${m.emails_sent_count ? ` &middot; ${m.emails_sent_count} emails sent` : ''}
+                ${m.migrations_completed ? ` &middot; ${m.migrations_completed} migrated` : ''}
+                ${m.migrations_failed ? ` &middot; ${m.migrations_failed} failed` : ''}
+              </p>
+            </div>
+            <div class="migration-actions">
+              <button class="btn btn-secondary btn-sm" onclick="showDetails('${m.id}')">Details</button>
+              ${getActionButtons(m)}
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading migrations:', error);
+        showAlert('Failed to load migrations: ' + error.message, 'error');
+      }
+    }
+
+    async function loadCurrentStripePrices() {
+      try {
+        const response = await fetch('/api/price-migration/stripe-prices');
+        const data = await response.json();
+
+        if (data.success && data.prices) {
+          // Auto-populate current prices
+          if (data.prices.basic?.gbp) {
+            document.getElementById('oldBasicGbp').value = data.prices.basic.gbp.amount;
+          }
+          if (data.prices.standard?.gbp) {
+            document.getElementById('oldStandardGbp').value = data.prices.standard.gbp.amount;
+          }
+          if (data.prices.pro?.gbp) {
+            document.getElementById('oldProGbp').value = data.prices.pro.gbp.amount;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading Stripe prices:', error);
+      }
+    }
+
+    function getActionButtons(migration) {
+      const buttons = [];
+
+      if (migration.status === 'pending') {
+        buttons.push(`<button class="btn btn-primary btn-sm" onclick="confirmSendEmails('${migration.id}')">Send Emails</button>`);
+        buttons.push(`<button class="btn btn-danger btn-sm" onclick="confirmCancel('${migration.id}')">Cancel</button>`);
+      } else if (migration.status === 'emails_sent') {
+        buttons.push(`<button class="btn btn-primary btn-sm" onclick="confirmExecute('${migration.id}')">Execute Now</button>`);
+        buttons.push(`<button class="btn btn-danger btn-sm" onclick="confirmCancel('${migration.id}')">Cancel</button>`);
+      }
+
+      return buttons.join('');
+    }
+
+    function formatStatus(status) {
+      const labels = {
+        pending: 'Pending',
+        emails_sent: 'Emails Sent',
+        completed: 'Completed',
+        cancelled: 'Cancelled'
+      };
+      return labels[status] || status;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function formatPrice(pence, currency = 'gbp') {
+      const symbols = { gbp: '£', usd: '$', eur: '€' };
+      const symbol = symbols[currency] || '£';
+      return `${symbol}${(pence / 100).toFixed(2)}`;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showAlert(message, type = 'info') {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    function showCreateModal() {
+      document.getElementById('createModal').classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    async function createMigration(event) {
+      event.preventDefault();
+
+      const data = {
+        name: document.getElementById('migrationName').value,
+        oldPricing: {
+          basic_gbp: parseInt(document.getElementById('oldBasicGbp').value) || null,
+          standard_gbp: parseInt(document.getElementById('oldStandardGbp').value) || null,
+          pro_gbp: parseInt(document.getElementById('oldProGbp').value) || null,
+          credit_gbp: parseInt(document.getElementById('oldCreditGbp').value) || null
+        },
+        newPricing: {
+          basic_gbp: parseInt(document.getElementById('newBasicGbp').value) || null,
+          standard_gbp: parseInt(document.getElementById('newStandardGbp').value) || null,
+          pro_gbp: parseInt(document.getElementById('newProGbp').value) || null,
+          credit_gbp: parseInt(document.getElementById('newCreditGbp').value) || null
+        },
+        newPriceIds: {
+          basic_gbp: document.getElementById('priceIdBasicGbp').value || null,
+          basic_usd: document.getElementById('priceIdBasicUsd').value || null,
+          basic_eur: document.getElementById('priceIdBasicEur').value || null,
+          standard_gbp: document.getElementById('priceIdStandardGbp').value || null,
+          standard_usd: document.getElementById('priceIdStandardUsd').value || null,
+          standard_eur: document.getElementById('priceIdStandardEur').value || null,
+          pro_gbp: document.getElementById('priceIdProGbp').value || null,
+          pro_usd: document.getElementById('priceIdProUsd').value || null,
+          pro_eur: document.getElementById('priceIdProEur').value || null
+        }
+      };
+
+      try {
+        const response = await fetch('/api/price-migration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showAlert('Migration created successfully', 'success');
+        closeModal('createModal');
+        document.getElementById('createMigrationForm').reset();
+        loadMigrations();
+      } catch (error) {
+        showAlert('Failed to create migration: ' + error.message, 'error');
+      }
+    }
+
+    async function showDetails(migrationId) {
+      try {
+        const response = await fetch(`/api/price-migration/${migrationId}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        const m = data.migration;
+        const customers = data.customers || [];
+
+        document.getElementById('detailsTitle').textContent = m.name;
+
+        const emailSentCount = customers.filter(c => c.email_status === 'sent').length;
+        const migratedCount = customers.filter(c => c.migration_status === 'completed').length;
+        const failedCount = customers.filter(c => c.migration_status === 'failed').length;
+
+        document.getElementById('detailsContent').innerHTML = `
+          <div class="alert alert-info">
+            <strong>Status:</strong> ${formatStatus(m.status)}
+            ${m.migration_scheduled_for ? ` &middot; Scheduled for: ${formatDate(m.migration_scheduled_for)}` : ''}
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="value">${customers.length}</div>
+              <div class="label">Total Customers</div>
+            </div>
+            <div class="stat-item">
+              <div class="value">${emailSentCount}</div>
+              <div class="label">Emails Sent</div>
+            </div>
+            <div class="stat-item">
+              <div class="value">${migratedCount}</div>
+              <div class="label">Migrated</div>
+            </div>
+            <div class="stat-item">
+              <div class="value" style="color: ${failedCount > 0 ? '#dc2626' : 'inherit'}">${failedCount}</div>
+              <div class="label">Failed</div>
+            </div>
+          </div>
+
+          <h4 style="margin: 24px 0 12px 0;">Pricing Changes</h4>
+          <table class="customer-table">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Current Price</th>
+                <th>New Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Basic</td>
+                <td>${m.old_basic_gbp ? formatPrice(m.old_basic_gbp) : '-'}/month</td>
+                <td>${m.new_basic_gbp ? formatPrice(m.new_basic_gbp) : '-'}/month</td>
+              </tr>
+              <tr>
+                <td>Standard</td>
+                <td>${m.old_standard_gbp ? formatPrice(m.old_standard_gbp) : '-'}/month</td>
+                <td>${m.new_standard_gbp ? formatPrice(m.new_standard_gbp) : '-'}/month</td>
+              </tr>
+              <tr>
+                <td>Pro</td>
+                <td>${m.old_pro_gbp ? formatPrice(m.old_pro_gbp) : '-'}/month</td>
+                <td>${m.new_pro_gbp ? formatPrice(m.new_pro_gbp) : '-'}/month</td>
+              </tr>
+              <tr>
+                <td>Credit</td>
+                <td>${m.old_credit_gbp ? formatPrice(m.old_credit_gbp) : '-'}/credit</td>
+                <td>${m.new_credit_gbp ? formatPrice(m.new_credit_gbp) : '-'}/credit</td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${customers.length > 0 ? `
+            <h4 style="margin: 24px 0 12px 0;">Customer Status</h4>
+            <div style="max-height: 300px; overflow-y: auto;">
+              <table class="customer-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Tier</th>
+                    <th>Currency</th>
+                    <th>Email Status</th>
+                    <th>Migration Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${customers.map(c => `
+                    <tr>
+                      <td>${escapeHtml(c.organisations?.name || c.organisation_id)}</td>
+                      <td>${c.current_tier || '-'}</td>
+                      <td>${(c.current_currency || 'gbp').toUpperCase()}</td>
+                      <td><span class="status-badge status-${c.email_status === 'sent' ? 'completed' : c.email_status === 'failed' ? 'cancelled' : 'pending'}">${c.email_status || 'pending'}</span></td>
+                      <td><span class="status-badge status-${c.migration_status}">${c.migration_status || 'pending'}</span></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="closeModal('detailsModal')">Close</button>
+          </div>
+        `;
+
+        document.getElementById('detailsModal').classList.add('active');
+      } catch (error) {
+        showAlert('Failed to load migration details: ' + error.message, 'error');
+      }
+    }
+
+    function confirmSendEmails(migrationId) {
+      currentMigrationId = migrationId;
+      document.getElementById('confirmTitle').textContent = 'Send Warning Emails';
+      document.getElementById('confirmMessage').innerHTML = `
+        <p>This will send price change notification emails to all affected customers.</p>
+        <p><strong>The migration will be scheduled to execute automatically in 7 days.</strong></p>
+        <p>Are you sure you want to proceed?</p>
+      `;
+      document.getElementById('confirmBtn').textContent = 'Send Emails';
+      document.getElementById('confirmBtn').className = 'btn btn-primary';
+      document.getElementById('confirmBtn').onclick = sendEmails;
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    function confirmExecute(migrationId) {
+      currentMigrationId = migrationId;
+      document.getElementById('confirmTitle').textContent = 'Execute Migration Now';
+      document.getElementById('confirmMessage').innerHTML = `
+        <p>This will immediately update all customer subscriptions to the new pricing.</p>
+        <p><strong>This action cannot be undone.</strong></p>
+        <p>Are you sure you want to proceed?</p>
+      `;
+      document.getElementById('confirmBtn').textContent = 'Execute Now';
+      document.getElementById('confirmBtn').className = 'btn btn-danger';
+      document.getElementById('confirmBtn').onclick = executeMigration;
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    function confirmCancel(migrationId) {
+      currentMigrationId = migrationId;
+      document.getElementById('confirmTitle').textContent = 'Cancel Migration';
+      document.getElementById('confirmMessage').innerHTML = `
+        <p>This will cancel the migration. No further emails will be sent and no subscriptions will be updated.</p>
+        <p>Are you sure you want to cancel?</p>
+      `;
+      document.getElementById('confirmBtn').textContent = 'Cancel Migration';
+      document.getElementById('confirmBtn').className = 'btn btn-danger';
+      document.getElementById('confirmBtn').onclick = cancelMigration;
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    async function sendEmails() {
+      closeModal('confirmModal');
+
+      try {
+        const response = await fetch(`/api/price-migration/${currentMigrationId}/send-emails`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showAlert(`Emails sent: ${result.sent} successful, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
+        loadMigrations();
+      } catch (error) {
+        showAlert('Failed to send emails: ' + error.message, 'error');
+      }
+    }
+
+    async function executeMigration() {
+      closeModal('confirmModal');
+
+      try {
+        const response = await fetch(`/api/price-migration/${currentMigrationId}/execute`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showAlert(`Migration completed: ${result.completed} successful, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
+        loadMigrations();
+      } catch (error) {
+        showAlert('Failed to execute migration: ' + error.message, 'error');
+      }
+    }
+
+    async function cancelMigration() {
+      closeModal('confirmModal');
+
+      try {
+        const response = await fetch(`/api/price-migration/${currentMigrationId}/cancel`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showAlert('Migration cancelled', 'success');
+        loadMigrations();
+      } catch (error) {
+        showAlert('Failed to cancel migration: ' + error.message, 'error');
+      }
+    }
+
+    function logout() {
+      window.location.href = '/logout';
+    }
+  </script>
+</body>
+</html>

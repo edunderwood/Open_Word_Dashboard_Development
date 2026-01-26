@@ -23,10 +23,12 @@ import costsRoutes from './routes/costs.js';
 import charityRegistersRoutes from './routes/charity-registers.js';
 import logsRoutes from './routes/logs.js';
 import communicationsRoutes from './routes/communications.js';
+import priceMigrationRoutes from './routes/price-migration.js';
 
 // Import services
 import { startMonitoring } from './services/monitor.js';
 import { startConsolidationCron } from './services/usage-consolidation.js';
+import { startPriceMigrationScheduler } from './services/price-migration-scheduler.js';
 
 dotenv.config();
 
@@ -89,6 +91,7 @@ app.use('/analytics', analyticsRoutes);
 app.use('/costs', costsRoutes);
 app.use('/api/charity-registers', requireAuth, charityRegistersRoutes);
 app.use('/api/communications', requireAuth, communicationsRoutes);
+app.use('/api/price-migration', requireAuth, priceMigrationRoutes);
 
 // Page routes
 app.get('/login', (req, res) => {
@@ -117,6 +120,10 @@ app.get('/customers/:id', requireAuth, (req, res) => {
 
 app.get('/pricing', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../views/pricing.html'));
+});
+
+app.get('/price-migration', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, '../views/price-migration.html'));
 });
 
 app.get('/monitoring', requireAuth, (req, res) => {
@@ -163,6 +170,7 @@ app.listen(PORT, () => {
 ║   - Dashboard:   http://localhost:${PORT}/                   ║
 ║   - Customers:   http://localhost:${PORT}/customers          ║
 ║   - Pricing:     http://localhost:${PORT}/pricing            ║
+║   - Migration:   http://localhost:${PORT}/price-migration    ║
 ║   - Costs:       http://localhost:${PORT}/costs              ║
 ║   - Charities:   http://localhost:${PORT}/charity-registers  ║
 ║   - Monitoring:  http://localhost:${PORT}/monitoring         ║
@@ -174,6 +182,7 @@ app.listen(PORT, () => {
   // Start background services
   startMonitoring();
   startConsolidationCron();
+  startPriceMigrationScheduler();
 });
 
 export default app;
