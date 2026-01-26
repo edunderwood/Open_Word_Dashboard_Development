@@ -273,7 +273,7 @@ export async function getCustomersToMigrate(migrationId) {
 }
 
 /**
- * Generate email body HTML for price change notification
+ * Generate email body HTML for price change notification (simplified - new prices only)
  * @param {object} params - Email parameters
  * @returns {string} HTML email body
  */
@@ -282,11 +282,7 @@ function generatePriceChangeEmailBody(params) {
         orgName,
         tierName,
         effectiveDate,
-        currentPrice,
         newPrice,
-        currentCredit,
-        newCredit,
-        currency,
         discountPercent,
         discountType
     } = params;
@@ -311,7 +307,7 @@ function generatePriceChangeEmailBody(params) {
     const discountNote = discountPercent > 0
         ? `<p style="background: #d1fae5; color: #065f46; padding: 12px 16px; border-radius: 8px; margin: 20px 0;">
             <strong>${discountTypeDisplay[discountType] || 'Special'} Discount - ${discountPercent}% Applied</strong><br>
-            The prices shown above already include your discount.
+            The price shown includes your discount.
            </p>`
         : '';
 
@@ -321,48 +317,75 @@ function generatePriceChangeEmailBody(params) {
         <p>We're writing to let you know about upcoming changes to Open Word pricing,
         effective from <strong>${effectiveDate}</strong>.</p>
 
-        <h3 style="color: #2563eb; margin-top: 25px;">Your Current Plan: ${tierDisplay[tierName] || tierName}</h3>
+        <h3 style="color: #2563eb; margin-top: 25px;">Your Plan: ${tierDisplay[tierName] || tierName}</h3>
 
         ${discountNote}
 
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #f3f4f6;">
-                <th style="padding: 12px; text-align: left; border: 1px solid #e5e7eb;"></th>
-                <th style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">Current</th>
-                <th style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">New (from ${effectiveDate})</th>
-            </tr>
-            <tr>
-                <td style="padding: 12px; border: 1px solid #e5e7eb;"><strong>Monthly Subscription</strong></td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${currentPrice}/month</td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${newPrice}/month</td>
-            </tr>
-            <tr style="background: #f9fafb;">
-                <td style="padding: 12px; border: 1px solid #e5e7eb;"><strong>Credit Price</strong></td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${currentCredit}/credit</td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${newCredit}/credit</td>
-            </tr>
-            <tr>
-                <td style="padding: 12px; border: 1px solid #e5e7eb;"><strong>~30 mins streaming</strong></td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${currentCredit} (1 credit)</td>
-                <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">${newCredit} (1 credit)</td>
-            </tr>
-        </table>
+        <p style="font-size: 1.2rem; margin: 20px 0;"><strong>New monthly price: ${newPrice}</strong></p>
 
-        <p style="margin-top: 20px;">The new pricing will apply to your next billing cycle after <strong>${effectiveDate}</strong>.</p>
+        <p>The new pricing will apply to your next billing cycle after <strong>${effectiveDate}</strong>.</p>
 
-        <p style="margin-top: 20px;">If you have any questions about these changes, please don't hesitate to contact us.</p>
+        <p style="margin-top: 20px;">If you have any questions about these changes, please don't hesitate to contact us at support@firmustech.com.</p>
 
         <p style="margin-top: 30px;">Thank you for being an Open Word customer.</p>
+
+        <p>Best regards,<br>The Open Word Team</p>
     `;
+}
+
+/**
+ * Process custom email template by replacing variables with customer-specific values
+ * @param {string} template - Email template with variables like {orgName}, {newPrice}
+ * @param {object} params - Values to replace
+ * @returns {string} Processed HTML
+ */
+function processEmailTemplate(template, params) {
+    const { orgName, tierName, newPrice, effectiveDate, discountPercent, discountType } = params;
+
+    const tierDisplay = {
+        basic: 'Basic',
+        standard: 'Standard',
+        pro: 'Professional'
+    };
+
+    const discountTypeDisplay = {
+        charity: 'Charity',
+        negotiated: 'Negotiated',
+        church: 'Church',
+        partner: 'Partner',
+        promotional: 'Promotional',
+        nonprofit: 'Non-profit',
+        educational: 'Educational',
+        community: 'Community'
+    };
+
+    const discountNote = discountPercent > 0
+        ? `<p style="background: #d1fae5; color: #065f46; padding: 12px 16px; border-radius: 8px; margin: 10px 0;">
+            <strong>${discountTypeDisplay[discountType] || 'Special'} Discount - ${discountPercent}% Applied</strong><br>
+            The price shown includes your discount.
+           </p>`
+        : '';
+
+    return template
+        .replace(/\{orgName\}/g, orgName || '')
+        .replace(/\{tierName\}/g, tierDisplay[tierName] || tierName || '')
+        .replace(/\{newPrice\}/g, newPrice || '')
+        .replace(/\{effectiveDate\}/g, effectiveDate || '')
+        .replace(/\{discountNote\}/g, discountNote);
 }
 
 /**
  * Send warning emails to all customers in a migration
  * @param {string} migrationId - Migration ID
+ * @param {object} options - Optional email customization
+ * @param {string} options.customSubject - Custom email subject
+ * @param {string} options.customBody - Custom email body template with variables
  * @returns {Promise<{success: boolean, sent: number, failed: number, errors?: Array}>}
  */
-export async function sendMigrationEmails(migrationId) {
+export async function sendMigrationEmails(migrationId, options = {}) {
     try {
+        const { customSubject, customBody } = options;
+
         // Get migration record
         const { data: migration, error: migrationError } = await supabase
             .from('price_migrations')
@@ -418,30 +441,10 @@ export async function sendMigrationEmails(migrationId) {
                     }
                 }
 
-                // Fetch CURRENT price from customer's Stripe subscription
-                let currentPriceAmount = null;
-                if (customer.stripeSubscriptionId) {
-                    try {
-                        const subscription = await stripe.subscriptions.retrieve(customer.stripeSubscriptionId);
-                        currentPriceAmount = subscription.items?.data?.[0]?.price?.unit_amount || null;
-                    } catch (err) {
-                        console.error(`Failed to fetch subscription for ${customer.name}:`, err.message);
-                    }
-                }
-
-                // Apply customer discount to both prices
+                // Apply customer discount to new price
                 const discountMultiplier = 1 - (customer.discountPercent || 0) / 100;
-                const pricing = {
-                    old: currentPriceAmount ? Math.round(currentPriceAmount * discountMultiplier) : null,
-                    new: newPriceAmount ? Math.round(newPriceAmount * discountMultiplier) : null
-                };
-
-                // Credit pricing - still uses database values as credits don't vary by currency
-                const oldCreditWithDiscount = migration.old_credit_gbp
-                    ? Math.round(migration.old_credit_gbp * discountMultiplier)
-                    : null;
-                const newCreditWithDiscount = migration.new_credit_gbp
-                    ? Math.round(migration.new_credit_gbp * discountMultiplier)
+                const newPriceWithDiscount = newPriceAmount
+                    ? Math.round(newPriceAmount * discountMultiplier)
                     : null;
 
                 // Insert customer record
@@ -472,20 +475,27 @@ export async function sendMigrationEmails(migrationId) {
                     continue;
                 }
 
-                // Generate email with discounted prices in customer's currency
-                const emailSubject = `Important: Open Word Pricing Update - Effective ${effectiveDateStr}`;
-                const emailBody = generatePriceChangeEmailBody({
+                // Email parameters for template processing
+                const emailParams = {
                     orgName: customer.name,
                     tierName: customer.tier,
                     effectiveDate: effectiveDateStr,
-                    currentPrice: formatPrice(pricing.old, customerCurrency),
-                    newPrice: formatPrice(pricing.new, customerCurrency),
-                    currentCredit: formatPrice(oldCreditWithDiscount, customerCurrency),
-                    newCredit: formatPrice(newCreditWithDiscount, customerCurrency),
-                    currency: customerCurrency,
+                    newPrice: formatPrice(newPriceWithDiscount, customerCurrency),
                     discountPercent: customer.discountPercent || 0,
                     discountType: customer.discountType
-                });
+                };
+
+                // Use custom template or default
+                let emailSubject, emailBody;
+                if (customSubject && customBody) {
+                    // Process custom template with customer-specific values
+                    emailSubject = customSubject.replace(/\{effectiveDate\}/g, effectiveDateStr);
+                    emailBody = processEmailTemplate(customBody, emailParams);
+                } else {
+                    // Use default template
+                    emailSubject = `Important: Open Word Pricing Update - Effective ${effectiveDateStr}`;
+                    emailBody = generatePriceChangeEmailBody(emailParams);
+                }
 
                 // Send email
                 const emailResult = await sendCustomerEmail(

@@ -72,6 +72,35 @@ router.get('/preview', async (req, res) => {
 });
 
 /**
+ * GET /api/price-migration/fetch-price
+ * Fetch a single price from Stripe by Price ID
+ * Used for real-time price preview when entering price IDs
+ */
+router.get('/fetch-price', async (req, res) => {
+    try {
+        const { priceId } = req.query;
+
+        if (!priceId) {
+            return res.json({ success: false, error: 'Price ID required' });
+        }
+
+        const price = await stripe.prices.retrieve(priceId);
+
+        res.json({
+            success: true,
+            priceId: price.id,
+            amount: price.unit_amount,
+            currency: price.currency,
+            nickname: price.nickname || null,
+            interval: price.recurring?.interval || 'month'
+        });
+    } catch (error) {
+        console.error('Error fetching price:', error.message);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/price-migration/stripe-prices
  * Get current Stripe prices for each tier/currency
  */
@@ -256,11 +285,14 @@ router.post('/', async (req, res) => {
 /**
  * POST /api/price-migration/:id/send-emails
  * Send warning emails to all affected customers
+ * Accepts optional customSubject and customBody for email customization
  */
 router.post('/:id/send-emails', async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await sendMigrationEmails(id);
+        const { customSubject, customBody } = req.body || {};
+
+        const result = await sendMigrationEmails(id, { customSubject, customBody });
 
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });

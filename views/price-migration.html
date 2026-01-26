@@ -172,6 +172,42 @@
       color: var(--gray-500);
       margin-bottom: 2px;
     }
+    .price-id-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .price-id-row input {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .price-preview {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--gray-700);
+      min-width: 70px;
+      text-align: right;
+    }
+    .price-preview.loading {
+      color: var(--gray-400);
+    }
+    .price-preview.error {
+      color: #dc2626;
+    }
+    .price-preview.success {
+      color: #059669;
+    }
+    #emailPreviewBody {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+    }
+    #emailPreviewBody:focus {
+      outline: 2px solid var(--primary);
+    }
 
     .progress-bar {
       height: 8px;
@@ -491,64 +527,6 @@
           <p style="color: var(--gray-500); padding: 8px;">Loading customers...</p>
         </div>
 
-        <h4 style="margin: 24px 0 12px 0;">Current Pricing (GBP)</h4>
-        <div class="pricing-grid">
-          <div class="pricing-column">
-            <h4>Basic</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="oldBasicGbp" placeholder="1400" step="1">
-            </div>
-          </div>
-          <div class="pricing-column">
-            <h4>Standard</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="oldStandardGbp" placeholder="2800" step="1">
-            </div>
-          </div>
-          <div class="pricing-column">
-            <h4>Pro</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="oldProGbp" placeholder="4400" step="1">
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="oldCreditGbp">Current Credit Price (pence)</label>
-          <input type="number" id="oldCreditGbp" placeholder="122" step="1">
-        </div>
-
-        <h4 style="margin: 24px 0 12px 0;">New Pricing (GBP)</h4>
-        <div class="pricing-grid">
-          <div class="pricing-column">
-            <h4>Basic</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="newBasicGbp" placeholder="1400" step="1">
-            </div>
-          </div>
-          <div class="pricing-column">
-            <h4>Standard</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="newStandardGbp" placeholder="2800" step="1">
-            </div>
-          </div>
-          <div class="pricing-column">
-            <h4>Pro</h4>
-            <div class="pricing-row">
-              <label>Monthly</label>
-              <input type="number" id="newProGbp" placeholder="4400" step="1">
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="newCreditGbp">New Credit Price (pence)</label>
-          <input type="number" id="newCreditGbp" placeholder="122" step="1">
-        </div>
-
         <h4 style="margin: 24px 0 12px 0;">New Stripe Price IDs</h4>
         <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 16px;">
           Enter the Stripe Price IDs for the new pricing. These are used to update customer subscriptions.
@@ -558,29 +536,56 @@
           <div class="price-id-group">
             <h5>Basic</h5>
             <label>GBP</label>
-            <input type="text" id="priceIdBasicGbp" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdBasicGbp" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Basic', 'GBP')">
+              <span class="price-preview" id="pricePreviewBasicGBP">-</span>
+            </div>
             <label>USD</label>
-            <input type="text" id="priceIdBasicUsd" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdBasicUsd" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Basic', 'USD')">
+              <span class="price-preview" id="pricePreviewBasicUSD">-</span>
+            </div>
             <label>EUR</label>
-            <input type="text" id="priceIdBasicEur" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdBasicEur" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Basic', 'EUR')">
+              <span class="price-preview" id="pricePreviewBasicEUR">-</span>
+            </div>
           </div>
           <div class="price-id-group">
             <h5>Standard</h5>
             <label>GBP</label>
-            <input type="text" id="priceIdStandardGbp" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdStandardGbp" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Standard', 'GBP')">
+              <span class="price-preview" id="pricePreviewStandardGBP">-</span>
+            </div>
             <label>USD</label>
-            <input type="text" id="priceIdStandardUsd" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdStandardUsd" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Standard', 'USD')">
+              <span class="price-preview" id="pricePreviewStandardUSD">-</span>
+            </div>
             <label>EUR</label>
-            <input type="text" id="priceIdStandardEur" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdStandardEur" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Standard', 'EUR')">
+              <span class="price-preview" id="pricePreviewStandardEUR">-</span>
+            </div>
           </div>
           <div class="price-id-group">
             <h5>Pro</h5>
             <label>GBP</label>
-            <input type="text" id="priceIdProGbp" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdProGbp" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Pro', 'GBP')">
+              <span class="price-preview" id="pricePreviewProGBP">-</span>
+            </div>
             <label>USD</label>
-            <input type="text" id="priceIdProUsd" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdProUsd" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Pro', 'USD')">
+              <span class="price-preview" id="pricePreviewProUSD">-</span>
+            </div>
             <label>EUR</label>
-            <input type="text" id="priceIdProEur" placeholder="price_xxx">
+            <div class="price-id-row">
+              <input type="text" id="priceIdProEur" placeholder="price_xxx" onblur="fetchPricePreview(this, 'Pro', 'EUR')">
+              <span class="price-preview" id="pricePreviewProEUR">-</span>
+            </div>
           </div>
         </div>
 
@@ -621,6 +626,46 @@
     </div>
   </div>
 
+  <!-- Email Preview Modal -->
+  <div id="emailPreviewModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>Email Preview</h3>
+        <button class="modal-close" onclick="closeModal('emailPreviewModal')">&times;</button>
+      </div>
+
+      <div class="alert alert-info">
+        <strong>Preview:</strong> This is how the email will appear to customers. You can edit the subject and body below.
+        <br><small>Variables like {orgName}, {tierName}, {newPrice} will be replaced with actual customer data when sent.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="emailSubject">Subject</label>
+        <input type="text" id="emailSubject" value="Important: Open Word Pricing Update">
+      </div>
+
+      <div class="form-group">
+        <label>Email Body</label>
+        <div id="emailPreviewBody" contenteditable="true"
+             style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 16px; min-height: 300px; background: white;">
+        </div>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--gray-600);">
+        <strong>Available variables:</strong> {orgName}, {tierName}, {newPrice}, {effectiveDate}, {discountNote}
+      </p>
+
+      <div class="alert alert-warning" style="margin-top: 16px;">
+        <strong>Note:</strong> The migration will be scheduled to execute automatically in 7 days after emails are sent.
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="closeModal('emailPreviewModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="sendEmailsWithCustomContent()">Send Emails</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentMigrationId = null;
     let availableCustomers = [];
@@ -628,8 +673,63 @@
     // Load migrations on page load
     document.addEventListener('DOMContentLoaded', () => {
       loadMigrations();
-      loadCurrentStripePrices();
     });
+
+    // Fetch price from Stripe and display preview
+    async function fetchPricePreview(input, tier, currency) {
+      const priceId = input.value.trim();
+      const previewEl = document.getElementById(`pricePreview${tier}${currency}`);
+
+      if (!priceId) {
+        previewEl.textContent = '-';
+        previewEl.className = 'price-preview';
+        return;
+      }
+
+      previewEl.textContent = '...';
+      previewEl.className = 'price-preview loading';
+
+      try {
+        const response = await fetch(`/api/price-migration/fetch-price?priceId=${encodeURIComponent(priceId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+          const symbols = { gbp: '\u00A3', usd: '$', eur: '\u20AC' };
+          const symbol = symbols[data.currency] || '';
+          previewEl.textContent = `${symbol}${(data.amount / 100).toFixed(2)}/mo`;
+          previewEl.className = 'price-preview success';
+        } else {
+          previewEl.textContent = 'Invalid';
+          previewEl.className = 'price-preview error';
+        }
+      } catch (err) {
+        previewEl.textContent = 'Error';
+        previewEl.className = 'price-preview error';
+      }
+    }
+
+    // Get default email template
+    function getDefaultEmailTemplate(effectiveDate) {
+      return `
+        <p>Dear {orgName},</p>
+
+        <p>We're writing to let you know about upcoming changes to Open Word pricing, effective from <strong>${effectiveDate}</strong>.</p>
+
+        <h3 style="color: #2563eb;">Your Plan: {tierName}</h3>
+
+        {discountNote}
+
+        <p style="font-size: 1.2rem;"><strong>New monthly price: {newPrice}</strong></p>
+
+        <p>The new pricing will apply to your next billing cycle after <strong>${effectiveDate}</strong>.</p>
+
+        <p>If you have any questions about these changes, please don't hesitate to contact us at support@firmustech.com.</p>
+
+        <p>Thank you for being an Open Word customer.</p>
+
+        <p>Best regards,<br>The Open Word Team</p>
+      `;
+    }
 
     // Load available customers for selection
     async function loadCustomersForSelection() {
@@ -748,27 +848,6 @@
       }
     }
 
-    async function loadCurrentStripePrices() {
-      try {
-        const response = await fetch('/api/price-migration/stripe-prices');
-        const data = await response.json();
-
-        if (data.success && data.prices) {
-          // Auto-populate current prices
-          if (data.prices.basic?.gbp) {
-            document.getElementById('oldBasicGbp').value = data.prices.basic.gbp.amount;
-          }
-          if (data.prices.standard?.gbp) {
-            document.getElementById('oldStandardGbp').value = data.prices.standard.gbp.amount;
-          }
-          if (data.prices.pro?.gbp) {
-            document.getElementById('oldProGbp').value = data.prices.pro.gbp.amount;
-          }
-        }
-      } catch (error) {
-        console.error('Error loading Stripe prices:', error);
-      }
-    }
 
     function getActionButtons(migration) {
       const buttons = [];
@@ -854,43 +933,30 @@
         return;
       }
 
-      // Validate at least one new price entered
-      const newBasicGbp = parseInt(document.getElementById('newBasicGbp').value) || null;
-      const newStandardGbp = parseInt(document.getElementById('newStandardGbp').value) || null;
-      const newProGbp = parseInt(document.getElementById('newProGbp').value) || null;
-      const newCreditGbp = parseInt(document.getElementById('newCreditGbp').value) || null;
+      // Get price IDs
+      const priceIds = {
+        basic_gbp: document.getElementById('priceIdBasicGbp').value.trim() || null,
+        basic_usd: document.getElementById('priceIdBasicUsd').value.trim() || null,
+        basic_eur: document.getElementById('priceIdBasicEur').value.trim() || null,
+        standard_gbp: document.getElementById('priceIdStandardGbp').value.trim() || null,
+        standard_usd: document.getElementById('priceIdStandardUsd').value.trim() || null,
+        standard_eur: document.getElementById('priceIdStandardEur').value.trim() || null,
+        pro_gbp: document.getElementById('priceIdProGbp').value.trim() || null,
+        pro_usd: document.getElementById('priceIdProUsd').value.trim() || null,
+        pro_eur: document.getElementById('priceIdProEur').value.trim() || null
+      };
 
-      if (!newBasicGbp && !newStandardGbp && !newProGbp && !newCreditGbp) {
-        showAlert('Please enter at least one new price value', 'error');
+      // Validate at least one price ID entered
+      const hasAnyPriceId = Object.values(priceIds).some(v => v);
+      if (!hasAnyPriceId) {
+        showAlert('Please enter at least one Stripe Price ID', 'error');
         return;
       }
 
       const data = {
         name: document.getElementById('migrationName').value,
-        selectedOrganisationIds: selectedCustomerIds,  // Include selected customers
-        oldPricing: {
-          basic_gbp: parseInt(document.getElementById('oldBasicGbp').value) || null,
-          standard_gbp: parseInt(document.getElementById('oldStandardGbp').value) || null,
-          pro_gbp: parseInt(document.getElementById('oldProGbp').value) || null,
-          credit_gbp: parseInt(document.getElementById('oldCreditGbp').value) || null
-        },
-        newPricing: {
-          basic_gbp: newBasicGbp,
-          standard_gbp: newStandardGbp,
-          pro_gbp: newProGbp,
-          credit_gbp: newCreditGbp
-        },
-        newPriceIds: {
-          basic_gbp: document.getElementById('priceIdBasicGbp').value || null,
-          basic_usd: document.getElementById('priceIdBasicUsd').value || null,
-          basic_eur: document.getElementById('priceIdBasicEur').value || null,
-          standard_gbp: document.getElementById('priceIdStandardGbp').value || null,
-          standard_usd: document.getElementById('priceIdStandardUsd').value || null,
-          standard_eur: document.getElementById('priceIdStandardEur').value || null,
-          pro_gbp: document.getElementById('priceIdProGbp').value || null,
-          pro_usd: document.getElementById('priceIdProUsd').value || null,
-          pro_eur: document.getElementById('priceIdProEur').value || null
-        }
+        selectedOrganisationIds: selectedCustomerIds,
+        newPriceIds: priceIds
       };
 
       try {
@@ -1044,16 +1110,48 @@
 
     function confirmSendEmails(migrationId) {
       currentMigrationId = migrationId;
-      document.getElementById('confirmTitle').textContent = 'Send Warning Emails';
-      document.getElementById('confirmMessage').innerHTML = `
-        <p>This will send price change notification emails to all affected customers.</p>
-        <p><strong>The migration will be scheduled to execute automatically in 7 days.</strong></p>
-        <p>Are you sure you want to proceed?</p>
-      `;
-      document.getElementById('confirmBtn').textContent = 'Send Emails';
-      document.getElementById('confirmBtn').className = 'btn btn-primary';
-      document.getElementById('confirmBtn').onclick = sendEmails;
-      document.getElementById('confirmModal').classList.add('active');
+
+      // Calculate effective date (7 days from now)
+      const effectiveDate = new Date();
+      effectiveDate.setDate(effectiveDate.getDate() + 7);
+      const dateStr = effectiveDate.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+
+      // Set default email content
+      document.getElementById('emailSubject').value = `Important: Open Word Pricing Update - Effective ${dateStr}`;
+      document.getElementById('emailPreviewBody').innerHTML = getDefaultEmailTemplate(dateStr);
+
+      // Show email preview modal
+      document.getElementById('emailPreviewModal').classList.add('active');
+    }
+
+    async function sendEmailsWithCustomContent() {
+      closeModal('emailPreviewModal');
+
+      const customSubject = document.getElementById('emailSubject').value;
+      const customBody = document.getElementById('emailPreviewBody').innerHTML;
+
+      try {
+        const response = await fetch(`/api/price-migration/${currentMigrationId}/send-emails`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customSubject, customBody })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showAlert(`Emails sent: ${result.sent} successful, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
+        loadMigrations();
+      } catch (error) {
+        showAlert('Failed to send emails: ' + error.message, 'error');
+      }
     }
 
     function confirmExecute(migrationId) {
@@ -1083,26 +1181,6 @@
       document.getElementById('confirmModal').classList.add('active');
     }
 
-    async function sendEmails() {
-      closeModal('confirmModal');
-
-      try {
-        const response = await fetch(`/api/price-migration/${currentMigrationId}/send-emails`, {
-          method: 'POST'
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-
-        showAlert(`Emails sent: ${result.sent} successful, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
-        loadMigrations();
-      } catch (error) {
-        showAlert('Failed to send emails: ' + error.message, 'error');
-      }
-    }
 
     async function executeMigration() {
       closeModal('confirmModal');
