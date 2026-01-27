@@ -338,11 +338,11 @@ The Open Word Team`
 Thank you for choosing Open Word for your real-time translation needs!
 
 Here are some tips to get started:
-- Access your control panel at openword.onrender.com
-- Set up your translation languages in Settings
-- Generate QR codes for your participants
+- Access your control panel at server.openword.live or use the Login option on the openword.live page.
+- Make sure you allow the microphone and audio inputs permission to be accessed by Open Word.
+- Provide the static QR code for your participants.
 
-Need help? Visit openword.live or reply to this email.
+Need help? Visit openword.live or use the manual available in the menu list.
 
 Best regards,
 The Open Word Team`
