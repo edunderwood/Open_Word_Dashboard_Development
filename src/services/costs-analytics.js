@@ -414,24 +414,51 @@ async function getUsageStatistics() {
     console.log(`   This month: ${thisMonthStart.toISOString()} to ${thisMonthEnd.toISOString()}`);
     console.log(`   Last month: ${lastMonthStart.toISOString()} to ${lastMonthEnd.toISOString()}`);
 
-    // Get organisations by tier with charity status
-    const { data: orgs } = await supabase
-      .from('organisations')
-      .select('id, subscription_tier, minimum_monthly_fee, charity_verified, charity_discount_percent');
+    // Fetch pricing tiers from database (source of truth for prices)
+    const { data: pricingTiers } = await supabase
+      .from('pricing_tiers')
+      .select('id, monthly_fee_pence, credit_price_pence');
 
-    // Build a map of org_id -> charity discount
-    const orgCharityMap = {};
-    orgs?.forEach(org => {
-      orgCharityMap[org.id] = org.charity_verified ? (org.charity_discount_percent || 50) : 0;
+    // Build tier fee map from database (convert pence to pounds)
+    const TIER_MONTHLY_FEES = {};
+    let creditPricePence = 118; // Default fallback
+    pricingTiers?.forEach(tier => {
+      TIER_MONTHLY_FEES[tier.id] = (tier.monthly_fee_pence || 0) / 100;
+      if (tier.credit_price_pence) {
+        creditPricePence = tier.credit_price_pence; // Use first found credit price
+      }
     });
 
-    // Monthly fees per tier (in GBP)
-    const TIER_MONTHLY_FEES = {
-      'basic': 12,
-      'standard': 24,
-      'pro': 40,
-      'enterprise': 80
-    };
+    // Fallback if no pricing tiers found
+    if (Object.keys(TIER_MONTHLY_FEES).length === 0) {
+      TIER_MONTHLY_FEES.basic = 14;
+      TIER_MONTHLY_FEES.standard = 28;
+      TIER_MONTHLY_FEES.pro = 44;
+      TIER_MONTHLY_FEES.enterprise = 300;
+    }
+
+    // Credit value from database (convert pence to pounds)
+    const CREDIT_VALUE_FULL = creditPricePence / 100;
+
+    // Get organisations by tier with discount info
+    // EXCLUDE cancelled subscriptions (subscription_cancelled_at IS NOT NULL)
+    const { data: orgs } = await supabase
+      .from('organisations')
+      .select('id, subscription_tier, minimum_monthly_fee, charity_verified, charity_discount_percent, discount_percent, subscription_cancelled_at')
+      .is('subscription_cancelled_at', null); // Only include active subscriptions
+
+    // Build a map of org_id -> effective discount (charity or general discount)
+    const orgDiscountMap = {};
+    orgs?.forEach(org => {
+      // Charity discount takes priority, then general discount
+      if (org.charity_verified) {
+        orgDiscountMap[org.id] = org.charity_discount_percent || 50;
+      } else if (org.discount_percent > 0) {
+        orgDiscountMap[org.id] = org.discount_percent;
+      } else {
+        orgDiscountMap[org.id] = 0;
+      }
+    });
 
     // Count orgs by tier and calculate expected fees
     const tierBreakdown = {
@@ -448,12 +475,12 @@ async function getUsageStatistics() {
       if (tierBreakdown[tier]) {
         tierBreakdown[tier].count++;
 
-        // Use org's minimum_monthly_fee if set, otherwise use tier default
-        let fee = org.minimum_monthly_fee || TIER_MONTHLY_FEES[tier] || 12;
+        // Use org's minimum_monthly_fee if set, otherwise use tier default from database
+        let fee = org.minimum_monthly_fee || TIER_MONTHLY_FEES[tier] || 14;
 
-        // Apply charity discount if verified
-        if (org.charity_verified) {
-          const discount = org.charity_discount_percent || 50;
+        // Apply discount (charity or general)
+        const discount = orgDiscountMap[org.id] || 0;
+        if (discount > 0) {
           fee = fee * (1 - discount / 100);
         }
 
@@ -461,10 +488,6 @@ async function getUsageStatistics() {
         totalExpectedMonthlyFees += fee;
       }
     });
-
-    // Credit values: £1.18 full price, £0.59 for 50% charity discount
-    const CREDIT_VALUE_FULL = 1.18;
-    const CHARITY_DISCOUNT_DEFAULT = 50;
 
     // Get credit usage for this month WITH organisation_id
     const { data: thisMonthUsage, error: thisMonthError } = await supabase
@@ -486,9 +509,9 @@ async function getUsageStatistics() {
       thisMonthCredits += credits;
       thisMonthCharacters += u.total_billable_characters || 0;
 
-      // Calculate value based on org's charity discount
-      const charityDiscount = orgCharityMap[u.organisation_id] || 0;
-      const creditValue = CREDIT_VALUE_FULL * (1 - charityDiscount / 100);
+      // Calculate value based on org's discount (charity or general)
+      const discount = orgDiscountMap[u.organisation_id] || 0;
+      const creditValue = CREDIT_VALUE_FULL * (1 - discount / 100);
       thisMonthValueGBP += credits * creditValue;
     });
 
@@ -515,9 +538,9 @@ async function getUsageStatistics() {
       lastMonthCredits += credits;
       lastMonthCharacters += u.total_billable_characters || 0;
 
-      // Calculate value based on org's charity discount
-      const charityDiscount = orgCharityMap[u.organisation_id] || 0;
-      const creditValue = CREDIT_VALUE_FULL * (1 - charityDiscount / 100);
+      // Calculate value based on org's discount (charity or general)
+      const discount = orgDiscountMap[u.organisation_id] || 0;
+      const creditValue = CREDIT_VALUE_FULL * (1 - discount / 100);
       lastMonthValueGBP += credits * creditValue;
     });
 
@@ -537,8 +560,7 @@ async function getUsageStatistics() {
         valueGBP: lastMonthValueGBP,
         period: lastMonthStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
       },
-      creditValueGBP: CREDIT_VALUE_FULL,
-      charityRate: CREDIT_VALUE_FULL * (1 - CHARITY_DISCOUNT_DEFAULT / 100)
+      creditValueGBP: CREDIT_VALUE_FULL
     };
   } catch (error) {
     console.error('Error getting usage statistics:', error);
