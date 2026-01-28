@@ -110,6 +110,10 @@ router.get('/', async (req, res) => {
     if (status) {
       if (status === 'paused') {
         query = query.eq('is_paused', true);
+      } else if (status === 'cancelling') {
+        // Customers who have cancelled but still have access
+        query = query.not('subscription_cancelled_at', 'is', null)
+                     .gt('tier_expires_at', new Date().toISOString());
       } else {
         query = query.eq('subscription_status', status);
       }

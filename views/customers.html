@@ -123,6 +123,7 @@
             <option value="active">Active</option>
             <option value="trialing">Trial</option>
             <option value="paused">Paused</option>
+            <option value="cancelling">Cancelling</option>
             <option value="past_due">Past Due</option>
             <option value="unpaid">Unpaid</option>
             <option value="canceled">Cancelled</option>
@@ -344,6 +345,15 @@
     function getStatusBadge(customer) {
       if (customer.is_paused) {
         return '<span class="badge badge-warning">Paused</span>';
+      }
+      // Check if subscription is cancelled (takes priority)
+      if (customer.subscription_cancelled_at) {
+        const expiresAt = customer.tier_expires_at ? new Date(customer.tier_expires_at) : null;
+        const isExpired = expiresAt && expiresAt < new Date();
+        if (isExpired) {
+          return '<span class="badge badge-gray">Cancelled</span>';
+        }
+        return '<span class="badge badge-warning" title="Access until ' + (expiresAt ? expiresAt.toLocaleDateString() : 'N/A') + '">Cancelling</span>';
       }
       const status = customer.subscription_status;
       const badges = {
