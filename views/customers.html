@@ -295,6 +295,92 @@
     </div>
   </div>
 
+  <!-- Enterprise Setup Modal -->
+  <div class="modal-overlay" id="enterpriseModal">
+    <div class="modal" style="max-width: 520px;">
+      <div class="modal-header" style="background: #8b5cf6; color: white;">
+        <h3>Enable Enterprise</h3>
+        <button class="modal-close" onclick="closeEnterpriseModal()" style="color: white;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="enterpriseModalOrgName" style="margin-bottom: 12px; color: var(--gray-600);"></p>
+
+        <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85rem;">
+          <strong style="color: #92400e;">This will:</strong>
+          <ul style="margin: 8px 0 0 16px; color: #78350f;">
+            <li>Set organisation to enterprise tier</li>
+            <li>Create a Supabase auth user for the admin</li>
+            <li>Create an enterprise_users record with admin role</li>
+            <li>Send a welcome email with login credentials</li>
+          </ul>
+        </div>
+
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Enterprise Config</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="entIncludedCredits" style="font-size: 0.8rem;">Included Credits</label>
+            <input type="number" id="entIncludedCredits" class="form-input" value="200" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="entOverageRate" style="font-size: 0.8rem;">Overage Rate (p)</label>
+            <input type="number" id="entOverageRate" class="form-input" value="118" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="entBillingDay" style="font-size: 0.8rem;">Billing Day</label>
+            <input type="number" id="entBillingDay" class="form-input" value="1" min="1" max="28" style="width: 100%;">
+          </div>
+        </div>
+
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">First Admin User</h4>
+        <div class="form-group">
+          <label for="entAdminName">Admin Name: *</label>
+          <input type="text" id="entAdminName" class="form-input" placeholder="e.g. John Smith" style="width: 100%;">
+        </div>
+        <div class="form-group">
+          <label for="entAdminEmail">Admin Email: *</label>
+          <input type="email" id="entAdminEmail" class="form-input" placeholder="e.g. admin@company.com" style="width: 100%;">
+        </div>
+
+        <input type="hidden" id="enterpriseOrgId">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEnterpriseModal()">Cancel</button>
+        <button class="btn" style="background: #8b5cf6; color: white;" onclick="submitEnterpriseSetup()">Enable Enterprise</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enterprise Config Edit Modal -->
+  <div class="modal-overlay" id="enterpriseConfigModal">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header" style="background: #8b5cf6; color: white;">
+        <h3>Edit Enterprise Config</h3>
+        <button class="modal-close" onclick="closeEnterpriseConfigModal()" style="color: white;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntCredits" style="font-size: 0.8rem;">Included Credits</label>
+            <input type="number" id="editEntCredits" class="form-input" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntOverage" style="font-size: 0.8rem;">Overage Rate (p)</label>
+            <input type="number" id="editEntOverage" class="form-input" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntBillingDay" style="font-size: 0.8rem;">Billing Day</label>
+            <input type="number" id="editEntBillingDay" class="form-input" min="1" max="28" style="width: 100%;">
+          </div>
+        </div>
+        <input type="hidden" id="editEntOrgId">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEnterpriseConfigModal()">Cancel</button>
+        <button class="btn" style="background: #8b5cf6; color: white;" onclick="submitEnterpriseConfigUpdate()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentPage = 1;
     let totalPages = 1;
@@ -435,6 +521,10 @@
             <tr>
               <td>
                 <strong>${customer.name || 'Unnamed'}</strong>
+                ${customer.is_enterprise
+                  ? '<span class="badge" style="margin-left: 4px; font-size: 9px; background: #8b5cf6; color: white;">Enterprise</span>'
+                  : ''
+                }
                 ${customer.charity_verified
                   ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
                   : customer.charity_review_requested
@@ -509,21 +599,24 @@
 
       try {
         // Fetch customer details, session stats, and credits in parallel
-        const [customerResponse, sessionResponse, creditsResponse] = await Promise.all([
+        const [customerResponse, sessionResponse, creditsResponse, enterpriseResponse] = await Promise.all([
           fetch(`/api/customers/${id}`),
           fetch(`/api/customers/${id}/session-stats`),
-          fetch(`/api/customers/${id}/credits`)
+          fetch(`/api/customers/${id}/credits`),
+          fetch(`/api/customers/${id}/enterprise-info`)
         ]);
 
         const customerData = await customerResponse.json();
         const sessionData = await sessionResponse.json();
         const creditsData = await creditsResponse.json();
+        const enterpriseData = await enterpriseResponse.json();
 
         if (!customerData.success) throw new Error(customerData.error);
 
         const customer = customerData.data;
         const sessionStats = sessionData.success ? sessionData.data : null;
         const credits = creditsData.success ? creditsData.data : null;
+        const enterprise = enterpriseData.success ? enterpriseData.data : null;
 
         document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
 
@@ -745,6 +838,64 @@
               </div>
             </div>
           ` : ''}
+          <!-- Enterprise Section -->
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+            <h4 style="margin-bottom: 15px; color: #8b5cf6; font-size: 0.75rem; text-transform: uppercase;">Enterprise</h4>
+            ${enterprise?.isEnterprise ? `
+              <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;">
+                <div class="stat-card" style="padding: 15px; border-left: 3px solid #8b5cf6;">
+                  <div class="label" style="font-size: 0.7rem;">Included Credits</div>
+                  <div class="value" style="font-size: 1.1rem;">${enterprise.config.includedCredits ?? '-'}</div>
+                </div>
+                <div class="stat-card" style="padding: 15px; border-left: 3px solid #8b5cf6;">
+                  <div class="label" style="font-size: 0.7rem;">Overage Rate</div>
+                  <div class="value" style="font-size: 1.1rem;">${enterprise.config.overageRatePence ?? '-'}p</div>
+                </div>
+                <div class="stat-card" style="padding: 15px; border-left: 3px solid #8b5cf6;">
+                  <div class="label" style="font-size: 0.7rem;">Billing Day</div>
+                  <div class="value" style="font-size: 1.1rem;">${enterprise.config.billingDay ?? '-'}${enterprise.config.billingDay === 1 ? 'st' : enterprise.config.billingDay === 2 ? 'nd' : enterprise.config.billingDay === 3 ? 'rd' : 'th'}</div>
+                </div>
+                <div class="stat-card" style="padding: 15px; border-left: 3px solid #8b5cf6;">
+                  <div class="label" style="font-size: 0.7rem;">Total Users</div>
+                  <div class="value" style="font-size: 1.1rem;">${enterprise.counts.total}</div>
+                  <div style="font-size: 0.65rem; color: var(--gray-500);">${enterprise.counts.admins}A / ${enterprise.counts.controllers}C / ${enterprise.counts.sessionUsers}S</div>
+                </div>
+              </div>
+              ${enterprise.users.length > 0 ? `
+                <div class="table-container" style="max-height: 180px; overflow-y: auto; margin-bottom: 15px;">
+                  <table style="font-size: 0.85rem;">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${enterprise.users.map(u => `
+                        <tr>
+                          <td>${u.name || '-'}</td>
+                          <td style="font-size: 0.8rem;">${u.email}</td>
+                          <td><span class="badge" style="background: ${u.role === 'admin' ? '#8b5cf6' : u.role === 'controller' ? '#3b82f6' : '#6b7280'}; color: white; font-size: 9px;">${u.role}</span></td>
+                          <td>${u.is_active ? '<span class="badge badge-success" style="font-size: 9px;">Active</span>' : '<span class="badge badge-gray" style="font-size: 9px;">Inactive</span>'}</td>
+                          <td>${u.last_login_at ? formatDateTime(u.last_login_at) : '<span class="text-muted">Never</span>'}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              ` : ''}
+              <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="showEditEnterpriseConfigModal('${customer.id}', ${enterprise.config.includedCredits ?? 200}, ${enterprise.config.overageRatePence ?? 118}, ${enterprise.config.billingDay ?? 1})">Edit Config</button>
+            ` : `
+              <div style="display: flex; align-items: center; gap: 15px;">
+                <span style="color: var(--gray-500); font-size: 0.9rem;">Not an enterprise customer</span>
+                <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="showEnterpriseSetupModal('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Enable Enterprise</button>
+              </div>
+            `}
+          </div>
+
           ${customer.is_paused ? `
             <div class="alert alert-warning mt-4">
               <strong>Account Paused</strong>
@@ -1220,6 +1371,92 @@
         loadCustomers(); // Refresh list
       } catch (error) {
         alert('Error denying review: ' + error.message);
+      }
+    }
+
+    // Enterprise functions
+    function showEnterpriseSetupModal(orgId, orgName) {
+      document.getElementById('enterpriseOrgId').value = orgId;
+      document.getElementById('enterpriseModalOrgName').textContent = `Enabling enterprise for: ${orgName}`;
+      document.getElementById('entIncludedCredits').value = 200;
+      document.getElementById('entOverageRate').value = 118;
+      document.getElementById('entBillingDay').value = 1;
+      document.getElementById('entAdminName').value = '';
+      document.getElementById('entAdminEmail').value = '';
+      document.getElementById('enterpriseModal').classList.add('active');
+    }
+
+    function closeEnterpriseModal() {
+      document.getElementById('enterpriseModal').classList.remove('active');
+    }
+
+    async function submitEnterpriseSetup() {
+      const orgId = document.getElementById('enterpriseOrgId').value;
+      const adminName = document.getElementById('entAdminName').value.trim();
+      const adminEmail = document.getElementById('entAdminEmail').value.trim();
+      const includedCredits = parseInt(document.getElementById('entIncludedCredits').value) || 200;
+      const overageRatePence = parseInt(document.getElementById('entOverageRate').value) || 118;
+      const billingDay = parseInt(document.getElementById('entBillingDay').value) || 1;
+
+      if (!adminName) { alert('Please enter an admin name'); return; }
+      if (!adminEmail || !adminEmail.includes('@')) { alert('Please enter a valid admin email'); return; }
+
+      if (!confirm(`Enable Enterprise for this organisation?\n\nThis will:\n- Set tier to Enterprise\n- Create auth user: ${adminEmail}\n- Send welcome email with credentials`)) return;
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/enable-enterprise`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ includedCredits, overageRatePence, billingDay, adminName, adminEmail })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        closeEnterpriseModal();
+
+        alert(`Enterprise enabled successfully!\n\nGenerated password for ${adminEmail}:\n${data.generatedPassword}\n\nThis password has been included in the welcome email.`);
+
+        viewCustomer(orgId);
+        loadCustomers();
+      } catch (error) {
+        alert('Error enabling enterprise: ' + error.message);
+      }
+    }
+
+    function showEditEnterpriseConfigModal(orgId, credits, overage, billingDay) {
+      document.getElementById('editEntOrgId').value = orgId;
+      document.getElementById('editEntCredits').value = credits;
+      document.getElementById('editEntOverage').value = overage;
+      document.getElementById('editEntBillingDay').value = billingDay;
+      document.getElementById('enterpriseConfigModal').classList.add('active');
+    }
+
+    function closeEnterpriseConfigModal() {
+      document.getElementById('enterpriseConfigModal').classList.remove('active');
+    }
+
+    async function submitEnterpriseConfigUpdate() {
+      const orgId = document.getElementById('editEntOrgId').value;
+      const includedCredits = parseInt(document.getElementById('editEntCredits').value);
+      const overageRatePence = parseInt(document.getElementById('editEntOverage').value);
+      const billingDay = parseInt(document.getElementById('editEntBillingDay').value);
+
+      try {
+        const response = await fetch(`/api/customers/${orgId}/update-enterprise-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ includedCredits, overageRatePence, billingDay })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        closeEnterpriseConfigModal();
+        alert('Enterprise config updated successfully');
+        viewCustomer(orgId);
+      } catch (error) {
+        alert('Error updating enterprise config: ' + error.message);
       }
     }
 

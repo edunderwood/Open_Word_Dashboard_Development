@@ -3,8 +3,10 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import supabase from '../services/supabase.js';
 import stripe from '../services/stripe.js';
+import { sendCustomerEmail } from '../services/email.js';
 
 const router = express.Router();
 
@@ -1308,6 +1310,332 @@ router.get('/:id/referrals', async (req, res) => {
   } catch (error) {
     console.error('Error fetching customer referrals:', error);
     res.status(500).json({ error: 'Failed to fetch customer referrals' });
+  }
+});
+
+/**
+ * Generate a secure random password
+ * 14 characters: uppercase + lowercase + numbers + symbols
+ */
+function generateSecurePassword() {
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const symbols = '!@#$%&*';
+
+  let password = '';
+  password += uppercase[crypto.randomInt(uppercase.length)];
+  password += lowercase[crypto.randomInt(lowercase.length)];
+  password += numbers[crypto.randomInt(numbers.length)];
+  password += symbols[crypto.randomInt(symbols.length)];
+
+  const allChars = uppercase + lowercase + numbers + symbols;
+  for (let i = 0; i < 10; i++) {
+    password += allChars[crypto.randomInt(allChars.length)];
+  }
+
+  return password.split('').sort(() => crypto.randomInt(3) - 1).join('');
+}
+
+/**
+ * Generate a unique org key for an enterprise organisation
+ * @param {string} name - Organisation name
+ * @returns {Promise<string>} Unique org key
+ */
+async function generateEnterpriseOrgKey(name) {
+  const initials = name
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase())
+    .filter(char => /[A-Z0-9]/.test(char))
+    .join('')
+    .substring(0, 4);
+
+  const maxSuffixLength = 15 - initials.length - 1;
+  let attempts = 0;
+
+  while (attempts < 10) {
+    const suffix = Math.random().toString(36).substring(2, 2 + maxSuffixLength).toUpperCase();
+    const orgKey = `${initials}-${suffix}`;
+
+    const { data: orgCheck } = await supabase
+      .from('organisations')
+      .select('id')
+      .eq('organisation_key', orgKey)
+      .single();
+
+    const { data: euCheck } = await supabase
+      .from('enterprise_users')
+      .select('id')
+      .eq('assigned_org_key', orgKey)
+      .single();
+
+    if (!orgCheck && !euCheck) {
+      return orgKey;
+    }
+
+    attempts++;
+  }
+
+  const timestamp = Date.now().toString(36).substring(0, maxSuffixLength).toUpperCase();
+  return `${initials}-${timestamp}`.substring(0, 15);
+}
+
+/**
+ * POST /api/customers/:id/enable-enterprise
+ * Convert an organisation to enterprise and create the first admin user
+ */
+router.post('/:id/enable-enterprise', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { includedCredits, overageRatePence, billingDay, adminName, adminEmail } = req.body;
+
+    // Validate inputs
+    if (!adminName || !adminEmail) {
+      return res.status(400).json({ error: 'Admin name and email are required' });
+    }
+
+    if (!adminEmail.includes('@')) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+
+    // Get the organisation and check it's not already enterprise
+    const { data: org, error: orgError } = await supabase
+      .from('organisations')
+      .select('id, name, is_enterprise, organisation_key')
+      .eq('id', id)
+      .single();
+
+    if (orgError) throw orgError;
+    if (!org) return res.status(404).json({ error: 'Organisation not found' });
+
+    if (org.is_enterprise) {
+      return res.status(400).json({ error: 'Organisation is already enterprise' });
+    }
+
+    // Generate password for the admin user
+    const generatedPassword = generateSecurePassword();
+
+    // Create Supabase auth user
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: adminEmail,
+      password: generatedPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: adminName,
+        enterprise_role: 'admin',
+        enterprise_org_id: id
+      }
+    });
+
+    if (authError) {
+      console.error('Error creating auth user for enterprise:', authError);
+      return res.status(400).json({ error: `Failed to create auth user: ${authError.message}` });
+    }
+
+    // Generate org key if the organisation doesn't have one
+    let orgKey = org.organisation_key;
+    if (!orgKey) {
+      orgKey = await generateEnterpriseOrgKey(org.name || 'Enterprise');
+    }
+
+    // Update the organisation to enterprise
+    const credits = includedCredits || 200;
+    const overage = overageRatePence || 118;
+    const billing = billingDay || 1;
+
+    const { error: updateError } = await supabase
+      .from('organisations')
+      .update({
+        is_enterprise: true,
+        subscription_tier: 'enterprise',
+        organisation_key: orgKey,
+        enterprise_included_credits: credits,
+        enterprise_overage_rate_pence: overage,
+        enterprise_billing_day: billing
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      // Rollback: delete the auth user
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      throw updateError;
+    }
+
+    // Insert enterprise_users record
+    const { data: enterpriseUser, error: euError } = await supabase
+      .from('enterprise_users')
+      .insert([{
+        organisation_id: id,
+        auth_user_id: authData.user.id,
+        email: adminEmail,
+        name: adminName,
+        role: 'admin',
+        is_active: true
+      }])
+      .select()
+      .single();
+
+    if (euError) {
+      // Rollback: delete auth user and revert organisation
+      console.error('Error creating enterprise_users record, rolling back:', euError);
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      await supabase
+        .from('organisations')
+        .update({
+          is_enterprise: false,
+          subscription_tier: 'basic'
+        })
+        .eq('id', id);
+      throw euError;
+    }
+
+    // Send welcome email
+    const loginUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
+    const emailBody = `
+      <h2>Welcome to Open Word Enterprise!</h2>
+      <p>Hi ${adminName},</p>
+      <p>Your organisation <strong>${org.name}</strong> has been upgraded to an Enterprise account.</p>
+
+      <h3>Your Login Credentials</h3>
+      <table style="border-collapse: collapse; margin: 15px 0;">
+        <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;">${adminEmail}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Password:</td><td style="padding: 8px; font-family: monospace; background: #f3f4f6; border-radius: 4px;">${generatedPassword}</td></tr>
+      </table>
+      <p style="color: #dc2626; font-weight: 600;">Please change your password after first login.</p>
+
+      <h3>Quick Start</h3>
+      <ol>
+        <li>Go to <a href="${loginUrl}/login">${loginUrl}/login</a></li>
+        <li>Log in with the credentials above</li>
+        <li>Access your Enterprise Control Panel to manage users and sessions</li>
+      </ol>
+
+      <h3>Enterprise Plan Details</h3>
+      <ul>
+        <li><strong>Included Credits:</strong> ${credits} per month</li>
+        <li><strong>Overage Rate:</strong> ${overage}p per credit</li>
+        <li><strong>Billing Day:</strong> ${billing}${billing === 1 ? 'st' : billing === 2 ? 'nd' : billing === 3 ? 'rd' : 'th'} of each month</li>
+      </ul>
+
+      <p>If you have any questions, please contact us at <a href="mailto:support@openword.live">support@openword.live</a>.</p>
+    `;
+
+    await sendCustomerEmail(adminEmail, 'Welcome to Open Word Enterprise', emailBody, adminName);
+
+    console.log(`🏢 Enterprise enabled for: ${org.name} (${id}) - Admin: ${adminName} (${adminEmail})`);
+
+    res.json({
+      success: true,
+      message: 'Enterprise enabled successfully',
+      generatedPassword,
+      enterpriseUserId: enterpriseUser.id
+    });
+  } catch (error) {
+    console.error('Error enabling enterprise:', error);
+    res.status(500).json({ error: 'Failed to enable enterprise: ' + error.message });
+  }
+});
+
+/**
+ * GET /api/customers/:id/enterprise-info
+ * Get enterprise users and config for an organisation
+ */
+router.get('/:id/enterprise-info', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get enterprise config from organisation
+    const { data: org, error: orgError } = await supabase
+      .from('organisations')
+      .select('is_enterprise, enterprise_included_credits, enterprise_overage_rate_pence, enterprise_billing_day')
+      .eq('id', id)
+      .single();
+
+    if (orgError) throw orgError;
+
+    if (!org?.is_enterprise) {
+      return res.json({
+        success: true,
+        data: { isEnterprise: false }
+      });
+    }
+
+    // Get enterprise users
+    const { data: users, error: usersError } = await supabase
+      .from('enterprise_users')
+      .select('id, email, name, role, is_active, last_login_at, created_at')
+      .eq('organisation_id', id)
+      .order('created_at', { ascending: true });
+
+    if (usersError) throw usersError;
+
+    // Count by role
+    const counts = { admins: 0, controllers: 0, sessionUsers: 0, total: 0 };
+    (users || []).forEach(u => {
+      if (u.is_active) {
+        counts.total++;
+        if (u.role === 'admin') counts.admins++;
+        else if (u.role === 'controller') counts.controllers++;
+        else if (u.role === 'session_user') counts.sessionUsers++;
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        isEnterprise: true,
+        config: {
+          includedCredits: org.enterprise_included_credits,
+          overageRatePence: org.enterprise_overage_rate_pence,
+          billingDay: org.enterprise_billing_day
+        },
+        users: users || [],
+        counts
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching enterprise info:', error);
+    res.status(500).json({ error: 'Failed to fetch enterprise info' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/update-enterprise-config
+ * Update enterprise billing configuration
+ */
+router.post('/:id/update-enterprise-config', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { includedCredits, overageRatePence, billingDay } = req.body;
+
+    const updates = {};
+    if (includedCredits !== undefined) updates.enterprise_included_credits = includedCredits;
+    if (overageRatePence !== undefined) updates.enterprise_overage_rate_pence = overageRatePence;
+    if (billingDay !== undefined) updates.enterprise_billing_day = billingDay;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const { data, error } = await supabase
+      .from('organisations')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`🏢 Enterprise config updated for org ${id}:`, updates);
+
+    res.json({
+      success: true,
+      message: 'Enterprise config updated',
+      data
+    });
+  } catch (error) {
+    console.error('Error updating enterprise config:', error);
+    res.status(500).json({ error: 'Failed to update enterprise config' });
   }
 });
 
