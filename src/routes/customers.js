@@ -1805,6 +1805,7 @@ router.post('/create-enterprise', async (req, res) => {
 router.post('/:id/send-enterprise-credentials', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`📧 send-enterprise-credentials called for org id: ${id}`);
 
     // Fetch org and enterprise admin
     const { data: org, error: orgError } = await supabase
@@ -1813,9 +1814,14 @@ router.post('/:id/send-enterprise-credentials', async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (orgError) throw orgError;
+    if (orgError) {
+      console.error('📧 Org query failed:', orgError);
+      return res.status(500).json({ error: 'Organisation query failed: ' + orgError.message });
+    }
     if (!org) return res.status(404).json({ error: 'Organisation not found' });
     if (!org.is_enterprise) return res.status(400).json({ error: 'Organisation is not enterprise' });
+
+    console.log(`📧 Found org: ${org.name}, fetching enterprise admin...`);
 
     // Get the admin enterprise user
     const { data: adminUser, error: adminError } = await supabase
@@ -1826,9 +1832,15 @@ router.post('/:id/send-enterprise-credentials', async (req, res) => {
       .limit(1)
       .single();
 
-    if (adminError || !adminUser) {
+    if (adminError) {
+      console.error('📧 Enterprise admin query failed:', adminError);
+      return res.status(404).json({ error: 'Enterprise admin query failed: ' + adminError.message });
+    }
+    if (!adminUser) {
       return res.status(404).json({ error: 'Enterprise admin user not found' });
     }
+
+    console.log(`📧 Found admin: ${adminUser.email}, sending email...`);
 
     const loginUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
 
@@ -1886,6 +1898,7 @@ router.post('/:id/send-enterprise-password', async (req, res) => {
   try {
     const { id } = req.params;
     const { password, regenerate } = req.body;
+    console.log(`📧 send-enterprise-password called for org id: ${id}, regenerate: ${!!regenerate}`);
 
     // Fetch org
     const { data: org, error: orgError } = await supabase
@@ -1894,9 +1907,14 @@ router.post('/:id/send-enterprise-password', async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (orgError) throw orgError;
+    if (orgError) {
+      console.error('📧 Org query failed:', orgError);
+      return res.status(500).json({ error: 'Organisation query failed: ' + orgError.message });
+    }
     if (!org) return res.status(404).json({ error: 'Organisation not found' });
     if (!org.is_enterprise) return res.status(400).json({ error: 'Organisation is not enterprise' });
+
+    console.log(`📧 Found org: ${org.name}, fetching enterprise admin...`);
 
     // Get the admin enterprise user
     const { data: adminUser, error: adminError } = await supabase
@@ -1907,9 +1925,15 @@ router.post('/:id/send-enterprise-password', async (req, res) => {
       .limit(1)
       .single();
 
-    if (adminError || !adminUser) {
+    if (adminError) {
+      console.error('📧 Enterprise admin query failed:', adminError);
+      return res.status(404).json({ error: 'Enterprise admin query failed: ' + adminError.message });
+    }
+    if (!adminUser) {
       return res.status(404).json({ error: 'Enterprise admin user not found' });
     }
+
+    console.log(`📧 Found admin: ${adminUser.email}, preparing password email...`);
 
     // If regenerate flag is set, generate a new password and update the auth user
     let passwordToSend = password;

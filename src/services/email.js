@@ -189,11 +189,8 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
       return { success: true, simulated: true };
     }
 
-    // Use verified SENDER_EMAIL for the from address, SUPPORT_EMAIL for reply-to
-    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER || supportEmail;
-
     await transporter.sendMail({
-      from: `"Open Word Support" <${senderEmail}>`,
+      from: `"Open Word Support" <${supportEmail}>`,
       replyTo: supportEmail,
       to: to,
       subject: subject,
