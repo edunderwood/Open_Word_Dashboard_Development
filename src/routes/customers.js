@@ -1520,13 +1520,17 @@ router.post('/:id/enable-enterprise', async (req, res) => {
       <p>If you have any questions, please contact us at <a href="mailto:support@openword.live">support@openword.live</a>.</p>
     `;
 
-    await sendCustomerEmail(adminEmail, 'Welcome to Open Word Enterprise', emailBody, adminName);
+    const emailResult = await sendCustomerEmail(adminEmail, 'Welcome to Open Word Enterprise', emailBody, adminName);
+
+    if (!emailResult.success) {
+      console.warn(`Warning: Enterprise enabled but email failed to send: ${emailResult.error}`);
+    }
 
     console.log(`🏢 Enterprise enabled for: ${org.name} (${id}) - Admin: ${adminName} (${adminEmail})`);
 
     res.json({
       success: true,
-      message: 'Enterprise enabled successfully',
+      message: 'Enterprise enabled successfully' + (!emailResult.success ? ' (email failed to send)' : ''),
       generatedPassword,
       enterpriseUserId: enterpriseUser.id
     });
@@ -1859,7 +1863,11 @@ router.post('/:id/send-enterprise-credentials', async (req, res) => {
       <p>If you have any questions, please contact us at <a href="mailto:support@openword.live">support@openword.live</a>.</p>
     `;
 
-    await sendCustomerEmail(adminUser.email, 'Your Open Word Enterprise Account Has Been Created', emailBody, adminUser.name);
+    const emailResult = await sendCustomerEmail(adminUser.email, 'Your Open Word Enterprise Account Has Been Created', emailBody, adminUser.name);
+
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send email: ' + (emailResult.error || 'Unknown error') });
+    }
 
     console.log(`📧 Enterprise credentials email (account details) sent to ${adminUser.email} for org ${org.name}`);
 
@@ -1947,7 +1955,11 @@ router.post('/:id/send-enterprise-password', async (req, res) => {
       <p>If you have any questions, please contact us at <a href="mailto:support@openword.live">support@openword.live</a>.</p>
     `;
 
-    await sendCustomerEmail(adminUser.email, 'Your Open Word Enterprise Password', emailBody, adminUser.name);
+    const emailResult = await sendCustomerEmail(adminUser.email, 'Your Open Word Enterprise Password', emailBody, adminUser.name);
+
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send email: ' + (emailResult.error || 'Unknown error') });
+    }
 
     console.log(`📧 Enterprise password email sent to ${adminUser.email} for org ${org.name}`);
 

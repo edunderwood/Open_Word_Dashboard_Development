@@ -1818,8 +1818,12 @@
       try {
         const response = await fetch(`/api/customers/${createdEnterpriseOrgId}/send-enterprise-credentials`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ error: `Server error (${response.status})` }));
+          throw new Error(errData.error || `Server error (${response.status})`);
+        }
         const data = await response.json();
         if (!data.success) throw new Error(data.error);
 
@@ -1845,9 +1849,13 @@
       try {
         const response = await fetch(`/api/customers/${createdEnterpriseOrgId}/send-enterprise-password`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ password: createdEnterprisePassword })
         });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ error: `Server error (${response.status})` }));
+          throw new Error(errData.error || `Server error (${response.status})`);
+        }
         const data = await response.json();
         if (!data.success) throw new Error(data.error);
 
