@@ -1,36 +1,28 @@
 /**
  * Email Service for Admin Alerts and Customer Communications
  *
- * Uses SendGrid via SMTP (recommended) or any SMTP provider
+ * Uses SendGrid Web API (HTTP) instead of SMTP to avoid port blocking on cloud platforms.
  *
  * Required env vars:
- *   SMTP_HOST=smtp.sendgrid.net
- *   SMTP_PORT=587
- *   SMTP_USER=apikey
- *   SMTP_PASS=SG.your_api_key
+ *   SENDGRID_API_KEY=SG.your_api_key (same key as SMTP_PASS)
+ *   - OR falls back to SMTP_PASS if SENDGRID_API_KEY is not set
  *   SENDER_EMAIL=alerts@yourdomain.com (must be verified in SendGrid)
  *   SUPPORT_EMAIL=support@openword.live (for customer communications)
  *   ALERT_EMAIL=recipient@example.com
  */
 
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-});
+// Configure SendGrid with API key (use SENDGRID_API_KEY or fall back to SMTP_PASS)
+const apiKey = process.env.SENDGRID_API_KEY || process.env.SMTP_PASS;
+if (apiKey) {
+  sgMail.setApiKey(apiKey);
+} else {
+  console.warn('⚠️ No SendGrid API key configured (SENDGRID_API_KEY or SMTP_PASS)');
+}
 
 /**
  * Send alert email
@@ -80,17 +72,17 @@ export async function sendAlert(subject, message, priority = 'info') {
   `;
 
   try {
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (!apiKey) {
       console.log(`📧 [Email disabled] Would send to ${alertEmail}: ${fullSubject}`);
       console.log(`   Message: ${message.replace(/<[^>]*>/g, '').substring(0, 200)}...`);
       return { success: true, simulated: true };
     }
 
-    // SENDER_EMAIL must be verified in SendGrid (or use SMTP_USER for other providers)
-    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER;
+    // SENDER_EMAIL must be verified in SendGrid
+    const senderEmail = process.env.SENDER_EMAIL || process.env.SUPPORT_EMAIL || 'support@openword.live';
 
-    await transporter.sendMail({
-      from: `"OpenWord Dashboard" <${senderEmail}>`,
+    await sgMail.send({
+      from: { email: senderEmail, name: 'OpenWord Dashboard' },
       to: alertEmail,
       subject: fullSubject,
       html: htmlBody,
@@ -99,7 +91,7 @@ export async function sendAlert(subject, message, priority = 'info') {
     console.log(`📧 Alert sent to ${alertEmail}: ${subject}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Failed to send alert email:', error);
+    console.error('❌ Failed to send alert email:', error?.response?.body || error);
     return { success: false, error: error.message };
   }
 }
@@ -183,14 +175,14 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
   `;
 
   try {
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (!apiKey) {
       console.log(`📧 [Email disabled] Would send to ${to}: ${subject}`);
       console.log(`   Body preview: ${bodyHtml.replace(/<[^>]*>/g, '').substring(0, 200)}...`);
       return { success: true, simulated: true };
     }
 
-    await transporter.sendMail({
-      from: `"Open Word Support" <${supportEmail}>`,
+    await sgMail.send({
+      from: { email: supportEmail, name: 'Open Word Support' },
       replyTo: supportEmail,
       to: to,
       subject: subject,
@@ -200,7 +192,7 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
     console.log(`📧 Customer email sent to ${to}: ${subject}`);
     return { success: true };
   } catch (error) {
-    console.error(`❌ Failed to send customer email to ${to}:`, error);
+    console.error(`❌ Failed to send customer email to ${to}:`, error?.response?.body || error);
     return { success: false, error: error.message };
   }
 }
