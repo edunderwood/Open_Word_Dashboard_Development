@@ -97,9 +97,12 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <div class="page-header">
-        <h2>Customers</h2>
-        <p>Manage all Open Word customers</p>
+      <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2>Customers</h2>
+          <p>Manage all Open Word customers</p>
+        </div>
+        <button class="btn" style="background: #8b5cf6; color: white; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; border: none;" onclick="openCreateEnterpriseModal()">+ Create Enterprise Customer</button>
       </div>
 
       <!-- Search and Filters -->
@@ -360,6 +363,14 @@
       <div class="modal-body">
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
           <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntMonthlyFee" style="font-size: 0.8rem;">Monthly Fee (&pound;)</label>
+            <input type="number" id="editEntMonthlyFee" class="form-input" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntCreditCharge" style="font-size: 0.8rem;">Credit Charge (p)</label>
+            <input type="number" id="editEntCreditCharge" class="form-input" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
             <label for="editEntCredits" style="font-size: 0.8rem;">Included Credits</label>
             <input type="number" id="editEntCredits" class="form-input" min="0" style="width: 100%;">
           </div>
@@ -371,12 +382,215 @@
             <label for="editEntBillingDay" style="font-size: 0.8rem;">Billing Day</label>
             <input type="number" id="editEntBillingDay" class="form-input" min="1" max="28" style="width: 100%;">
           </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="editEntTrialDays" style="font-size: 0.8rem;">Trial (days)</label>
+            <input type="number" id="editEntTrialDays" class="form-input" min="0" style="width: 100%;">
+          </div>
         </div>
         <input type="hidden" id="editEntOrgId">
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeEnterpriseConfigModal()">Cancel</button>
         <button class="btn" style="background: #8b5cf6; color: white;" onclick="submitEnterpriseConfigUpdate()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Enterprise Customer Modal -->
+  <div class="modal-overlay" id="createEnterpriseModal">
+    <div class="modal" style="max-width: 650px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header" style="background: #8b5cf6; color: white;">
+        <h3>Create Enterprise Customer</h3>
+        <button class="modal-close" onclick="closeCreateEnterpriseModal()" style="color: white;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Customer Details -->
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Customer Details</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntOrgName" style="font-size: 0.8rem;">Organisation Name *</label>
+            <input type="text" id="createEntOrgName" class="form-input" placeholder="e.g. Acme Corporation" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntContactName" style="font-size: 0.8rem;">Contact Name *</label>
+            <input type="text" id="createEntContactName" class="form-input" placeholder="e.g. John Smith" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntEmail" style="font-size: 0.8rem;">Contact Email *</label>
+            <input type="email" id="createEntEmail" class="form-input" placeholder="e.g. admin@company.com" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntPhone" style="font-size: 0.8rem;">Contact Phone</label>
+            <input type="tel" id="createEntPhone" class="form-input" placeholder="e.g. 07700 900000" style="width: 100%;">
+          </div>
+        </div>
+
+        <!-- Address -->
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Address</h4>
+        <div style="margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <input type="text" id="createEntAddress1" class="form-input" placeholder="Address Line 1" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <input type="text" id="createEntAddress2" class="form-input" placeholder="Address Line 2" style="width: 100%;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <input type="text" id="createEntCity" class="form-input" placeholder="City" style="width: 100%;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <input type="text" id="createEntPostcode" class="form-input" placeholder="Postcode" style="width: 100%;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <select id="createEntCountry" class="form-input" style="width: 100%; padding: 10px;">
+                <option value="United Kingdom" selected>United Kingdom</option>
+                <option value="Ireland">Ireland</option>
+                <option value="United States">United States</option>
+                <option value="Canada">Canada</option>
+                <option value="Australia">Australia</option>
+                <option value="France">France</option>
+                <option value="Germany">Germany</option>
+                <option value="Spain">Spain</option>
+                <option value="Italy">Italy</option>
+                <option value="Netherlands">Netherlands</option>
+                <option value="Belgium">Belgium</option>
+                <option value="Switzerland">Switzerland</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Billing Config -->
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Billing Configuration</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntMonthlyFee" style="font-size: 0.8rem;">Monthly Fee (&pound;)</label>
+            <input type="number" id="createEntMonthlyFee" class="form-input" value="300" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntCreditCharge" style="font-size: 0.8rem;">Credit Charge (p)</label>
+            <input type="number" id="createEntCreditCharge" class="form-input" value="118" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntIncCredits" style="font-size: 0.8rem;">Included Credits</label>
+            <input type="number" id="createEntIncCredits" class="form-input" value="200" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntOverage" style="font-size: 0.8rem;">Overage Rate (p)</label>
+            <input type="number" id="createEntOverage" class="form-input" value="118" min="0" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntBillingDay" style="font-size: 0.8rem;">Billing Day</label>
+            <input type="number" id="createEntBillingDay" class="form-input" value="1" min="1" max="28" style="width: 100%;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="createEntTrialDays" style="font-size: 0.8rem;">Trial Period (days)</label>
+            <input type="number" id="createEntTrialDays" class="form-input" value="0" min="0" style="width: 100%;">
+          </div>
+        </div>
+
+        <!-- Discount (optional, collapsible) -->
+        <details style="margin-bottom: 10px;">
+          <summary style="cursor: pointer; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; margin-bottom: 12px;">Discount (Optional)</summary>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="createEntDiscountPercent" style="font-size: 0.8rem;">Discount %</label>
+              <select id="createEntDiscountPercent" class="form-input" style="width: 100%; padding: 10px;">
+                <option value="">No discount</option>
+                <option value="10">10%</option>
+                <option value="20">20%</option>
+                <option value="30">30%</option>
+                <option value="40">40%</option>
+                <option value="50">50%</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="createEntDiscountType" style="font-size: 0.8rem;">Discount Type</label>
+              <select id="createEntDiscountType" class="form-input" style="width: 100%; padding: 10px;">
+                <option value="">Select type...</option>
+                <option value="charity">Charity</option>
+                <option value="church">Church</option>
+                <option value="nonprofit">Nonprofit</option>
+                <option value="educational">Educational</option>
+                <option value="community">Community</option>
+                <option value="partner">Partner</option>
+                <option value="promotional">Promotional</option>
+                <option value="negotiated">Negotiated</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+              <label for="createEntDiscountReason" style="font-size: 0.8rem;">Reason (optional)</label>
+              <input type="text" id="createEntDiscountReason" class="form-input" placeholder="Enter reason for discount..." style="width: 100%;">
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCreateEnterpriseModal()">Cancel</button>
+        <button class="btn" style="background: #8b5cf6; color: white;" id="createEntSubmitBtn" onclick="submitCreateEnterprise()">Create Enterprise Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enterprise Credentials Modal (shown after creation) -->
+  <div class="modal-overlay" id="enterpriseCredentialsModal">
+    <div class="modal" style="max-width: 520px;">
+      <div class="modal-header" style="background: #8b5cf6; color: white;">
+        <h3>Enterprise Customer Created</h3>
+        <button class="modal-close" onclick="closeEnterpriseCredentialsModal()" style="color: white;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #f0fdf4; border: 1px solid #86efac; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="margin: 0; color: #166534; font-weight: 600;">Customer created successfully!</p>
+        </div>
+
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Account Summary</h4>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; background: #f9fafb; border: 1px solid #e5e7eb; width: 40%;">Organisation</td>
+            <td style="padding: 8px 12px; border: 1px solid #e5e7eb;" id="credOrgName"></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; background: #f9fafb; border: 1px solid #e5e7eb;">Org Key</td>
+            <td style="padding: 8px 12px; border: 1px solid #e5e7eb; font-family: monospace;" id="credOrgKey"></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; background: #f9fafb; border: 1px solid #e5e7eb;">Admin Email</td>
+            <td style="padding: 8px 12px; border: 1px solid #e5e7eb;" id="credAdminEmail"></td>
+          </tr>
+        </table>
+
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 6px;">Generated Password</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="password" id="credPassword" readonly style="flex: 1; padding: 10px; font-family: monospace; font-size: 16px; border: 2px solid #8b5cf6; border-radius: 6px; background: #f9fafb;">
+            <button class="btn btn-sm" onclick="toggleCredPassword()" style="padding: 8px 12px; white-space: nowrap;">Show</button>
+          </div>
+          <p style="margin: 6px 0 0; font-size: 0.75rem; color: #dc2626; font-weight: 600;">This password cannot be retrieved after closing this dialog.</p>
+        </div>
+
+        <h4 style="margin-bottom: 12px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Send Credentials Emails</h4>
+        <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 15px;">Send the customer their login details in two separate emails for security.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn" style="background: #3b82f6; color: white; flex: 1;" id="sendCredEmailBtn" onclick="sendEnterpriseCredentialsEmail()">
+              Send Account Details Email
+            </button>
+            <span id="credEmailStatus" style="font-size: 20px;"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn" style="background: #8b5cf6; color: white; flex: 1;" id="sendPassEmailBtn" onclick="sendEnterprisePasswordEmail()">
+              Send Password Email
+            </button>
+            <span id="passEmailStatus" style="font-size: 20px;"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEnterpriseCredentialsModal()">Close</button>
       </div>
     </div>
   </div>
@@ -887,7 +1101,13 @@
                   </table>
                 </div>
               ` : ''}
-              <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="showEditEnterpriseConfigModal('${customer.id}', ${enterprise.config.includedCredits ?? 200}, ${enterprise.config.overageRatePence ?? 118}, ${enterprise.config.billingDay ?? 1})">Edit Config</button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="showEditEnterpriseConfigModal('${customer.id}', ${enterprise.config.includedCredits ?? 200}, ${enterprise.config.overageRatePence ?? 118}, ${enterprise.config.billingDay ?? 1}, ${customer.minimum_monthly_fee ?? 300}, ${customer.enterprise_credit_charge_pence ?? 118}, ${customer.enterprise_trial_days ?? 0})">Edit Config</button>
+                ${customer.payment_status === 'pending' ? `
+                  <button class="btn btn-sm" style="background: #3b82f6; color: white;" onclick="resendEnterpriseCredentialsEmail('${customer.id}')">Resend Account Email</button>
+                  <button class="btn btn-sm" style="background: #f59e0b; color: white;" onclick="resendEnterprisePasswordEmail('${customer.id}')">Resend Password Email</button>
+                ` : ''}
+              </div>
             ` : `
               <div style="display: flex; align-items: center; gap: 15px;">
                 <span style="color: var(--gray-500); font-size: 0.9rem;">Not an enterprise customer</span>
@@ -1424,11 +1644,14 @@
       }
     }
 
-    function showEditEnterpriseConfigModal(orgId, credits, overage, billingDay) {
+    function showEditEnterpriseConfigModal(orgId, credits, overage, billingDay, monthlyFee, creditCharge, trialDays) {
       document.getElementById('editEntOrgId').value = orgId;
       document.getElementById('editEntCredits').value = credits;
       document.getElementById('editEntOverage').value = overage;
       document.getElementById('editEntBillingDay').value = billingDay;
+      document.getElementById('editEntMonthlyFee').value = monthlyFee || 300;
+      document.getElementById('editEntCreditCharge').value = creditCharge || 118;
+      document.getElementById('editEntTrialDays').value = trialDays || 0;
       document.getElementById('enterpriseConfigModal').classList.add('active');
     }
 
@@ -1441,12 +1664,15 @@
       const includedCredits = parseInt(document.getElementById('editEntCredits').value);
       const overageRatePence = parseInt(document.getElementById('editEntOverage').value);
       const billingDay = parseInt(document.getElementById('editEntBillingDay').value);
+      const monthlyFee = parseInt(document.getElementById('editEntMonthlyFee').value);
+      const creditChargePence = parseInt(document.getElementById('editEntCreditCharge').value);
+      const trialDays = parseInt(document.getElementById('editEntTrialDays').value);
 
       try {
         const response = await fetch(`/api/customers/${orgId}/update-enterprise-config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ includedCredits, overageRatePence, billingDay })
+          body: JSON.stringify({ includedCredits, overageRatePence, billingDay, monthlyFee, creditChargePence, trialDays })
         });
 
         const data = await response.json();
@@ -1457,6 +1683,226 @@
         viewCustomer(orgId);
       } catch (error) {
         alert('Error updating enterprise config: ' + error.message);
+      }
+    }
+
+    // =====================================================
+    // CREATE ENTERPRISE CUSTOMER
+    // =====================================================
+
+    let createdEnterpriseOrgId = null;
+    let createdEnterprisePassword = null;
+    let credEmailSent = false;
+    let passEmailSent = false;
+
+    function openCreateEnterpriseModal() {
+      // Reset all fields
+      document.getElementById('createEntOrgName').value = '';
+      document.getElementById('createEntContactName').value = '';
+      document.getElementById('createEntEmail').value = '';
+      document.getElementById('createEntPhone').value = '';
+      document.getElementById('createEntAddress1').value = '';
+      document.getElementById('createEntAddress2').value = '';
+      document.getElementById('createEntCity').value = '';
+      document.getElementById('createEntPostcode').value = '';
+      document.getElementById('createEntCountry').value = 'United Kingdom';
+      document.getElementById('createEntMonthlyFee').value = '300';
+      document.getElementById('createEntCreditCharge').value = '118';
+      document.getElementById('createEntIncCredits').value = '200';
+      document.getElementById('createEntOverage').value = '118';
+      document.getElementById('createEntBillingDay').value = '1';
+      document.getElementById('createEntTrialDays').value = '0';
+      document.getElementById('createEntDiscountPercent').value = '';
+      document.getElementById('createEntDiscountType').value = '';
+      document.getElementById('createEntDiscountReason').value = '';
+      document.getElementById('createEntSubmitBtn').disabled = false;
+      document.getElementById('createEntSubmitBtn').textContent = 'Create Enterprise Customer';
+      document.getElementById('createEnterpriseModal').classList.add('active');
+    }
+
+    function closeCreateEnterpriseModal() {
+      document.getElementById('createEnterpriseModal').classList.remove('active');
+    }
+
+    async function submitCreateEnterprise() {
+      const orgName = document.getElementById('createEntOrgName').value.trim();
+      const contactName = document.getElementById('createEntContactName').value.trim();
+      const email = document.getElementById('createEntEmail').value.trim();
+
+      if (!orgName) { alert('Organisation name is required'); return; }
+      if (!contactName) { alert('Contact name is required'); return; }
+      if (!email || !email.includes('@')) { alert('Valid email address is required'); return; }
+
+      const btn = document.getElementById('createEntSubmitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        const response = await fetch('/api/customers/create-enterprise', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organisationName: orgName,
+            contactName: contactName,
+            contactEmail: email,
+            contactPhone: document.getElementById('createEntPhone').value.trim(),
+            addressLine1: document.getElementById('createEntAddress1').value.trim(),
+            addressLine2: document.getElementById('createEntAddress2').value.trim(),
+            city: document.getElementById('createEntCity').value.trim(),
+            postcode: document.getElementById('createEntPostcode').value.trim(),
+            country: document.getElementById('createEntCountry').value,
+            monthlyFee: parseInt(document.getElementById('createEntMonthlyFee').value) || 300,
+            creditChargePence: parseInt(document.getElementById('createEntCreditCharge').value) || 118,
+            includedCredits: parseInt(document.getElementById('createEntIncCredits').value) || 200,
+            overageRatePence: parseInt(document.getElementById('createEntOverage').value) || 118,
+            billingDay: parseInt(document.getElementById('createEntBillingDay').value) || 1,
+            trialDays: parseInt(document.getElementById('createEntTrialDays').value) || 0,
+            discountPercent: parseInt(document.getElementById('createEntDiscountPercent').value) || 0,
+            discountType: document.getElementById('createEntDiscountType').value,
+            discountReason: document.getElementById('createEntDiscountReason').value.trim()
+          })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        // Close creation modal and open credentials modal
+        closeCreateEnterpriseModal();
+
+        createdEnterpriseOrgId = data.organisationId;
+        createdEnterprisePassword = data.generatedPassword;
+        credEmailSent = false;
+        passEmailSent = false;
+
+        document.getElementById('credOrgName').textContent = data.organisationName;
+        document.getElementById('credOrgKey').textContent = data.organisationKey;
+        document.getElementById('credAdminEmail').textContent = data.adminEmail;
+        document.getElementById('credPassword').value = data.generatedPassword;
+        document.getElementById('credPassword').type = 'password';
+        document.getElementById('credEmailStatus').textContent = '';
+        document.getElementById('passEmailStatus').textContent = '';
+        document.getElementById('sendCredEmailBtn').disabled = false;
+        document.getElementById('sendPassEmailBtn').disabled = false;
+
+        document.getElementById('enterpriseCredentialsModal').classList.add('active');
+
+        // Refresh customer list
+        await loadCustomers();
+      } catch (error) {
+        alert('Error creating enterprise customer: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Create Enterprise Customer';
+      }
+    }
+
+    function toggleCredPassword() {
+      const input = document.getElementById('credPassword');
+      const btn = input.nextElementSibling;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+      } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+      }
+    }
+
+    async function sendEnterpriseCredentialsEmail() {
+      if (!createdEnterpriseOrgId) return;
+      const btn = document.getElementById('sendCredEmailBtn');
+      const status = document.getElementById('credEmailStatus');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      status.textContent = '';
+
+      try {
+        const response = await fetch(`/api/customers/${createdEnterpriseOrgId}/send-enterprise-credentials`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        credEmailSent = true;
+        btn.textContent = 'Account Details Email Sent';
+        status.textContent = '\u2705';
+      } catch (error) {
+        alert('Error sending email: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Send Account Details Email';
+        status.textContent = '\u274C';
+      }
+    }
+
+    async function sendEnterprisePasswordEmail() {
+      if (!createdEnterpriseOrgId || !createdEnterprisePassword) return;
+      const btn = document.getElementById('sendPassEmailBtn');
+      const status = document.getElementById('passEmailStatus');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      status.textContent = '';
+
+      try {
+        const response = await fetch(`/api/customers/${createdEnterpriseOrgId}/send-enterprise-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: createdEnterprisePassword })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+
+        passEmailSent = true;
+        btn.textContent = 'Password Email Sent';
+        status.textContent = '\u2705';
+      } catch (error) {
+        alert('Error sending email: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Send Password Email';
+        status.textContent = '\u274C';
+      }
+    }
+
+    function closeEnterpriseCredentialsModal() {
+      if (!credEmailSent || !passEmailSent) {
+        const unsent = [];
+        if (!credEmailSent) unsent.push('Account Details');
+        if (!passEmailSent) unsent.push('Password');
+        if (!confirm(`You haven't sent the ${unsent.join(' and ')} email(s) yet. Close anyway?`)) {
+          return;
+        }
+      }
+      createdEnterprisePassword = null;
+      document.getElementById('enterpriseCredentialsModal').classList.remove('active');
+    }
+
+    async function resendEnterpriseCredentialsEmail(orgId) {
+      if (!confirm('Send account details email to the enterprise admin?')) return;
+      try {
+        const response = await fetch(`/api/customers/${orgId}/send-enterprise-credentials`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        alert('Account details email sent successfully');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function resendEnterprisePasswordEmail(orgId) {
+      if (!confirm('This will generate a new password and send it to the enterprise admin. Continue?')) return;
+      try {
+        const response = await fetch(`/api/customers/${orgId}/send-enterprise-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ regenerate: true })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        alert('New password generated and sent successfully');
+      } catch (error) {
+        alert('Error: ' + error.message);
       }
     }
 
