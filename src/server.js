@@ -23,6 +23,7 @@ import costsRoutes from './routes/costs.js';
 import charityRegistersRoutes from './routes/charity-registers.js';
 import logsRoutes from './routes/logs.js';
 import communicationsRoutes from './routes/communications.js';
+import notificationsRoutes from './routes/notifications.js';
 import priceMigrationRoutes from './routes/price-migration.js';
 
 // Import services
@@ -91,6 +92,7 @@ app.use('/analytics', analyticsRoutes);
 app.use('/costs', costsRoutes);
 app.use('/api/charity-registers', requireAuth, charityRegistersRoutes);
 app.use('/api/communications', requireAuth, communicationsRoutes);
+app.use('/api/notifications', requireAuth, notificationsRoutes);
 app.use('/api/price-migration', requireAuth, priceMigrationRoutes);
 
 // Page routes
@@ -142,6 +144,10 @@ app.get('/communications', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../views/communications.html'));
 });
 
+app.get('/notifications', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, '../views/notifications.html'));
+});
+
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
@@ -173,6 +179,7 @@ app.listen(PORT, () => {
 ║   - Migration:   http://localhost:${PORT}/price-migration    ║
 ║   - Costs:       http://localhost:${PORT}/costs              ║
 ║   - Charities:   http://localhost:${PORT}/charity-registers  ║
+║   - Notifications: http://localhost:${PORT}/notifications    ║
 ║   - Monitoring:  http://localhost:${PORT}/monitoring         ║
 ║   - Logs:        http://localhost:${PORT}/logs               ║
 ║   - Analytics:   http://localhost:${PORT}/analytics          ║

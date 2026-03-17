@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications - Open Word Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .recipient-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+    .recipient-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #f3f4f6;
+      gap: 12px;
+    }
+    .recipient-item:last-child {
+      border-bottom: none;
+    }
+    .recipient-item:hover {
+      background: #f9fafb;
+    }
+    .recipient-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    .recipient-info {
+      flex: 1;
+    }
+    .recipient-name {
+      font-weight: 500;
+      color: #374151;
+    }
+    .recipient-email {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .recipient-badges {
+      display: flex;
+      gap: 6px;
+    }
+    .select-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+    .select-count {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .notif-composer {
+      display: grid;
+      gap: 16px;
+    }
+    .notif-composer label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+    .notif-composer input[type="text"],
+    .notif-composer textarea,
+    .notif-composer select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .notif-composer textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+    .notif-composer input:focus,
+    .notif-composer textarea:focus,
+    .notif-composer select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    .send-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      color: #374151;
+    }
+    .tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .history-table {
+      width: 100%;
+    }
+    .history-table th, .history-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .history-table th {
+      background: #f9fafb;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .type-general { background: #e5e7eb; color: #374151; }
+    .type-maintenance { background: #fef3c7; color: #92400e; }
+    .type-feature { background: #d1fae5; color: #065f46; }
+    .type-pricing { background: #dbeafe; color: #1e40af; }
+    .type-urgent { background: #fee2e2; color: #991b1b; }
+    .broadcast-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+    .broadcast-toggle input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+    }
+    .broadcast-toggle label {
+      font-weight: 500;
+      color: #374151;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Open Word</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li><a href="/dashboard">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            Dashboard
+          </a></li>
+          <li><a href="/customers">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            Customers
+          </a></li>
+          <li><a href="/pricing">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Pricing
+          </a></li>
+          <li><a href="/price-migration">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+            Price Migration
+          </a></li>
+          <li><a href="/costs">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+            Costs
+          </a></li>
+          <li><a href="/charity-registers">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+            Charity Registers
+          </a></li>
+          <li><a href="/communications">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            Communications
+          </a></li>
+          <li><a href="/notifications" class="active">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+            Notifications
+          </a></li>
+          <li><a href="/monitoring">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            Monitoring
+          </a></li>
+          <li><a href="/analytics">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+            Analytics
+          </a></li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="content-header">
+        <h2>In-App Notifications</h2>
+        <p>Send notifications that appear in the customer's control panel</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('compose')">Compose</button>
+        <button class="tab-btn" onclick="switchTab('history')">History</button>
+      </div>
+
+      <!-- Compose Tab -->
+      <div id="compose-tab" class="tab-content active">
+        <div class="card">
+          <div class="card-header">
+            <h3>Send Notification</h3>
+          </div>
+          <div class="card-body">
+            <!-- Broadcast toggle -->
+            <div class="broadcast-toggle">
+              <input type="checkbox" id="broadcastToggle" onchange="toggleBroadcast()">
+              <label for="broadcastToggle">Send to all customers (broadcast)</label>
+            </div>
+
+            <!-- Recipient selection (hidden when broadcast) -->
+            <div id="recipientSection">
+              <div class="select-controls">
+                <button class="btn btn-sm" onclick="selectAll()">Select All</button>
+                <button class="btn btn-sm btn-secondary" onclick="selectNone()">Select None</button>
+                <span class="select-count" id="selectedCount">0 selected</span>
+              </div>
+              <div class="recipient-list" id="recipientList">
+                <div style="padding: 20px; text-align: center; color: #6b7280;">Loading customers...</div>
+              </div>
+            </div>
+
+            <!-- Notification composer -->
+            <div class="notif-composer">
+              <div>
+                <label for="notifType">Type</label>
+                <select id="notifType">
+                  <option value="general">General</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="feature">New Feature</option>
+                  <option value="pricing">Pricing Update</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+              <div>
+                <label for="notifTitle">Title</label>
+                <input type="text" id="notifTitle" placeholder="Notification title..." maxlength="200">
+              </div>
+              <div>
+                <label for="notifMessage">Message</label>
+                <textarea id="notifMessage" placeholder="Notification message..."></textarea>
+              </div>
+            </div>
+
+            <div class="send-actions">
+              <button class="btn btn-primary" onclick="sendNotification()" id="sendBtn">Send Notification</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="history-tab" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <h3>Notification History</h3>
+          </div>
+          <div class="card-body">
+            <div style="overflow-x: auto;">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Recipient</th>
+                    <th>Sent By</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <tr><td colspan="6" style="text-align: center; color: #6b7280;">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top: 16px; text-align: center;">
+              <button class="btn btn-sm btn-secondary" id="loadMoreBtn" onclick="loadMoreHistory()" style="display: none;">Load More</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let customers = [];
+    let historyOffset = 0;
+    const HISTORY_LIMIT = 50;
+
+    // Load customers on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadCustomers();
+      loadHistory();
+    });
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(tab + '-tab').classList.add('active');
+      event.target.classList.add('active');
+      if (tab === 'history') loadHistory();
+    }
+
+    function toggleBroadcast() {
+      const broadcast = document.getElementById('broadcastToggle').checked;
+      document.getElementById('recipientSection').style.display = broadcast ? 'none' : 'block';
+    }
+
+    async function loadCustomers() {
+      try {
+        const res = await fetch('/api/notifications/customers');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        customers = data.customers;
+        renderCustomerList();
+      } catch (err) {
+        document.getElementById('recipientList').innerHTML =
+          `<div style="padding: 20px; text-align: center; color: #ef4444;">Failed to load customers: ${err.message}</div>`;
+      }
+    }
+
+    function renderCustomerList() {
+      const list = document.getElementById('recipientList');
+      if (customers.length === 0) {
+        list.innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280;">No customers found</div>';
+        return;
+      }
+
+      list.innerHTML = customers.map(c => `
+        <div class="recipient-item">
+          <input type="checkbox" class="recipient-checkbox" value="${c.id}" onchange="updateCount()">
+          <div class="recipient-info">
+            <div class="recipient-name">${escapeHtml(c.name || 'Unnamed')}</div>
+            <div class="recipient-email">${escapeHtml(c.email || 'No email')}</div>
+          </div>
+          <div class="recipient-badges">
+            <span class="badge badge-${c.tier === 'enterprise' ? 'primary' : c.tier === 'pro' ? 'success' : 'default'}">${c.tier}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectAll() {
+      document.querySelectorAll('.recipient-checkbox').forEach(cb => cb.checked = true);
+      updateCount();
+    }
+
+    function selectNone() {
+      document.querySelectorAll('.recipient-checkbox').forEach(cb => cb.checked = false);
+      updateCount();
+    }
+
+    function updateCount() {
+      const count = document.querySelectorAll('.recipient-checkbox:checked').length;
+      document.getElementById('selectedCount').textContent = `${count} selected`;
+    }
+
+    function getSelectedIds() {
+      return Array.from(document.querySelectorAll('.recipient-checkbox:checked')).map(cb => cb.value);
+    }
+
+    async function sendNotification() {
+      const broadcast = document.getElementById('broadcastToggle').checked;
+      const title = document.getElementById('notifTitle').value.trim();
+      const message = document.getElementById('notifMessage').value.trim();
+      const type = document.getElementById('notifType').value;
+      const customerIds = getSelectedIds();
+
+      if (!title) return alert('Please enter a title');
+      if (!message) return alert('Please enter a message');
+      if (!broadcast && customerIds.length === 0) return alert('Please select at least one customer or enable broadcast');
+
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        const res = await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerIds: broadcast ? [] : customerIds,
+            title,
+            message,
+            type,
+            sendToAll: broadcast
+          })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        alert(`Notification sent successfully! (${data.sent} recipient(s))`);
+
+        // Clear form
+        document.getElementById('notifTitle').value = '';
+        document.getElementById('notifMessage').value = '';
+        selectNone();
+      } catch (err) {
+        alert('Failed to send: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send Notification';
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const res = await fetch(`/api/notifications/history?limit=${HISTORY_LIMIT}&offset=${historyOffset}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const tbody = document.getElementById('historyTableBody');
+
+        if (historyOffset === 0) {
+          tbody.innerHTML = '';
+        }
+
+        if (data.notifications.length === 0 && historyOffset === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #6b7280;">No notifications sent yet</td></tr>';
+          return;
+        }
+
+        data.notifications.forEach(n => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${new Date(n.created_at).toLocaleString()}</td>
+            <td><span class="type-badge type-${n.type}">${n.type}</span></td>
+            <td>${escapeHtml(n.title)}</td>
+            <td>${escapeHtml(n.recipientName)}</td>
+            <td>${escapeHtml(n.sent_by)}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteNotification('${n.id}', this)">Delete</button></td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        historyOffset += data.notifications.length;
+        document.getElementById('loadMoreBtn').style.display =
+          historyOffset < data.total ? 'inline-block' : 'none';
+      } catch (err) {
+        console.error('Failed to load history:', err);
+      }
+    }
+
+    function loadMoreHistory() {
+      loadHistory();
+    }
+
+    async function deleteNotification(id, btn) {
+      if (!confirm('Delete this notification?')) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          btn.closest('tr').remove();
+        }
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+        btn.disabled = false;
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function logout() {
+      window.location.href = '/logout';
+    }
+  </script>
+</body>
+</html>
