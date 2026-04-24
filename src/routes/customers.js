@@ -494,6 +494,102 @@ router.post('/:id/end-trial', async (req, res) => {
 });
 
 /**
+ * POST /api/customers/:id/reset-pin
+ * Admin-triggered purchase PIN reset. Generates a reset token, saves it against
+ * the customer's purchase_pins row, and emails the customer a reset link to the
+ * Open Word server's /reset-pin page.
+ */
+router.post('/:id/reset-pin', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: customer, error: custError } = await supabase
+      .from('organisations')
+      .select('id, name, user_id')
+      .eq('id', id)
+      .single();
+
+    if (custError) throw custError;
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    if (!customer.user_id) return res.status(400).json({ error: 'Customer has no linked auth user' });
+
+    const { data: pinRow, error: pinError } = await supabase
+      .from('purchase_pins')
+      .select('id')
+      .eq('organisation_id', id)
+      .single();
+
+    if (pinError && pinError.code !== 'PGRST116') throw pinError;
+    if (!pinRow) {
+      return res.status(400).json({
+        error: 'Customer has no purchase PIN set. Ask them to set one in the control panel settings.'
+      });
+    }
+
+    const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(customer.user_id);
+    const customerEmail = authUser?.user?.email;
+    if (authErr || !customerEmail) {
+      return res.status(500).json({ error: 'Could not find customer auth email' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresHours = 24;
+    const expiresAt = new Date(Date.now() + expiresHours * 3600000);
+
+    const { error: updateError } = await supabase
+      .from('purchase_pins')
+      .update({
+        reset_token: resetToken,
+        reset_token_expires: expiresAt.toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('organisation_id', id);
+
+    if (updateError) throw updateError;
+
+    const serverUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
+    const resetLink = `${serverUrl}/reset-pin?token=${encodeURIComponent(resetToken)}`;
+
+    const emailBody = `
+      <h2>Reset your Open Word purchase PIN</h2>
+      <p>Hi ${customer.name || 'there'},</p>
+      <p>A member of the Open Word support team has initiated a purchase PIN reset for your account at your request. Click the button below to choose a new PIN.</p>
+      <p style="text-align: center;">
+        <a href="${resetLink}" class="button" style="color: white;">Reset my PIN</a>
+      </p>
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="background: #f3f4f6; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px; word-break: break-all;">${resetLink}</p>
+      <p style="background: #fef3c7; padding: 12px; border-radius: 6px; border: 1px solid #f59e0b; color: #92400e;">
+        This link will expire in ${expiresHours} hours. If you didn't request this reset, please contact support immediately.
+      </p>
+      <p>Need help? Reply to this email or contact <a href="mailto:support@openword.live">support@openword.live</a>.</p>
+    `;
+
+    const emailResult = await sendCustomerEmail(
+      customerEmail,
+      'Reset your Open Word purchase PIN',
+      emailBody,
+      customer.name
+    );
+
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send reset email: ' + (emailResult.error || 'Unknown error') });
+    }
+
+    console.log(`🔑 Admin PIN reset email sent to ${customerEmail} for ${customer.name}`);
+
+    res.json({
+      success: true,
+      message: `Reset email sent to ${customerEmail}. Link expires in ${expiresHours} hours.`,
+      email: customerEmail
+    });
+  } catch (error) {
+    console.error('Error sending PIN reset:', error);
+    res.status(500).json({ error: 'Failed to send PIN reset email' });
+  }
+});
+
+/**
  * GET /api/customers/:id/session-stats
  * Get customer session/streaming statistics from streaming_sessions table
  */

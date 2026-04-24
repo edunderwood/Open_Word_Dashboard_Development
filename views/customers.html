@@ -1199,6 +1199,9 @@
             ${leftButtons.join('')}
           </div>
           <div style="display: flex; gap: 12px;">
+            <button class="btn btn-warning" onclick="resetPurchasePin('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">
+              Reset PIN
+            </button>
             <button class="btn btn-primary" onclick="emailCustomer('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: middle;">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -1339,6 +1342,26 @@
         loadCustomers();
       } catch (error) {
         alert('Error unpausing customer: ' + error.message);
+      }
+    }
+
+    // Send a purchase PIN reset email to the customer
+    async function resetPurchasePin(id, name) {
+      if (!confirm(`Send a purchase PIN reset email to ${name || 'this customer'}?\n\nThey will receive a link (valid 24h) to choose a new PIN. Their existing PIN keeps working until they complete the reset.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/customers/${id}/reset-pin`, {
+          method: 'POST',
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || data.message || 'Request failed');
+
+        alert(data.message || 'PIN reset email sent');
+      } catch (error) {
+        alert('Error sending PIN reset: ' + error.message);
       }
     }
 
