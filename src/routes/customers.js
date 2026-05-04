@@ -180,23 +180,44 @@ router.get('/', async (req, res) => {
       creditMap[cb.organisation_id] = parseFloat(cb.current_balance) || 0;
     });
 
-    // Fetch last login for each customer (batch fetch auth users)
+    // Batch fetch most recent streaming session per customer.
+    // Persisted "Remember Me" sessions mean auth.users.last_sign_in_at can lag
+    // weeks behind real activity — pair it with the last streaming session so
+    // "Last Active" reflects when we actually last saw the customer.
+    const { data: recentSessions } = await supabase
+      .from('streaming_sessions')
+      .select('organisation_id, started_at')
+      .in('organisation_id', customerIds)
+      .order('started_at', { ascending: false });
+
+    const lastStreamingMap = {};
+    recentSessions?.forEach(s => {
+      if (!lastStreamingMap[s.organisation_id]) {
+        lastStreamingMap[s.organisation_id] = s.started_at;
+      }
+    });
+
     const customersWithLogin = await Promise.all(
       customers.map(async (customer) => {
-        let lastLogin = null;
+        let lastSignIn = null;
         if (customer.user_id) {
           try {
             const { data: authUser } = await supabase.auth.admin.getUserById(customer.user_id);
             if (authUser?.user) {
-              lastLogin = authUser.user.last_sign_in_at;
+              lastSignIn = authUser.user.last_sign_in_at;
             }
           } catch (err) {
             // Silently fail for individual auth lookups
           }
         }
+        const lastStreaming = lastStreamingMap[customer.id] || null;
+        const candidates = [lastSignIn, lastStreaming].filter(Boolean);
+        const lastActive = candidates.length
+          ? candidates.reduce((a, b) => (a > b ? a : b))
+          : null;
         return {
           ...customer,
-          last_login: lastLogin,
+          last_login: lastActive,
           credit_balance: creditMap[customer.id] ?? 0
         };
       })
@@ -637,7 +658,7 @@ router.get('/:id/session-stats', async (req, res) => {
         return res.json({
           success: true,
           data: {
-            lastLogin,
+            lastLogin, // streaming_sessions table missing — fall back to sign-in time
             lastStreamingSession: null,
             sessionStats: {
               totalSessions: 0,
@@ -705,10 +726,18 @@ router.get('/:id/session-stats', async (req, res) => {
     const totalTranscribed = last10Sessions.reduce((sum, s) => sum + (s.charactersTranscribed || 0), 0);
     const totalTranslated = last10Sessions.reduce((sum, s) => sum + (s.charactersTranslated || 0), 0);
 
+    // "Last Active" = most recent of password sign-in and streaming session start.
+    // last_sign_in_at alone is misleading because persisted sessions don't refresh it.
+    const lastStreamingStart = lastStreamingSession?.startedAt || null;
+    const activeCandidates = [lastLogin, lastStreamingStart].filter(Boolean);
+    const lastActive = activeCandidates.length
+      ? activeCandidates.reduce((a, b) => (a > b ? a : b))
+      : null;
+
     res.json({
       success: true,
       data: {
-        lastLogin,
+        lastLogin: lastActive,
         lastStreamingSession,
         sessionStats: {
           totalSessions,
