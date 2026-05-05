@@ -30,6 +30,7 @@ import priceMigrationRoutes from './routes/price-migration.js';
 import { startMonitoring } from './services/monitor.js';
 import { startConsolidationCron } from './services/usage-consolidation.js';
 import { startPriceMigrationScheduler } from './services/price-migration-scheduler.js';
+import { startTrialReminderScheduler } from './services/trial-reminder-scheduler.js';
 
 dotenv.config();
 
@@ -190,6 +191,7 @@ app.listen(PORT, () => {
   startMonitoring();
   startConsolidationCron();
   startPriceMigrationScheduler();
+  startTrialReminderScheduler();
 });
 
 export default app;
