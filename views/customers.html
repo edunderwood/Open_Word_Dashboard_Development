@@ -130,7 +130,8 @@
           <select id="statusFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
-            <option value="trialing">Trial</option>
+            <option value="trialing_short">Trial (10 min)</option>
+            <option value="trialing_extended">Trial (30 day)</option>
             <option value="paused">Paused</option>
             <option value="cancelling">Cancelling</option>
             <option value="past_due">Past Due</option>
@@ -139,7 +140,8 @@
           </select>
           <select id="planFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
             <option value="">All Tiers</option>
-            <option value="free_trial">Free Trial</option>
+            <option value="free_trial">Free Trial (10 min)</option>
+            <option value="extended_trial">Extended Trial (30 day)</option>
             <option value="basic">Basic</option>
             <option value="standard">Standard</option>
             <option value="pro">Pro</option>
@@ -642,6 +644,7 @@
     function getTierColor(tier) {
       const colors = {
         free_trial: '#10b981',
+        extended_trial: '#059669',
         basic: '#6b7280',
         standard: '#3b82f6',
         pro: '#f59e0b',
@@ -652,7 +655,8 @@
 
     function formatTierName(tier) {
       if (!tier) return 'Basic';
-      if (tier === 'free_trial') return 'Free Trial';
+      if (tier === 'free_trial') return 'Free Trial (10 min)';
+      if (tier === 'extended_trial') return 'Extended Trial (30 day)';
       return tier.charAt(0).toUpperCase() + tier.slice(1);
     }
 

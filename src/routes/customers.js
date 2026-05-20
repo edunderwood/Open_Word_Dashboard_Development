@@ -110,12 +110,26 @@ router.get('/', async (req, res) => {
     }
 
     if (status) {
+      const nowIso = new Date().toISOString();
       if (status === 'paused') {
         query = query.eq('is_paused', true);
       } else if (status === 'cancelling') {
         // Customers who have cancelled but still have access
         query = query.not('subscription_cancelled_at', 'is', null)
-                     .gt('tier_expires_at', new Date().toISOString());
+                     .gt('tier_expires_at', nowIso);
+      } else if (status === 'canceled') {
+        // Either Stripe reports canceled, OR cancellation flagged and access has lapsed.
+        // The strict subscription_status='canceled' filter misses customers whose Stripe
+        // webhook never fully synced the status back.
+        query = query.or(
+          `subscription_status.eq.canceled,and(subscription_cancelled_at.not.is.null,tier_expires_at.lte.${nowIso})`
+        );
+      } else if (status === 'trialing_short') {
+        // 10-min instant trial: subscription_tier='free_trial' (status is 'active')
+        query = query.eq('subscription_tier', 'free_trial');
+      } else if (status === 'trialing_extended') {
+        // 30-day extended trial: subscription_tier='extended_trial'
+        query = query.eq('subscription_tier', 'extended_trial');
       } else {
         query = query.eq('subscription_status', status);
       }
