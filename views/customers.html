@@ -976,6 +976,8 @@
               <p><strong>Payment:</strong> ${getPaymentStatusBadge(customer)}</p>
               <p><strong>Stripe Customer:</strong> <code style="font-size: 0.75rem;">${customer.stripe_customer_id || '-'}</code></p>
               ${customer.trial_ends_at ? `<p><strong>Trial Ends:</strong> ${formatDate(customer.trial_ends_at)}</p>` : ''}
+              ${customer.cancellation_reason ? `<p><strong>Cancel reason:</strong> ${customer.cancellation_reason}</p>` : ''}
+              ${customer.cancellation_feedback ? `<p><strong>Cancel comment:</strong> ${customer.cancellation_feedback}</p>` : ''}
             </div>
           </div>
 

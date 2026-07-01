@@ -1,6 +1,6 @@
 {
   "name": "openword-dashboard",
-  "version": "1.0.0",
+  "version": "3.2.0",
   "description": "Admin dashboard for OpenWord system monitoring and customer management",
   "main": "src/server.js",
   "type": "module",

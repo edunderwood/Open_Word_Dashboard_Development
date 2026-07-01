@@ -31,6 +31,7 @@ import { startMonitoring } from './services/monitor.js';
 import { startConsolidationCron } from './services/usage-consolidation.js';
 import { startPriceMigrationScheduler } from './services/price-migration-scheduler.js';
 import { startTrialReminderScheduler } from './services/trial-reminder-scheduler.js';
+import { startTrialWinbackScheduler } from './services/trial-winback-scheduler.js';
 
 dotenv.config();
 
@@ -192,6 +193,7 @@ app.listen(PORT, () => {
   startConsolidationCron();
   startPriceMigrationScheduler();
   startTrialReminderScheduler();
+  startTrialWinbackScheduler();
 });
 
 export default app;
