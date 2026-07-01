@@ -15,6 +15,13 @@ dotenv.config();
 const OPENWORD_SERVER_URL = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
 const MONITOR_INTERVAL = parseInt(process.env.MONITOR_INTERVAL_MINUTES || '5');
 
+// Payment failures are already alerted by the Control Panel `invoice.payment_failed`
+// webhook. This poller re-scans the last 24h every run and re-emails the same
+// unresolved failures (and re-fires on every restart because its throttle is
+// in-memory), so it is disabled by default to prevent duplicate alert spam.
+// Set ENABLE_STRIPE_FAILURE_ALERTS=true to re-enable.
+const ENABLE_STRIPE_FAILURE_ALERTS = process.env.ENABLE_STRIPE_FAILURE_ALERTS === 'true';
+
 // Performance thresholds (in milliseconds)
 const PERFORMANCE_WARNING_THRESHOLD = 3000; // 3 seconds
 const PERFORMANCE_CRITICAL_THRESHOLD = 8000; // 8 seconds
@@ -470,6 +477,9 @@ async function checkNewRegistrations() {
  */
 async function checkStripePaymentErrors() {
   try {
+    if (!ENABLE_STRIPE_FAILURE_ALERTS) {
+      return { skipped: true, reason: 'disabled (handled by Control Panel webhook)' };
+    }
     if (!stripe) {
       return { error: 'Stripe not configured' };
     }
