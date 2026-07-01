@@ -165,20 +165,21 @@
           <table>
             <thead>
               <tr>
-                <th>Organisation</th>
-                <th>Key</th>
-                <th>Tier</th>
-                <th>Discount</th>
-                <th>Credits</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Last Active</th>
-                <th>Trial Ends</th>
+                <th class="sortable" data-sort="name" onclick="sortBy('name')">Organisation<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="organisation_key" onclick="sortBy('organisation_key')">Key<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="tier" onclick="sortBy('tier')">Tier<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="discount" onclick="sortBy('discount')">Discount<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="credits" onclick="sortBy('credits')">Credits<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="account" onclick="sortBy('account')">Account<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="payment" onclick="sortBy('payment')">Payment<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="started" onclick="sortBy('started')">Started<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="last_active" onclick="sortBy('last_active')">Last Active<span class="sort-arrow"></span></th>
+                <th class="sortable" data-sort="trial_ends" onclick="sortBy('trial_ends')">Trial Ends<span class="sort-arrow"></span></th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="customersTable">
-              <tr><td colspan="10" class="text-center text-muted">Loading...</td></tr>
+              <tr><td colspan="11" class="text-center text-muted">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -609,6 +610,10 @@
     let currentPage = 1;
     let totalPages = 1;
     let searchTimeout = null;
+    let allCustomers = [];        // full filtered set (loaded with ?all=true)
+    let sortField = null;         // active sort column key
+    let sortDir = 'asc';          // 'asc' | 'desc'
+    const PAGE_SIZE = 20;
 
     // Format currency
     function formatCurrency(amount) {
@@ -699,6 +704,92 @@
       return badges[status] || `<span class="badge badge-gray">${status || 'Unknown'}</span>`;
     }
 
+    // A customer is "active" if they signed in / streamed within the last 2 weeks.
+    const ACTIVE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+    function isRecentlyActive(lastActive) {
+      if (!lastActive) return false;
+      return (Date.now() - new Date(lastActive).getTime()) <= ACTIVE_WINDOW_MS;
+    }
+
+    // "Last Active" cell: timestamp coloured green (Active) if within 2 weeks, grey otherwise.
+    function getLastActiveHtml(customer) {
+      if (!customer.last_login) {
+        return '<span class="text-muted">Never</span>';
+      }
+      const active = isRecentlyActive(customer.last_login);
+      const color = active ? 'var(--success, #10b981)' : '#9ca3af';
+      const label = active ? 'Active' : 'Inactive';
+      return `<span style="color: ${color}; font-weight: 600;" title="${label} — last active ${formatDateTime(customer.last_login)}">${formatDateTime(customer.last_login)}</span>`;
+    }
+
+    // ---- Column sorting (client-side over the full loaded set) ----
+    const TIER_RANK = { free_trial: 0, extended_trial: 1, basic: 2, standard: 3, pro: 4, enterprise: 5 };
+
+    // Mirrors getStatusBadge so the Account column sorts by what's displayed.
+    function accountSortValue(c) {
+      if (c.is_paused) return 'paused';
+      if (c.subscription_cancelled_at) {
+        const exp = c.tier_expires_at ? new Date(c.tier_expires_at) : null;
+        return (exp && exp < new Date()) ? 'cancelled' : 'cancelling';
+      }
+      return (c.subscription_status || 'unknown').toLowerCase();
+    }
+
+    function toEpoch(d) { return d ? new Date(d).getTime() : null; }
+
+    function getSortValue(c, field) {
+      switch (field) {
+        case 'name': return (c.name || '').toLowerCase();
+        case 'organisation_key': return (c.organisation_key || '').toLowerCase();
+        case 'tier': return TIER_RANK[c.subscription_tier] ?? 2;
+        case 'discount': return c.discount_percent || 0;
+        case 'credits': return c.credit_balance ?? 0;
+        case 'account': return accountSortValue(c);
+        case 'payment': return (c.payment_status || '').toLowerCase();
+        case 'started': return toEpoch(c.registered_at || c.created_at);
+        case 'last_active': return toEpoch(c.last_login);
+        case 'trial_ends': return toEpoch(c.trial_ends_at);
+        default: return '';
+      }
+    }
+
+    // Empty/null values always sort to the bottom regardless of direction.
+    function compareCustomers(a, b) {
+      const va = getSortValue(a, sortField);
+      const vb = getSortValue(b, sortField);
+      const aEmpty = va === null || va === undefined || va === '';
+      const bEmpty = vb === null || vb === undefined || vb === '';
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      let cmp;
+      if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+      else cmp = String(va).localeCompare(String(vb));
+      return sortDir === 'asc' ? cmp : -cmp;
+    }
+
+    function sortBy(field) {
+      if (sortField === field) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField = field;
+        sortDir = 'asc';
+      }
+      currentPage = 1;
+      applySortAndRender();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        const arrow = th.querySelector('.sort-arrow');
+        if (!arrow) return;
+        arrow.textContent = th.getAttribute('data-sort') === sortField
+          ? (sortDir === 'asc' ? ' ▲' : ' ▼')
+          : '';
+      });
+    }
+
     // Handle search with debounce
     function handleSearch(event) {
       clearTimeout(searchTimeout);
@@ -719,10 +810,8 @@
       const charity = document.getElementById('charityFilter').value;
 
       try {
-        const params = new URLSearchParams({
-          page: currentPage,
-          limit: 20,
-        });
+        // Load the full filtered set; sorting + pagination happen client-side.
+        const params = new URLSearchParams({ all: 'true' });
         if (search) params.append('search', search);
         if (status) params.append('status', status);
         if (plan) params.append('plan', plan);
@@ -733,15 +822,31 @@
 
         if (!data.success) throw new Error(data.error);
 
-        const { data: customers, pagination } = data;
-        totalPages = pagination.pages;
+        allCustomers = data.data || [];
+        applySortAndRender();
+      } catch (error) {
+        console.error('Error loading customers:', error);
+        document.getElementById('customersTable').innerHTML =
+          '<tr><td colspan="11" class="text-center text-danger">Error loading customers</td></tr>';
+      }
+    }
 
-        // Update table
-        const table = document.getElementById('customersTable');
-        if (customers.length === 0) {
-          table.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No customers found</td></tr>';
-        } else {
-          table.innerHTML = customers.map(customer => {
+    function applySortAndRender() {
+      const rows = allCustomers.slice();
+      if (sortField) rows.sort(compareCustomers);
+
+      totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const startIdx = (currentPage - 1) * PAGE_SIZE;
+      const pageRows = rows.slice(startIdx, startIdx + PAGE_SIZE);
+
+      const table = document.getElementById('customersTable');
+      if (rows.length === 0) {
+        table.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No customers found</td></tr>';
+      } else {
+        table.innerHTML = pageRows.map(customer => {
             const creditBalance = customer.credit_balance ?? 0;
             const tier = customer.subscription_tier || 'basic';
             // Discount display
@@ -771,9 +876,10 @@
               <td style="font-weight: 600; color: ${creditBalance <= 0 ? 'var(--danger)' : creditBalance <= 10 ? 'var(--warning)' : 'inherit'};">
                 ${creditBalance.toFixed(1)}
               </td>
+              <td>${getStatusBadge(customer)}</td>
               <td>${getPaymentStatusBadge(customer)}</td>
               <td>${customer.registered_at ? formatDate(customer.registered_at) : customer.created_at ? formatDate(customer.created_at) : '<span class="text-muted">-</span>'}</td>
-              <td>${customer.last_login ? formatDateTime(customer.last_login) : '<span class="text-muted">Never</span>'}</td>
+              <td>${getLastActiveHtml(customer)}</td>
               <td>${customer.trial_ends_at ? formatDate(customer.trial_ends_at) : '<span class="text-muted">-</span>'}</td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View/Edit</button>
@@ -784,32 +890,32 @@
               </td>
             </tr>
           `}).join('');
-        }
-
-        // Update pagination
-        document.getElementById('paginationInfo').textContent =
-          `Showing ${customers.length} of ${pagination.total} (Page ${pagination.page} of ${pagination.pages})`;
-        document.getElementById('prevBtn').disabled = pagination.page <= 1;
-        document.getElementById('nextBtn').disabled = pagination.page >= pagination.pages;
-      } catch (error) {
-        console.error('Error loading customers:', error);
-        document.getElementById('customersTable').innerHTML =
-          '<tr><td colspan="10" class="text-center text-danger">Error loading customers</td></tr>';
       }
+
+      // Update pagination (client-side)
+      const total = rows.length;
+      const shownFrom = total === 0 ? 0 : startIdx + 1;
+      const shownTo = startIdx + pageRows.length;
+      document.getElementById('paginationInfo').textContent =
+        `Showing ${shownFrom}–${shownTo} of ${total} (Page ${currentPage} of ${totalPages})`;
+      document.getElementById('prevBtn').disabled = currentPage <= 1;
+      document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+
+      updateSortIndicators();
     }
 
     // Pagination
     function prevPage() {
       if (currentPage > 1) {
         currentPage--;
-        loadCustomers();
+        applySortAndRender();
       }
     }
 
     function nextPage() {
       if (currentPage < totalPages) {
         currentPage++;
-        loadCustomers();
+        applySortAndRender();
       }
     }
 
@@ -866,7 +972,8 @@
             <div>
               <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Subscription</h4>
               <p><strong>Plan:</strong> <span class="badge" style="background: ${getTierColor(customer.subscription_tier || 'basic')}; color: white;">${formatTierName(customer.subscription_tier)}</span></p>
-              <p><strong>Status:</strong> ${getPaymentStatusBadge(customer)}</p>
+              <p><strong>Account:</strong> ${getStatusBadge(customer)}</p>
+              <p><strong>Payment:</strong> ${getPaymentStatusBadge(customer)}</p>
               <p><strong>Stripe Customer:</strong> <code style="font-size: 0.75rem;">${customer.stripe_customer_id || '-'}</code></p>
               ${customer.trial_ends_at ? `<p><strong>Trial Ends:</strong> ${formatDate(customer.trial_ends_at)}</p>` : ''}
             </div>
@@ -878,7 +985,7 @@
             <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 15px;">
               <div class="stat-card" style="padding: 15px;">
                 <div class="label" style="font-size: 0.7rem;">Last Active</div>
-                <div class="value" style="font-size: 0.9rem;">${sessionStats?.lastLogin ? formatDateTime(sessionStats.lastLogin) : 'Never'}</div>
+                <div class="value" style="font-size: 0.9rem; color: ${sessionStats?.lastLogin ? (isRecentlyActive(sessionStats.lastLogin) ? 'var(--success, #10b981)' : '#9ca3af') : 'inherit'};">${sessionStats?.lastLogin ? formatDateTime(sessionStats.lastLogin) : 'Never'} ${sessionStats?.lastLogin ? `<span class="badge ${isRecentlyActive(sessionStats.lastLogin) ? 'badge-success' : 'badge-gray'}" style="margin-left: 6px; font-size: 9px;">${isRecentlyActive(sessionStats.lastLogin) ? 'Active' : 'Inactive'}</span>` : ''}</div>
               </div>
               <div class="stat-card" style="padding: 15px;">
                 <div class="label" style="font-size: 0.7rem;">Last Streaming Session</div>

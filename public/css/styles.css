@@ -244,6 +244,21 @@ th {
   background: var(--gray-50);
 }
 
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.sortable:hover {
+  color: var(--primary, #2563eb);
+}
+
+.sort-arrow {
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
 td {
   font-size: 0.875rem;
   color: var(--gray-700);

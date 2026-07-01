@@ -172,10 +172,16 @@ router.get('/', async (req, res) => {
     // Get total count first
     const { count: totalCount } = await query;
 
-    // Apply pagination
-    const { data: customers, error } = await query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // `all=true` returns every matching customer (no server pagination) so the
+    // dashboard can sort and paginate the full set client-side. Otherwise fall
+    // back to the classic server-side page window.
+    const fetchAll = req.query.all === 'true';
+
+    let listQuery = query.order('created_at', { ascending: false });
+    if (!fetchAll) {
+      listQuery = listQuery.range(offset, offset + limit - 1);
+    }
+    const { data: customers, error } = await listQuery;
 
     if (error) throw error;
 
@@ -211,41 +217,51 @@ router.get('/', async (req, res) => {
       }
     });
 
-    const customersWithLogin = await Promise.all(
-      customers.map(async (customer) => {
-        let lastSignIn = null;
-        if (customer.user_id) {
-          try {
-            const { data: authUser } = await supabase.auth.admin.getUserById(customer.user_id);
-            if (authUser?.user) {
-              lastSignIn = authUser.user.last_sign_in_at;
-            }
-          } catch (err) {
-            // Silently fail for individual auth lookups
-          }
+    // Bulk-fetch auth sign-in times in one sweep (map user_id -> last_sign_in_at)
+    // instead of an auth.admin.getUserById call per customer (avoids an N+1 that
+    // would be prohibitive in all=true mode).
+    const authSignInMap = {};
+    try {
+      let authPage = 1;
+      const perPage = 1000;
+      while (true) {
+        const { data: usersPage } = await supabase.auth.admin.listUsers({ page: authPage, perPage });
+        const users = usersPage?.users || [];
+        for (const u of users) {
+          if (u.last_sign_in_at) authSignInMap[u.id] = u.last_sign_in_at;
         }
-        const lastStreaming = lastStreamingMap[customer.id] || null;
-        const candidates = [lastSignIn, lastStreaming].filter(Boolean);
-        const lastActive = candidates.length
-          ? candidates.reduce((a, b) => (a > b ? a : b))
-          : null;
-        return {
-          ...customer,
-          last_login: lastActive,
-          credit_balance: creditMap[customer.id] ?? 0
-        };
-      })
-    );
+        if (users.length < perPage) break;
+        authPage++;
+      }
+    } catch (err) {
+      console.error('Bulk auth listUsers failed, last-sign-in may be missing:', err.message);
+    }
+
+    const customersWithLogin = customers.map((customer) => {
+      const lastSignIn = customer.user_id ? (authSignInMap[customer.user_id] || null) : null;
+      const lastStreaming = lastStreamingMap[customer.id] || null;
+      const candidates = [lastSignIn, lastStreaming].filter(Boolean);
+      const lastActive = candidates.length
+        ? candidates.reduce((a, b) => (a > b ? a : b))
+        : null;
+      return {
+        ...customer,
+        last_login: lastActive,
+        credit_balance: creditMap[customer.id] ?? 0
+      };
+    });
 
     res.json({
       success: true,
       data: customersWithLogin,
-      pagination: {
-        page,
-        limit,
-        total: totalCount,
-        pages: Math.ceil(totalCount / limit),
-      }
+      pagination: fetchAll
+        ? { page: 1, limit: totalCount, total: totalCount, pages: 1 }
+        : {
+            page,
+            limit,
+            total: totalCount,
+            pages: Math.ceil(totalCount / limit),
+          }
     });
   } catch (error) {
     console.error('Error fetching customers:', error);
