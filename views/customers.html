@@ -932,6 +932,27 @@
       });
     }
 
+    // Friendly labels for email_log.email_type
+    function formatEmailType(type) {
+      if (!type) return '-';
+      const labels = {
+        bulk_announcement: 'Announcement',
+        individual: 'Individual',
+        maintenance: 'Maintenance',
+        feature_update: 'Feature update',
+        pricing_change: 'Pricing change',
+        price_migration: 'Price migration',
+        welcome: 'Welcome',
+        custom: 'Custom',
+        trial_reminder: 'Trial reminder',
+        trial_ending: 'Trial ending',
+        winback: 'Win-back',
+        cancellation: 'Cancellation',
+        payment_failed: 'Payment failed'
+      };
+      return labels[type] || type;
+    }
+
     // View customer details
     async function viewCustomer(id) {
       document.getElementById('customerModal').classList.add('active');
@@ -939,17 +960,19 @@
 
       try {
         // Fetch customer details, session stats, and credits in parallel
-        const [customerResponse, sessionResponse, creditsResponse, enterpriseResponse] = await Promise.all([
+        const [customerResponse, sessionResponse, creditsResponse, enterpriseResponse, emailsResponse] = await Promise.all([
           fetch(`/api/customers/${id}`),
           fetch(`/api/customers/${id}/session-stats`),
           fetch(`/api/customers/${id}/credits`),
-          fetch(`/api/customers/${id}/enterprise-info`)
+          fetch(`/api/customers/${id}/enterprise-info`),
+          fetch(`/api/customers/${id}/emails`)
         ]);
 
         const customerData = await customerResponse.json();
         const sessionData = await sessionResponse.json();
         const creditsData = await creditsResponse.json();
         const enterpriseData = await enterpriseResponse.json();
+        const emailsData = await emailsResponse.json();
 
         if (!customerData.success) throw new Error(customerData.error);
 
@@ -957,6 +980,7 @@
         const sessionStats = sessionData.success ? sessionData.data : null;
         const credits = creditsData.success ? creditsData.data : null;
         const enterprise = enterpriseData.success ? enterpriseData.data : null;
+        const emails = emailsData.success ? emailsData.data : [];
 
         document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
 
@@ -1025,6 +1049,30 @@
                 </div>
               </div>
             ` : ''}
+          </div>
+
+          <!-- Emails Sent Section -->
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Emails Sent (${emails.length})</h4>
+            ${emails.length > 0 ? `
+              <div class="table-container" style="max-height: 220px; overflow-y: auto;">
+                <table style="font-size: 0.85rem;">
+                  <thead>
+                    <tr><th>Date</th><th>Subject</th><th>Type</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    ${emails.map(e => `
+                      <tr>
+                        <td style="white-space: nowrap;">${formatDateTime(e.sent_at)}</td>
+                        <td>${e.subject || '-'}</td>
+                        <td>${formatEmailType(e.email_type)}</td>
+                        <td><span class="badge ${e.status === 'sent' ? 'badge-success' : (e.status === 'failed' ? 'badge-danger' : 'badge-gray')}">${e.status || '-'}</span></td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : '<p style="color: var(--gray-500); font-size: 0.85rem;">No emails logged for this customer yet.</p>'}
           </div>
 
           <!-- Discounts Section (combines charity and non-charity discounts) -->

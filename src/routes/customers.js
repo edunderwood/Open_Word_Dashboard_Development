@@ -332,6 +332,31 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * GET /api/customers/:id/emails
+ * Emails logged to this customer (from email_log), most recent first.
+ */
+router.get('/:id/emails', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+
+    const { data: emails, error } = await supabase
+      .from('email_log')
+      .select('subject, email_type, status, sent_at, sent_by, recipient_email, error_message')
+      .eq('organisation_id', id)
+      .order('sent_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: emails || [] });
+  } catch (error) {
+    console.error('Error fetching customer emails:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch customer emails' });
+  }
+});
+
+/**
  * GET /api/customers/:id/usage
  * Get customer usage statistics from streaming_sessions (faster than translation_usage)
  */

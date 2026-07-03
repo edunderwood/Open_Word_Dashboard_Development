@@ -10,7 +10,7 @@
 
 import cron from 'node-cron';
 import { supabase } from './supabase.js';
-import { sendCustomerEmail, sendWarningAlert } from './email.js';
+import { sendCustomerEmail, sendWarningAlert, logEmail } from './email.js';
 
 let isRunning = false;
 
@@ -107,9 +107,10 @@ async function processTrialReminders() {
       const trialEnd = new Date(org.trial_ends_at);
       const daysRemaining = Math.max(1, Math.round((trialEnd - Date.now()) / (24 * 60 * 60 * 1000)));
 
+      const subject = `Your Open Word free trial ends in ${daysRemaining} days`;
       const result = await sendCustomerEmail(
         email,
-        `Your Open Word free trial ends in ${daysRemaining} days`,
+        subject,
         buildEmailBody({
           name: org.name,
           daysRemaining,
@@ -118,6 +119,16 @@ async function processTrialReminders() {
         }),
         org.name || 'Customer'
       );
+
+      await logEmail({
+        organisationId: org.id,
+        recipientEmail: email,
+        recipientName: org.name,
+        subject,
+        emailType: 'trial_reminder',
+        status: result.success ? 'sent' : 'failed',
+        error: result.error,
+      });
 
       if (result.success) {
         const { error: updateErr } = await supabase

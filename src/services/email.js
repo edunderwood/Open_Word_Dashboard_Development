@@ -13,8 +13,31 @@
 
 import sgMail from '@sendgrid/mail';
 import dotenv from 'dotenv';
+import { supabase } from './supabase.js';
 
 dotenv.config();
+
+/**
+ * Record a sent email in the email_log table (non-fatal — never throws).
+ * Lets automated emails show up in the dashboard's per-customer email history.
+ */
+export async function logEmail({ organisationId = null, recipientEmail, recipientName = null, subject, bodyPreview = null, emailType, status = 'sent', sentBy = 'system', error = null }) {
+  try {
+    await supabase.from('email_log').insert({
+      organisation_id: organisationId,
+      recipient_email: recipientEmail,
+      recipient_name: recipientName,
+      subject,
+      body_preview: bodyPreview,
+      sent_by: sentBy,
+      status,
+      email_type: emailType,
+      error_message: error || null,
+    });
+  } catch (e) {
+    console.error('Failed to write email_log entry:', e.message);
+  }
+}
 
 // Configure SendGrid with API key (use SENDGRID_API_KEY or fall back to SMTP_PASS)
 const apiKey = process.env.SENDGRID_API_KEY || process.env.SMTP_PASS;

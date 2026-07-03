@@ -13,7 +13,7 @@
 
 import cron from 'node-cron';
 import { supabase } from './supabase.js';
-import { sendCustomerEmail, sendWarningAlert } from './email.js';
+import { sendCustomerEmail, sendWarningAlert, logEmail } from './email.js';
 
 let isRunning = false;
 
@@ -135,6 +135,16 @@ async function processTrialWinbacks() {
         buildEmailBody({ name: org.name, trialEndsAt: org.trial_ends_at, credits }),
         org.name || 'Customer'
       );
+
+      await logEmail({
+        organisationId: org.id,
+        recipientEmail: email,
+        recipientName: org.name,
+        subject,
+        emailType: 'winback',
+        status: result.success ? 'sent' : 'failed',
+        error: result.error,
+      });
 
       if (result.success) {
         const { error: updateErr } = await supabase
