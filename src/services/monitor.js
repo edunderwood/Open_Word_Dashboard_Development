@@ -31,6 +31,9 @@ const issueTracker = {
   serverDown: false,
   lastServerCheck: null,
   consecutiveFailures: 0,
+  dbDown: false,
+  consecutiveDbFailures: 0,
+  lastDbCheck: null,
   consecutiveSlowResponses: 0,
   lastResponseTime: null,
   lastAlertSent: {},
@@ -301,25 +304,59 @@ async function checkUsageAnomalies() {
  * Check database connectivity
  */
 async function checkDatabaseHealth() {
-  try {
-    const { data, error } = await supabase
+  // A single query attempt against Supabase. Returns { ok: true } or throws.
+  const attemptQuery = async () => {
+    const { error } = await supabase
       .from('organisations')
       .select('id')
       .limit(1);
-
     if (error) throw error;
+    return true;
+  };
+
+  try {
+    // One immediate retry to absorb a momentary blip (e.g. a Cloudflare 522
+    // while the Supabase origin briefly restarts) without inflating the count.
+    try {
+      await attemptQuery();
+    } catch (firstError) {
+      await attemptQuery();
+    }
+
+    if (issueTracker.dbDown) {
+      // Database recovered
+      await sendWarningAlert(
+        'Database Recovered',
+        `<p>Supabase database is reachable again after ${issueTracker.consecutiveDbFailures} failed checks.</p>`
+      );
+    }
+    issueTracker.dbDown = false;
+    issueTracker.consecutiveDbFailures = 0;
+    issueTracker.lastDbCheck = new Date();
+
     return { healthy: true };
   } catch (error) {
-    if (!issueTracker.lastAlertSent.database ||
-        (Date.now() - issueTracker.lastAlertSent.database) > 30 * 60 * 1000) { // 30 minutes
-      await sendCriticalAlert(
-        'Database Connection Issue',
-        `<p>Unable to connect to Supabase database!</p>
-         <p>Error: ${error.message}</p>`
-      );
-      issueTracker.lastAlertSent.database = Date.now();
+    issueTracker.consecutiveDbFailures++;
+    issueTracker.lastDbCheck = new Date();
+
+    // Only alert after 3 consecutive failed checks, matching the server-health
+    // gate. This prevents transient timeouts from paging on the first blip.
+    if (issueTracker.consecutiveDbFailures >= 3 && !issueTracker.dbDown) {
+      issueTracker.dbDown = true;
+
+      if (!issueTracker.lastAlertSent.database ||
+          (Date.now() - issueTracker.lastAlertSent.database) > 30 * 60 * 1000) { // 30 minutes
+        await sendCriticalAlert(
+          'Database Connection Issue',
+          `<p>Unable to connect to Supabase database!</p>
+           <p>Error: ${error.message}</p>
+           <p>Failed checks: ${issueTracker.consecutiveDbFailures}</p>`
+        );
+        issueTracker.lastAlertSent.database = Date.now();
+      }
     }
-    return { healthy: false, error: error.message };
+
+    return { healthy: false, error: error.message, consecutiveDbFailures: issueTracker.consecutiveDbFailures };
   }
 }
 
