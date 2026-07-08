@@ -32,6 +32,7 @@ import { startConsolidationCron } from './services/usage-consolidation.js';
 import { startPriceMigrationScheduler } from './services/price-migration-scheduler.js';
 import { startTrialReminderScheduler } from './services/trial-reminder-scheduler.js';
 import { startTrialWinbackScheduler } from './services/trial-winback-scheduler.js';
+import { startAutoTopupReconcileScheduler } from './services/auto-topup-reconcile-scheduler.js';
 
 dotenv.config();
 
@@ -194,6 +195,7 @@ app.listen(PORT, () => {
   startPriceMigrationScheduler();
   startTrialReminderScheduler();
   startTrialWinbackScheduler();
+  startAutoTopupReconcileScheduler();
 });
 
 export default app;
