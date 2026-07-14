@@ -127,10 +127,11 @@
           return;
         }
         tbody.innerHTML = rows.map(r => {
-          const mailto = r.contact_email ? 'mailto:' + encodeURIComponent(r.contact_email) + '?subject=' + encodeURIComponent('Re: ' + (r.subject || 'your support request')) : null;
+          const replySubject = (r.ticket_ref ? '[' + r.ticket_ref + '] ' : '') + 'Re: ' + (r.subject || 'your support request');
+          const mailto = r.contact_email ? 'mailto:' + encodeURIComponent(r.contact_email) + '?subject=' + encodeURIComponent(replySubject) : null;
           return `
             <tr class="req-row" onclick="toggleDetail('${r.id}')">
-              <td style="white-space:nowrap;">${fmt(r.created_at)}</td>
+              <td style="white-space:nowrap;">${fmt(r.created_at)}${r.ticket_ref ? `<br><code style="font-size:0.7rem;color:#4338ca;">${esc(r.ticket_ref)}</code>` : ''}</td>
               <td>${esc(r.organisation_name) || '-'}<br><code style="font-size:0.7rem;">${esc(r.organisation_key) || ''}</code></td>
               <td><span class="cat-chip">${catLabel(r.category)}</span></td>
               <td>${esc(r.subject)}</td>
@@ -146,6 +147,7 @@
             <tr class="req-detail" id="detail-${r.id}" style="display:none;">
               <td colspan="6">
                 <div style="padding:6px 4px;">
+                  ${r.ticket_ref ? `<p style="margin:0 0 8px;font-size:0.85rem;">Reference: <strong style="color:#4338ca;">${esc(r.ticket_ref)}</strong></p>` : ''}
                   <p class="req-message">${esc(r.message)}</p>
                   <p style="margin-top:10px;font-size:0.8rem;color:var(--gray-500);">
                     From: ${esc(r.contact_name) || ''} ${r.contact_email ? '&lt;' + esc(r.contact_email) + '&gt;' : ''}

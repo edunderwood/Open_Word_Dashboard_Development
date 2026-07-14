@@ -1103,12 +1103,13 @@
               <div class="table-container" style="max-height: 240px; overflow-y: auto;">
                 <table style="font-size: 0.85rem;">
                   <thead>
-                    <tr><th>Date</th><th>Category</th><th>Subject</th><th>Status</th></tr>
+                    <tr><th>Date</th><th>Ref</th><th>Category</th><th>Subject</th><th>Status</th></tr>
                   </thead>
                   <tbody>
                     ${supportRequests.map(s => `
                       <tr>
                         <td style="white-space: nowrap;">${formatDateTime(s.created_at)}</td>
+                        <td><code style="font-size:0.75rem;color:#4338ca;">${escapeHtml(s.ticket_ref) || '-'}</code></td>
                         <td style="text-transform: capitalize;">${escapeHtml(s.category) || '-'}</td>
                         <td>${escapeHtml(s.subject) || '-'}<div style="font-size:0.8rem;color:var(--gray-500);margin-top:2px;">${escapeHtml((s.message || '').slice(0, 140))}${(s.message || '').length > 140 ? '…' : ''}</div></td>
                         <td>${supportStatusBadge(s.status)}</td>
