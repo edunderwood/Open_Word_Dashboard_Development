@@ -209,8 +209,9 @@
         box.innerHTML = notes.length
           ? notes.map(n => {
               const isReply = n.author === 'reply';
-              const label = isReply ? '<span class="reply-label">📧 Reply to customer</span> ' : '';
-              return `<div class="note-item${isReply ? ' reply-note' : ''}"><span style="color:var(--gray-500);font-size:0.75rem;">${fmt(n.created_at)}</span> ${label}<div style="white-space:pre-wrap;">${esc(n.note)}</div></div>`;
+              const label = isReply ? '<span class="reply-label">📧 Email sent to customer</span> ' : '';
+              const prefix = isReply ? '<strong style="color:#2563eb;">Email sent - </strong>' : '';
+              return `<div class="note-item${isReply ? ' reply-note' : ''}"><span style="color:var(--gray-500);font-size:0.75rem;">${fmt(n.created_at)}</span> ${label}<div style="white-space:pre-wrap;">${prefix}${esc(n.note)}</div></div>`;
             }).join('')
           : '<span style="color:var(--gray-500);">No notes yet.</span>';
       } catch (e) {
