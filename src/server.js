@@ -25,6 +25,7 @@ import logsRoutes from './routes/logs.js';
 import communicationsRoutes from './routes/communications.js';
 import notificationsRoutes from './routes/notifications.js';
 import priceMigrationRoutes from './routes/price-migration.js';
+import supportRoutes from './routes/support.js';
 
 // Import services
 import { startMonitoring } from './services/monitor.js';
@@ -97,6 +98,7 @@ app.use('/api/charity-registers', requireAuth, charityRegistersRoutes);
 app.use('/api/communications', requireAuth, communicationsRoutes);
 app.use('/api/notifications', requireAuth, notificationsRoutes);
 app.use('/api/price-migration', requireAuth, priceMigrationRoutes);
+app.use('/api/support', requireAuth, supportRoutes);
 
 // Page routes
 app.get('/login', (req, res) => {
@@ -149,6 +151,10 @@ app.get('/communications', requireAuth, (req, res) => {
 
 app.get('/notifications', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../views/notifications.html'));
+});
+
+app.get('/support', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, '../views/support.html'));
 });
 
 app.get('/logout', (req, res) => {

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support - Open Word Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-tab { padding: 8px 14px; border: 1px solid var(--gray-200, #e5e7eb); background: #fff; border-radius: 8px; cursor: pointer; font-size: 14px; color: #374151; }
+    .filter-tab.active { background: #667eea; color: #fff; border-color: #667eea; }
+    .req-row { cursor: pointer; }
+    .req-detail td { background: #f9fafb; }
+    .req-message { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; }
+    .cat-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #eef2ff; color: #4338ca; font-weight: 600; text-transform: capitalize; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Open Word</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li><a href="/dashboard"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>Dashboard</a></li>
+          <li><a href="/customers"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Customers</a></li>
+          <li><a href="/pricing"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Pricing</a></li>
+          <li><a href="/price-migration"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>Price Migration</a></li>
+          <li><a href="/costs"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>Costs</a></li>
+          <li><a href="/charity-registers"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>Charity Registers</a></li>
+          <li><a href="/communications"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Communications</a></li>
+          <li><a href="/notifications"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>Notifications</a></li>
+          <li><a href="/support" class="active"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Support</a></li>
+          <li><a href="/monitoring"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Monitoring</a></li>
+          <li><a href="/analytics"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>Analytics</a></li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>Support Requests</h2>
+        <p>Messages submitted from the in-app Contact Support form</p>
+      </div>
+
+      <div class="card">
+        <div class="filter-tabs" id="filterTabs">
+          <button class="filter-tab active" data-status="all" onclick="setFilter('all')">All (<span id="count-all">0</span>)</button>
+          <button class="filter-tab" data-status="new" onclick="setFilter('new')">New (<span id="count-new">0</span>)</button>
+          <button class="filter-tab" data-status="in_progress" onclick="setFilter('in_progress')">In progress (<span id="count-in_progress">0</span>)</button>
+          <button class="filter-tab" data-status="resolved" onclick="setFilter('resolved')">Resolved (<span id="count-resolved">0</span>)</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Category</th>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="requestsBody">
+              <tr><td colspan="6" class="text-center"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentFilter = 'all';
+
+    function logout() { window.location.href = '/logout'; }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function fmt(ts) {
+      if (!ts) return '-';
+      try { return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+      catch (e) { return ts; }
+    }
+    function catLabel(c) {
+      const m = { billing: 'Billing', technical: 'Technical', feature: 'Feature', account: 'Account', other: 'Other' };
+      return m[c] || c || '-';
+    }
+    function statusBadge(s) {
+      if (s === 'resolved') return '<span class="badge badge-success">Resolved</span>';
+      if (s === 'in_progress') return '<span class="badge" style="background:#2563eb;color:#fff;">In progress</span>';
+      return '<span class="badge badge-warning">New</span>';
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/support/stats');
+        const json = await res.json();
+        if (!json.success) return;
+        const c = json.counts;
+        document.getElementById('count-all').textContent = c.total;
+        document.getElementById('count-new').textContent = c.new;
+        document.getElementById('count-in_progress').textContent = c.in_progress;
+        document.getElementById('count-resolved').textContent = c.resolved;
+      } catch (e) { /* ignore */ }
+    }
+
+    async function loadRequests() {
+      const tbody = document.getElementById('requestsBody');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner"></div></td></tr>';
+      try {
+        const res = await fetch('/api/support?status=' + encodeURIComponent(currentFilter));
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Failed to load');
+        const rows = json.data || [];
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--gray-500);padding:30px;">No support requests' + (currentFilter !== 'all' ? ' with this status' : '') + '.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => {
+          const mailto = r.contact_email ? 'mailto:' + encodeURIComponent(r.contact_email) + '?subject=' + encodeURIComponent('Re: ' + (r.subject || 'your support request')) : null;
+          return `
+            <tr class="req-row" onclick="toggleDetail('${r.id}')">
+              <td style="white-space:nowrap;">${fmt(r.created_at)}</td>
+              <td>${esc(r.organisation_name) || '-'}<br><code style="font-size:0.7rem;">${esc(r.organisation_key) || ''}</code></td>
+              <td><span class="cat-chip">${catLabel(r.category)}</span></td>
+              <td>${esc(r.subject)}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td onclick="event.stopPropagation();">
+                <select class="form-input" style="width:auto;font-size:0.8rem;padding:4px 6px;" onchange="updateStatus('${r.id}', this.value)">
+                  <option value="new" ${r.status === 'new' ? 'selected' : ''}>New</option>
+                  <option value="in_progress" ${r.status === 'in_progress' ? 'selected' : ''}>In progress</option>
+                  <option value="resolved" ${r.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+                </select>
+              </td>
+            </tr>
+            <tr class="req-detail" id="detail-${r.id}" style="display:none;">
+              <td colspan="6">
+                <div style="padding:6px 4px;">
+                  <p class="req-message">${esc(r.message)}</p>
+                  <p style="margin-top:10px;font-size:0.8rem;color:var(--gray-500);">
+                    From: ${esc(r.contact_name) || ''} ${r.contact_email ? '&lt;' + esc(r.contact_email) + '&gt;' : ''}
+                    ${r.subscription_tier ? ' &nbsp;•&nbsp; Plan: ' + esc(r.subscription_tier) : ''}
+                    ${r.credit_balance != null ? ' &nbsp;•&nbsp; Credits: ' + esc(r.credit_balance) : ''}
+                    ${mailto ? ' &nbsp;•&nbsp; <a href="' + mailto + '">Reply by email</a>' : ''}
+                  </p>
+                </div>
+              </td>
+            </tr>`;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:#dc2626;padding:20px;">' + esc(e.message) + '</td></tr>';
+      }
+    }
+
+    function toggleDetail(id) {
+      const el = document.getElementById('detail-' + id);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    function setFilter(status) {
+      currentFilter = status;
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t.dataset.status === status));
+      loadRequests();
+    }
+
+    async function updateStatus(id, status) {
+      try {
+        const res = await fetch('/api/support/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Update failed');
+        loadStats();
+        // If filtering by a status, the row may no longer belong — reload.
+        if (currentFilter !== 'all') loadRequests();
+      } catch (e) {
+        alert('Could not update status: ' + e.message);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStats();
+      loadRequests();
+    });
+  </script>
+</body>
+</html>
