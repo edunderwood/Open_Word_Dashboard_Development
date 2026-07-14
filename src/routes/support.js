@@ -95,6 +95,48 @@ router.patch('/:id', async (req, res) => {
 });
 
 /**
+ * GET /api/support/:id/notes
+ * List internal notes for a request (oldest first).
+ */
+router.get('/:id/notes', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('support_notes')
+      .select('*')
+      .eq('request_id', req.params.id)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (e) {
+    console.error('support notes list error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * POST /api/support/:id/notes  { note }
+ * Add an internal note to a request.
+ */
+router.post('/:id/notes', async (req, res) => {
+  try {
+    const note = String(req.body?.note || '').trim();
+    if (note.length < 1 || note.length > 4000) {
+      return res.status(400).json({ success: false, error: 'Note must be 1–4000 characters.' });
+    }
+    const { data, error } = await supabase
+      .from('support_notes')
+      .insert({ request_id: req.params.id, note, author: 'admin' })
+      .select('*')
+      .single();
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (e) {
+    console.error('support note add error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
  * POST /api/support/:id/reply  { message, resolve }
  * Send a reply to the customer FROM support@openword.live (via SendGrid), so it
  * doesn't go from the admin's personal email. Optionally mark the request resolved.
