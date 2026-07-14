@@ -182,6 +182,13 @@ router.post('/:id/reply', async (req, res) => {
       sentBy: 'admin',
     }).catch(() => {});
 
+    // Record the reply in the ticket's notes so there's a full communication log
+    // (best-effort — don't fail the reply if this insert fails).
+    supabase
+      .from('support_notes')
+      .insert({ request_id: reqRow.id, note: message, author: 'reply' })
+      .then(({ error }) => { if (error) console.warn('failed to log reply note:', error.message); });
+
     // Replying moves 'new' -> 'in_progress'; the resolve option jumps to 'resolved'.
     const newStatus = resolve ? 'resolved' : (reqRow.status === 'new' ? 'in_progress' : reqRow.status);
     if (newStatus !== reqRow.status) {

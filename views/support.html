@@ -18,6 +18,8 @@
     .resolved-row.req-row:hover td { background: #d1fae5 !important; }
     .note-item { padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
     .note-item:last-child { border-bottom: none; }
+    .reply-note { background: #f0f7ff; border-radius: 6px; padding: 6px 8px; border-bottom: none; }
+    .reply-label { display: inline-block; font-size: 0.7rem; font-weight: 600; color: #2563eb; background: #dbeafe; padding: 1px 6px; border-radius: 8px; }
   </style>
 </head>
 <body>
@@ -205,7 +207,11 @@
         if (!json.success) throw new Error(json.error || 'Failed to load notes');
         const notes = json.data || [];
         box.innerHTML = notes.length
-          ? notes.map(n => `<div class="note-item"><span style="color:var(--gray-500);font-size:0.75rem;">${fmt(n.created_at)}</span><div>${esc(n.note)}</div></div>`).join('')
+          ? notes.map(n => {
+              const isReply = n.author === 'reply';
+              const label = isReply ? '<span class="reply-label">📧 Reply to customer</span> ' : '';
+              return `<div class="note-item${isReply ? ' reply-note' : ''}"><span style="color:var(--gray-500);font-size:0.75rem;">${fmt(n.created_at)}</span> ${label}<div style="white-space:pre-wrap;">${esc(n.note)}</div></div>`;
+            }).join('')
           : '<span style="color:var(--gray-500);">No notes yet.</span>';
       } catch (e) {
         box.innerHTML = '<span style="color:#dc2626;">' + esc(e.message) + '</span>';
@@ -254,8 +260,10 @@
         if (!json.success) throw new Error(json.error || 'Failed to send');
         setStatus('Reply sent from support@openword.live ✓', '#16a34a');
         if (ta) ta.value = '';
+        loadNotes(id);   // show the reply in the ticket's notes log right away
         loadStats();
-        setTimeout(loadRequests, 1500);
+        // If the reply resolved the ticket, reload so the row turns green.
+        if (json.status === 'resolved') setTimeout(loadRequests, 1500);
       } catch (e) {
         setStatus('Error: ' + e.message, '#dc2626');
       }
