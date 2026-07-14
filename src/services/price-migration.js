@@ -325,7 +325,7 @@ function generatePriceChangeEmailBody(params) {
 
         <p>The new pricing will apply to your next billing cycle after <strong>${effectiveDate}</strong>.</p>
 
-        <p style="margin-top: 20px;">If you have any questions about these changes, please don't hesitate to contact us at support@firmustech.com.</p>
+        <p style="margin-top: 20px;">If you have any questions about these changes, please don't hesitate to contact us at support@openword.live.</p>
 
         <p style="margin-top: 30px;">Thank you for being an Open Word customer.</p>
 

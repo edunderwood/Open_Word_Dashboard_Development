@@ -153,8 +153,18 @@
                     From: ${esc(r.contact_name) || ''} ${r.contact_email ? '&lt;' + esc(r.contact_email) + '&gt;' : ''}
                     ${r.subscription_tier ? ' &nbsp;•&nbsp; Plan: ' + esc(r.subscription_tier) : ''}
                     ${r.credit_balance != null ? ' &nbsp;•&nbsp; Credits: ' + esc(r.credit_balance) : ''}
-                    ${mailto ? ' &nbsp;•&nbsp; <a href="' + mailto + '">Reply by email</a>' : ''}
+                    ${mailto ? ' &nbsp;•&nbsp; <a href="' + mailto + '">Reply from my email client</a>' : ''}
                   </p>
+                  ${r.contact_email ? `
+                  <div style="margin-top:12px; border-top:1px solid var(--gray-200,#e5e7eb); padding-top:12px;">
+                    <div style="font-size:0.8rem; color:var(--gray-500); margin-bottom:6px;">Reply from <strong>support@openword.live</strong> (customer replies come back to support):</div>
+                    <textarea id="reply-${r.id}" class="form-input" rows="4" placeholder="Type your reply..." style="width:100%;"></textarea>
+                    <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                      <button class="btn btn-primary" onclick="sendReply('${r.id}', false)">Send reply</button>
+                      <button class="btn" onclick="sendReply('${r.id}', true)">Send &amp; mark resolved</button>
+                      <span id="reply-status-${r.id}" style="font-size:0.85rem;"></span>
+                    </div>
+                  </div>` : ''}
                 </div>
               </td>
             </tr>`;
@@ -173,6 +183,30 @@
       currentFilter = status;
       document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t.dataset.status === status));
       loadRequests();
+    }
+
+    async function sendReply(id, resolve) {
+      const ta = document.getElementById('reply-' + id);
+      const statusEl = document.getElementById('reply-status-' + id);
+      const message = (ta && ta.value || '').trim();
+      const setStatus = (txt, color) => { if (statusEl) { statusEl.textContent = txt; statusEl.style.color = color; } };
+      if (!message) { setStatus('Enter a reply first.', '#dc2626'); return; }
+      setStatus('Sending...', 'var(--gray-500)');
+      try {
+        const res = await fetch('/api/support/' + id + '/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, resolve })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Failed to send');
+        setStatus('Reply sent from support@openword.live ✓', '#16a34a');
+        if (ta) ta.value = '';
+        loadStats();
+        setTimeout(loadRequests, 1500);
+      } catch (e) {
+        setStatus('Error: ' + e.message, '#dc2626');
+      }
     }
 
     async function updateStatus(id, status) {

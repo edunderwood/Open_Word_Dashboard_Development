@@ -6,6 +6,7 @@
  */
 import express from 'express';
 import supabase from '../services/supabase.js';
+import { sendCustomerEmail, logEmail } from '../services/email.js';
 
 const router = express.Router();
 
@@ -89,6 +90,65 @@ router.patch('/:id', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('support update error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * POST /api/support/:id/reply  { message, resolve }
+ * Send a reply to the customer FROM support@openword.live (via SendGrid), so it
+ * doesn't go from the admin's personal email. Optionally mark the request resolved.
+ */
+router.post('/:id/reply', async (req, res) => {
+  try {
+    const message = String(req.body?.message || '').trim();
+    const resolve = req.body?.resolve === true || req.body?.resolve === 'true';
+    if (message.length < 1 || message.length > 5000) {
+      return res.status(400).json({ success: false, error: 'Reply must be 1–5000 characters.' });
+    }
+
+    const { data: reqRow, error: fetchErr } = await supabase
+      .from('support_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (fetchErr || !reqRow) return res.status(404).json({ success: false, error: 'Request not found' });
+    if (!reqRow.contact_email) return res.status(400).json({ success: false, error: 'No customer email on this request' });
+
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const refPrefix = reqRow.ticket_ref ? `[${reqRow.ticket_ref}] ` : '';
+    const subject = `${refPrefix}Re: ${reqRow.subject || 'your support request'}`;
+    const bodyHtml = `
+      <p>Hi ${esc(reqRow.contact_name) || 'there'},</p>
+      <p>Thanks for contacting Open Word support${reqRow.ticket_ref ? ` (reference <strong>${esc(reqRow.ticket_ref)}</strong>)` : ''}.</p>
+      <div style="white-space:pre-wrap; margin:12px 0;">${esc(message)}</div>
+      <p>You can reply to this email if you need anything else.</p>
+      <p>Best regards,<br>The Open Word Support Team</p>`;
+
+    const result = await sendCustomerEmail(reqRow.contact_email, subject, bodyHtml, reqRow.contact_name || 'Customer');
+    if (!result.success) {
+      return res.status(502).json({ success: false, error: result.error || 'Failed to send reply' });
+    }
+
+    // Log to email history (best-effort)
+    logEmail({
+      organisationId: reqRow.organisation_id,
+      recipientEmail: reqRow.contact_email,
+      recipientName: reqRow.contact_name,
+      subject,
+      emailType: 'individual',
+      sentBy: 'admin',
+    }).catch(() => {});
+
+    // Replying moves 'new' -> 'in_progress'; the resolve option jumps to 'resolved'.
+    const newStatus = resolve ? 'resolved' : (reqRow.status === 'new' ? 'in_progress' : reqRow.status);
+    if (newStatus !== reqRow.status) {
+      await supabase.from('support_requests').update({ status: newStatus }).eq('id', reqRow.id);
+    }
+
+    res.json({ success: true, status: newStatus });
+  } catch (e) {
+    console.error('support reply error:', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
