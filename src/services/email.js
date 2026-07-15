@@ -141,9 +141,18 @@ export async function sendWarningAlert(subject, message) {
  * @param {string} recipientName - Customer/org name for personalization
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = 'Customer') {
+export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = 'Customer', opts = {}) {
   const supportEmail = process.env.SUPPORT_EMAIL || 'support@openword.live';
   const serverUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
+
+  // Blind-copy a support inbox so there is an at-a-glance archive of what was
+  // actually sent. Defaults to support@openword.live; set EMAIL_BCC='' (or 'off')
+  // to disable, or EMAIL_BCC=someone@else to redirect. Callers can pass
+  // { bcc: false } to skip (used by bulk sends so a blast only copies once).
+  const bccRaw = process.env.EMAIL_BCC !== undefined ? process.env.EMAIL_BCC : (process.env.SUPPORT_EMAIL || 'support@openword.live');
+  const wantBcc = opts.bcc !== false && bccRaw && bccRaw.toLowerCase() !== 'off';
+  // SendGrid rejects the same address in both `to` and `bcc`, so guard against it.
+  const bccAddr = wantBcc && bccRaw.toLowerCase() !== String(to).toLowerCase() ? bccRaw : null;
 
   const htmlBody = `
     <!DOCTYPE html>
@@ -204,15 +213,18 @@ export async function sendCustomerEmail(to, subject, bodyHtml, recipientName = '
       return { success: true, simulated: true };
     }
 
-    await sgMail.send({
+    const msg = {
       from: { email: supportEmail, name: 'Open Word Support' },
       replyTo: supportEmail,
       to: to,
       subject: subject,
       html: htmlBody,
-    });
+    };
+    if (bccAddr) msg.bcc = bccAddr;
 
-    console.log(`📧 Customer email sent to ${to}: ${subject}`);
+    await sgMail.send(msg);
+
+    console.log(`📧 Customer email sent to ${to}: ${subject}${bccAddr ? ` (bcc ${bccAddr})` : ''}`);
     return { success: true };
   } catch (error) {
     console.error(`❌ Failed to send customer email to ${to}:`, error?.response?.body || error);
@@ -237,14 +249,19 @@ export async function sendBulkCustomerEmail(recipients, subject, bodyHtml, delay
 
   console.log(`📧 Starting bulk email to ${recipients.length} recipients...`);
 
+  let sentCount = 0;
   for (const recipient of recipients) {
     try {
+      // Only blind-copy the support inbox on the first message of a campaign so a
+      // large blast leaves a single representative copy rather than one per recipient.
       const result = await sendCustomerEmail(
         recipient.email,
         subject,
         bodyHtml,
-        recipient.name
+        recipient.name,
+        { bcc: sentCount === 0 }
       );
+      sentCount++;
 
       if (result.success) {
         results.sent++;
