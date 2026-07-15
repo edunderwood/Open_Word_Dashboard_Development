@@ -350,6 +350,7 @@
       <!-- Tabs -->
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('compose')">Compose Email</button>
+        <button class="tab-btn" onclick="switchTab('direct')">Direct Email</button>
         <button class="tab-btn" onclick="switchTab('history')">Send History</button>
       </div>
 
@@ -432,6 +433,47 @@
         </div>
       </div>
 
+      <!-- Direct Email Tab -->
+      <div id="direct-tab" class="tab-content">
+        <div class="card" style="max-width: 640px;">
+          <h3 style="margin-top: 0;">Email an Enquirer</h3>
+          <p style="color: #6b7280; margin-top: 0; font-size: 14px;">
+            Send a one-off email to any address — for example someone who has enquired but not yet registered.
+          </p>
+
+          <div class="sender-info" style="margin-bottom: 16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>From: <strong>support@openword.live</strong></span>
+          </div>
+
+          <div class="email-composer">
+            <div>
+              <label for="directToEmail">Recipient Email <span style="color:#dc2626;">*</span></label>
+              <input type="email" id="directToEmail" class="form-input" placeholder="enquirer@example.com">
+            </div>
+            <div>
+              <label for="directToName">Recipient Name <span style="color:#9ca3af;">(optional)</span></label>
+              <input type="text" id="directToName" class="form-input" placeholder="e.g. Jane Smith">
+            </div>
+            <div>
+              <label for="directSubject">Subject <span style="color:#dc2626;">*</span></label>
+              <input type="text" id="directSubject" class="form-input" placeholder="Enter email subject...">
+            </div>
+            <div>
+              <label for="directBody">Message <span style="color:#dc2626;">*</span></label>
+              <textarea id="directBody" placeholder="Enter your message here..."></textarea>
+            </div>
+          </div>
+
+          <div class="send-actions">
+            <button class="btn btn-secondary" onclick="previewDirectEmail()">Preview</button>
+            <button class="btn btn-primary" onclick="sendDirectEmail()" id="directSendBtn">Send Email</button>
+          </div>
+        </div>
+      </div>
+
       <!-- History Tab -->
       <div id="history-tab" class="tab-content">
         <div class="card">
@@ -477,7 +519,7 @@
       </div>
       <div class="preview-footer">
         <button class="btn btn-secondary" onclick="closePreview()">Close</button>
-        <button class="btn btn-primary" onclick="closePreview(); sendBulkEmail();">Send Email</button>
+        <button class="btn btn-primary" onclick="confirmPreviewSend()">Send Email</button>
       </div>
     </div>
   </div>
@@ -487,6 +529,7 @@
     let filteredCustomers = [];
     let templates = [];
     let historyOffset = 0;
+    let previewSendHandler = sendBulkEmail;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -679,12 +722,19 @@
       document.getElementById('previewSubject').textContent = subject;
       document.getElementById('previewBody').innerHTML = '<p>' + escapeHtml(body).replace(/\n/g, '<br>') + '</p>';
 
+      previewSendHandler = sendBulkEmail;
       document.getElementById('previewModal').classList.add('active');
     }
 
     // Close preview
     function closePreview() {
       document.getElementById('previewModal').classList.remove('active');
+    }
+
+    // Send from the preview modal using whichever composer opened it
+    function confirmPreviewSend() {
+      closePreview();
+      previewSendHandler();
     }
 
     // Send bulk email
@@ -739,6 +789,86 @@
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send to <span id="sendCount">0</span> Recipients';
         updateSelectCount();
+      }
+    }
+
+    // Preview a direct (one-off) email
+    function previewDirectEmail() {
+      const email = document.getElementById('directToEmail').value.trim();
+      const subject = document.getElementById('directSubject').value.trim();
+      const body = document.getElementById('directBody').value.trim();
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid recipient email address');
+        return;
+      }
+      if (!subject) {
+        alert('Please enter a subject');
+        return;
+      }
+      if (!body) {
+        alert('Please enter a message');
+        return;
+      }
+
+      document.getElementById('previewTo').textContent = email;
+      document.getElementById('previewSubject').textContent = subject;
+      document.getElementById('previewBody').innerHTML = '<p>' + escapeHtml(body).replace(/\n/g, '<br>') + '</p>';
+
+      previewSendHandler = sendDirectEmail;
+      document.getElementById('previewModal').classList.add('active');
+    }
+
+    // Send a direct (one-off) email to any address
+    async function sendDirectEmail() {
+      const email = document.getElementById('directToEmail').value.trim();
+      const name = document.getElementById('directToName').value.trim();
+      const subject = document.getElementById('directSubject').value.trim();
+      const body = document.getElementById('directBody').value.trim();
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid recipient email address');
+        return;
+      }
+      if (!subject || !body) {
+        alert('Please fill in the subject and message');
+        return;
+      }
+
+      if (!confirm(`Send this email to ${email}?`)) {
+        return;
+      }
+
+      const sendBtn = document.getElementById('directSendBtn');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch('/api/communications/send-direct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toEmail: email, toName: name, subject, body })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert(`Email sent to ${email}`);
+          document.getElementById('directToEmail').value = '';
+          document.getElementById('directToName').value = '';
+          document.getElementById('directSubject').value = '';
+          document.getElementById('directBody').value = '';
+        } else {
+          alert('Failed to send email: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Error sending direct email:', error);
+        alert('Error sending email: ' + error.message);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send Email';
       }
     }
 

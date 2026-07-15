@@ -239,6 +239,70 @@ router.post('/send-individual/:id', async (req, res) => {
 });
 
 /**
+ * POST /send-direct
+ * Send a one-off email to any address (e.g. an enquirer who has not registered).
+ * Sent FROM support@openword.live via sendCustomerEmail. Logged with a null
+ * organisation_id since there is no customer record.
+ */
+router.post('/send-direct', async (req, res) => {
+    try {
+        const { toEmail, toName, subject, body } = req.body;
+
+        const email = (toEmail || '').trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, error: 'A valid recipient email address is required' });
+        }
+        if (!subject || !subject.trim()) {
+            return res.status(400).json({ success: false, error: 'Subject is required' });
+        }
+        if (!body || !body.trim()) {
+            return res.status(400).json({ success: false, error: 'Email body is required' });
+        }
+
+        const recipientName = (toName || '').trim() || 'there';
+
+        // Convert plain text to HTML (escape + preserve line breaks)
+        const htmlBody = body
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+
+        // Send email (from support@openword.live)
+        const result = await sendCustomerEmail(email, subject, `<p>${htmlBody}</p>`, recipientName);
+
+        // Log to database (no organisation attached)
+        const { error: logError } = await supabase
+            .from('email_log')
+            .insert({
+                organisation_id: null,
+                recipient_email: email,
+                recipient_name: (toName || '').trim() || null,
+                subject: subject,
+                body_preview: body.substring(0, 500),
+                sent_by: req.session.user?.email || 'admin',
+                status: result.success ? 'sent' : 'failed',
+                email_type: 'custom',
+                error_message: result.error || null
+            });
+
+        if (logError) {
+            console.error('Failed to log direct email:', logError);
+        }
+
+        if (result.success) {
+            res.json({ success: true, message: `Email sent to ${email}` });
+        } else {
+            res.status(500).json({ success: false, error: result.error });
+        }
+    } catch (error) {
+        console.error('Error sending direct email:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /history
  * Get email send history
  */
