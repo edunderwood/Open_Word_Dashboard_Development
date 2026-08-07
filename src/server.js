@@ -37,6 +37,17 @@ import { startAutoTopupReconcileScheduler } from './services/auto-topup-reconcil
 
 dotenv.config();
 
+// Fail fast rather than silently signing admin session cookies with a
+// public, hardcoded value - that would make every admin session forgeable
+// (full access to customer PII, pricing, Stripe actions) if this env var
+// were ever left unset in a deploy.
+if (!process.env.SESSION_SECRET) {
+  console.error('❌ FATAL: SESSION_SECRET environment variable is not set.');
+  console.error('   Refusing to start with a hardcoded fallback secret - set');
+  console.error('   SESSION_SECRET (a long random string) before starting the dashboard.');
+  process.exit(1);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -61,7 +72,7 @@ app.use(limiter);
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'openword-dashboard-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
