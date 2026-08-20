@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import supabase from '../services/supabase.js';
 import stripe from '../services/stripe.js';
 import { sendCustomerEmail } from '../services/email.js';
+import { deleteFreeTrialOrganisation } from '../services/free-trial-cleanup.js';
 
 const router = express.Router();
 
@@ -566,6 +567,47 @@ router.post('/:id/end-trial', async (req, res) => {
   } catch (error) {
     console.error('Error ending trial:', error);
     res.status(500).json({ error: 'Failed to end trial' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/delete-trial
+ * Manually delete a free-trial (10-minute, no-card) account entirely - org
+ * and its auth user. Unlike the automated cleanup scheduler (which only ever
+ * touches trials that never streamed a session), this manual action works
+ * regardless of whether the trial was used, since an admin is making the
+ * call explicitly. Refuses to run on any organisation that isn't currently
+ * on the free_trial tier, so this can't be pointed at a paying customer.
+ */
+router.post('/:id/delete-trial', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: org, error: fetchError } = await supabase
+      .from('organisations')
+      .select('id, name, user_id, subscription_tier')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!org) {
+      return res.status(404).json({ success: false, error: 'Customer not found' });
+    }
+
+    const result = await deleteFreeTrialOrganisation(org);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    console.log(`🗑️ Trial customer deleted by admin: ${org.name} (${id})`);
+
+    res.json({
+      success: true,
+      message: 'Trial account deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting trial customer:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete trial customer' });
   }
 });
 
