@@ -678,9 +678,17 @@
       const checked = document.querySelectorAll('.recipient-checkbox[data-id]:checked');
       const total = document.querySelectorAll('.recipient-checkbox[data-id]:not([disabled])').length;
 
-      document.getElementById('selectCount').textContent = `${checked.length} of ${total} selected`;
-      document.getElementById('sendCount').textContent = checked.length;
-      document.getElementById('sendBtn').disabled = checked.length === 0;
+      // Defensive null checks: sendBtn's markup gets temporarily replaced with a
+      // plain "Sending..." label while a send is in flight (see sendBulkEmail),
+      // which removes #sendCount from the DOM for that window - without these
+      // guards, any call to updateSelectCount() during that window (e.g. a
+      // checkbox click) throws and gets misreported as an email-send failure.
+      const selectCountEl = document.getElementById('selectCount');
+      const sendCountEl = document.getElementById('sendCount');
+      const sendBtnEl = document.getElementById('sendBtn');
+      if (selectCountEl) selectCountEl.textContent = `${checked.length} of ${total} selected`;
+      if (sendCountEl) sendCountEl.textContent = checked.length;
+      if (sendBtnEl) sendBtnEl.disabled = checked.length === 0;
 
       // Update select all checkbox
       const selectAllCheckbox = document.getElementById('selectAll');
@@ -753,6 +761,7 @@
       }
 
       const sendBtn = document.getElementById('sendBtn');
+      const sendBtnOriginalHTML = sendBtn.innerHTML;
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending...';
 
@@ -787,7 +796,7 @@
         alert('Error sending email: ' + error.message);
       } finally {
         sendBtn.disabled = false;
-        sendBtn.innerHTML = 'Send to <span id="sendCount">0</span> Recipients';
+        sendBtn.innerHTML = sendBtnOriginalHTML;
         updateSelectCount();
       }
     }
