@@ -26,6 +26,15 @@ const ENABLE_STRIPE_FAILURE_ALERTS = process.env.ENABLE_STRIPE_FAILURE_ALERTS ==
 const PERFORMANCE_WARNING_THRESHOLD = 3000; // 3 seconds
 const PERFORMANCE_CRITICAL_THRESHOLD = 8000; // 8 seconds
 
+// A deliberately-nonexistent organisation key used to probe /organisation/info -
+// a real, public endpoint that runs an actual Supabase query (getOrganisationByKey())
+// and returns 404. Used instead of /health for the performance check: /health is a
+// static, no-DB-touching response and is structurally blind to database/auth-layer
+// slowdowns (see the 2026-08-23 incident where /health stayed at ~55ms the entire
+// time while real customer requests took up to 32 minutes). We only care about
+// timing here, not the response body/status - a 404 in a few ms is a healthy result.
+const MONITOR_HEALTHCHECK_ORG_KEY = '__monitor_healthcheck__';
+
 // Store for tracking issues
 const issueTracker = {
   serverDown: false,
@@ -115,10 +124,13 @@ async function checkServerPerformance() {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // 15 second timeout for performance check
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60s - wide enough to still measure (not just abort at) the kind of multi-minute delays seen in the 2026-08-23 incident
 
-    // Test the health endpoint
-    const response = await fetch(`${OPENWORD_SERVER_URL}/health`, {
+    // Hit a real, public, DB-backed endpoint rather than /health (which is a
+    // static response and never touches Supabase - see constant comment above).
+    // Status code is irrelevant here (a 404 for the nonexistent org is expected
+    // and fine); only the timing matters.
+    const response = await fetch(`${OPENWORD_SERVER_URL}/organisation/info?organisation=${MONITOR_HEALTHCHECK_ORG_KEY}`, {
       signal: controller.signal,
     });
 
@@ -301,16 +313,67 @@ async function checkUsageAnomalies() {
 }
 
 /**
+ * Race a promise against a timeout, rejecting if it doesn't resolve in time.
+ * Needed because the 2026-08-23 incident showed Supabase calls don't
+ * necessarily error under degradation - they can just hang and eventually
+ * succeed (one observed customer request took 32 minutes and still returned
+ * normally). Without an explicit timeout, a health-check probe would do the
+ * same thing: technically "succeed" after half an hour, never registering as
+ * a failure, and also stalling this check (and the 5-minute cron cycle behind
+ * it) for that entire time.
+ */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
+/**
  * Check database connectivity
  */
 async function checkDatabaseHealth() {
-  // A single query attempt against Supabase. Returns { ok: true } or throws.
-  const attemptQuery = async () => {
+  // A single query attempt against Supabase PostgREST. Returns true or throws
+  // (including on timeout - see withTimeout() above).
+  const attemptQuery = async () => withTimeout((async () => {
     const { error } = await supabase
       .from('organisations')
       .select('id')
       .limit(1);
     if (error) throw error;
+    return true;
+  })(), PERFORMANCE_CRITICAL_THRESHOLD, 'Database (PostgREST) query');
+
+  // A single probe of Supabase's Auth API (admin, service-role) - a DIFFERENT
+  // subsystem than the PostgREST table query above. Every real customer request
+  // to the control panel goes through JWT verification via this same Auth layer
+  // (authenticateUser middleware), so a degradation here directly matches what
+  // customers experience - but a plain table SELECT using the service-role key
+  // does NOT exercise it at all. Added after the 2026-08-23 incident, where this
+  // check reported "database: healthy" throughout a 2+ hour period of customer
+  // requests taking up to 32 minutes - the table SELECT stayed fast the whole
+  // time, so whatever was actually slow was never being tested.
+  const attemptAuthQuery = async () => withTimeout((async () => {
+    const { error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+    if (error) throw error;
+    return true;
+  })(), PERFORMANCE_CRITICAL_THRESHOLD, 'Auth API query');
+
+  // Run both probes together (not sequentially) - they test independent
+  // subsystems, so neither should be delayed by the other. Promise.allSettled
+  // so one hanging doesn't hide the other's result.
+  const attemptBoth = async () => {
+    const [dbResult, authResult] = await Promise.allSettled([attemptQuery(), attemptAuthQuery()]);
+    const failures = [];
+    if (dbResult.status === 'rejected') failures.push(`Database (PostgREST): ${dbResult.reason.message}`);
+    if (authResult.status === 'rejected') failures.push(`Auth API: ${authResult.reason.message}`);
+    if (failures.length > 0) {
+      const err = new Error(failures.join('; '));
+      err.failures = failures;
+      throw err;
+    }
     return true;
   };
 
@@ -318,16 +381,16 @@ async function checkDatabaseHealth() {
     // One immediate retry to absorb a momentary blip (e.g. a Cloudflare 522
     // while the Supabase origin briefly restarts) without inflating the count.
     try {
-      await attemptQuery();
+      await attemptBoth();
     } catch (firstError) {
-      await attemptQuery();
+      await attemptBoth();
     }
 
     if (issueTracker.dbDown) {
       // Database recovered
       await sendWarningAlert(
         'Database Recovered',
-        `<p>Supabase database is reachable again after ${issueTracker.consecutiveDbFailures} failed checks.</p>`
+        `<p>Supabase (database and auth) is reachable again after ${issueTracker.consecutiveDbFailures} failed checks.</p>`
       );
     }
     issueTracker.dbDown = false;
@@ -346,10 +409,11 @@ async function checkDatabaseHealth() {
 
       if (!issueTracker.lastAlertSent.database ||
           (Date.now() - issueTracker.lastAlertSent.database) > 30 * 60 * 1000) { // 30 minutes
+        const failureList = (error.failures || [error.message]).map(f => `<li>${f}</li>`).join('');
         await sendCriticalAlert(
           'Database Connection Issue',
-          `<p>Unable to connect to Supabase database!</p>
-           <p>Error: ${error.message}</p>
+          `<p>Unable to reach Supabase - one or more subsystems failing:</p>
+           <ul>${failureList}</ul>
            <p>Failed checks: ${issueTracker.consecutiveDbFailures}</p>`
         );
         issueTracker.lastAlertSent.database = Date.now();
