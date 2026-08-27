@@ -70,6 +70,27 @@ router.get('/summary', async (req, res) => {
     });
     const totalCostLastMonth = totalCharactersLastMonth * 0.000024;
 
+    // AI Voice (TTS) characters, across all organisations, same periods - a separate,
+    // display-only figure from tts_usage (billed the same as translation, see
+    // db/credit-reconciliation.js in the Control Panel repo, but shown separately here
+    // so it's clear the totals above are transcription + text-translation only).
+    const startOfMonthDate = startOfMonth.split('T')[0];
+    const startOfLastMonthDate = startOfLastMonth.split('T')[0];
+    const endOfLastMonthDate = endOfLastMonth.split('T')[0];
+
+    const { data: ttsThisMonth } = await supabase
+      .from('tts_usage')
+      .select('character_count')
+      .gte('date', startOfMonthDate);
+    const totalTtsCharactersThisMonth = (ttsThisMonth || []).reduce((sum, r) => sum + (r.character_count || 0), 0);
+
+    const { data: ttsLastMonth } = await supabase
+      .from('tts_usage')
+      .select('character_count')
+      .gte('date', startOfLastMonthDate)
+      .lte('date', endOfLastMonthDate);
+    const totalTtsCharactersLastMonth = (ttsLastMonth || []).reduce((sum, r) => sum + (r.character_count || 0), 0);
+
     // Get customers with issues
     const { count: pausedCustomers } = await supabase
       .from('organisations')
@@ -109,10 +130,12 @@ router.get('/summary', async (req, res) => {
           thisMonth: {
             characters: totalCharactersThisMonth,
             cost: totalCostThisMonth,
+            ttsCharacters: totalTtsCharactersThisMonth,
           },
           lastMonth: {
             characters: totalCharactersLastMonth,
             cost: totalCostLastMonth,
+            ttsCharacters: totalTtsCharactersLastMonth,
           },
         },
         timestamp: new Date().toISOString(),
@@ -163,6 +186,27 @@ router.get('/recent-activity', async (req, res) => {
       console.error('Error fetching streaming sessions:', sessionsError);
     }
 
+    // AI Voice (TTS) characters for these sessions, queried once and grouped in JS
+    // (same batch-query-by-id pattern used elsewhere) - display-only, does not affect
+    // character_count below which stays translation-only.
+    const sessionIds = (recentSessions || []).map(s => s.id).filter(Boolean);
+    let ttsBySessionId = {};
+    if (sessionIds.length > 0) {
+      const { data: ttsRows, error: ttsError } = await supabase
+        .from('tts_usage')
+        .select('session_id, character_count')
+        .in('session_id', sessionIds);
+
+      if (ttsError) {
+        console.error('Error fetching tts_usage for recent activity:', ttsError);
+      } else {
+        ttsBySessionId = (ttsRows || []).reduce((acc, row) => {
+          acc[row.session_id] = (acc[row.session_id] || 0) + (row.character_count || 0);
+          return acc;
+        }, {});
+      }
+    }
+
     // Also get recent credit usage as fallback
     const { data: recentCredits, error: creditsError } = await supabase
       .from('credit_usage')
@@ -189,6 +233,7 @@ router.get('/recent-activity', async (req, res) => {
         id: session.id,
         created_at: session.started_at,
         character_count: session.characters_translated || 0,
+        tts_character_count: ttsBySessionId[session.id] || 0,
         duration_minutes: session.duration_minutes || 0,
         operation_type: session.status === 'active' ? 'Streaming' : 'Session',
         organisation_id: session.organisation_id,

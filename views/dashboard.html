@@ -240,6 +240,10 @@
               <div style="font-size: 1.5rem; font-weight: 700;" id="usageChange">-</div>
             </div>
           </div>
+          <div id="usageTtsRow" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200, #e5e7eb);">
+            <div class="text-muted mb-2">🔊 AI Voice (synthesized speech)</div>
+            <div style="font-size: 1.5rem; font-weight: 700;" id="usageTtsChars">-</div>
+          </div>
         </div>
       </div>
 
@@ -350,11 +354,12 @@
                   <th>Type</th>
                   <th>Duration</th>
                   <th>Translated</th>
+                  <th>🔊 AI Voice</th>
                   <th>Date</th>
                 </tr>
               </thead>
               <tbody id="recentUsage">
-                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+                <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -455,6 +460,14 @@
         // Update usage stats
         document.getElementById('usageChars').textContent = formatNumber(usage.thisMonth.characters);
         document.getElementById('usageCost').textContent = formatCurrency(usage.thisMonth.cost);
+
+        // AI Voice (TTS) characters - separate figure, billed the same as translation but
+        // shown on its own so "Characters" above reads as transcription + text translation only.
+        const ttsCharsThisMonth = usage.thisMonth.ttsCharacters || 0;
+        if (ttsCharsThisMonth > 0) {
+          document.getElementById('usageTtsChars').textContent = formatNumber(ttsCharsThisMonth);
+          document.getElementById('usageTtsRow').style.display = 'block';
+        }
 
         // Calculate change
         if (usage.lastMonth.characters > 0) {
@@ -793,7 +806,7 @@
         // Recent usage
         const usageTable = document.getElementById('recentUsage');
         if (data.data.recentUsage.length === 0) {
-          usageTable.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No recent usage</td></tr>';
+          usageTable.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No recent usage</td></tr>';
         } else {
           usageTable.innerHTML = data.data.recentUsage.map(usage => `
             <tr>
@@ -801,6 +814,7 @@
               <td>${usage.operation_type}</td>
               <td>${formatDuration(usage.duration_minutes)}</td>
               <td>${formatNumber(usage.character_count)}</td>
+              <td>${usage.tts_character_count ? formatNumber(usage.tts_character_count) : '-'}</td>
               <td>${formatDate(usage.created_at)}</td>
             </tr>
           `).join('');

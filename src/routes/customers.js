@@ -432,6 +432,32 @@ router.get('/:id/usage', async (req, res) => {
     // Estimate total cost at £0.000024/char (standard rate)
     const totalCost = totalCharacters * 0.000024;
 
+    // AI Voice (TTS) characters for this org/period - a separate, display-only breakdown
+    // from tts_usage (same organisation_id + date-range scoping as the streaming_sessions
+    // query above, using tts_usage's own `date` column). Does NOT affect totalCharacters/
+    // translationChars above, which stay transcription + text-translation only.
+    let totalTtsCharacters = 0;
+    const byLanguageTts = {};
+    try {
+      let ttsQuery = supabase
+        .from('tts_usage')
+        .select('language, character_count')
+        .eq('organisation_id', id)
+        .gte('date', startDate.toISOString().split('T')[0]);
+
+      const { data: ttsRows, error: ttsError } = await ttsQuery;
+      if (ttsError) throw ttsError;
+
+      (ttsRows || []).forEach(row => {
+        const lang = row.language || 'unknown';
+        const chars = row.character_count || 0;
+        totalTtsCharacters += chars;
+        byLanguageTts[lang] = (byLanguageTts[lang] || 0) + chars;
+      });
+    } catch (ttsErr) {
+      console.error('Error fetching tts_usage for customer usage:', ttsErr);
+    }
+
     res.json({
       success: true,
       data: {
@@ -440,7 +466,9 @@ router.get('/:id/usage', async (req, res) => {
         totalCost,
         transcriptionChars,
         translationChars,
+        totalTtsCharacters,
         byLanguage,
+        byLanguageTts,
         byDate,
         records: sessions?.length || 0, // Now represents session count
       }

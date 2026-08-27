@@ -1463,6 +1463,12 @@
               <div class="label">Translation</div>
               <div class="value">${formatNumber(usage.translationChars)}</div>
             </div>
+            ${usage.totalTtsCharacters > 0 ? `
+              <div class="stat-card">
+                <div class="label">🔊 AI Voice</div>
+                <div class="value">${formatNumber(usage.totalTtsCharacters)}</div>
+              </div>
+            ` : ''}
           </div>
 
           <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Usage by Language</h4>
@@ -1473,6 +1479,17 @@
               </div>
             `).join('') || '<div class="text-muted">No language data</div>'}
           </div>
+
+          ${usage.byLanguageTts && Object.keys(usage.byLanguageTts).length > 0 ? `
+            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">🔊 AI Voice by Language</h4>
+            <div class="grid grid-3" style="margin-bottom: 20px;">
+              ${Object.entries(usage.byLanguageTts).map(([lang, chars]) => `
+                <div style="padding: 10px; background: var(--gray-50); border-radius: 8px;">
+                  <strong>${lang}</strong>: ${formatNumber(chars)}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
 
           <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Daily Usage</h4>
           <div class="table-container" style="max-height: 200px; overflow-y: auto;">
