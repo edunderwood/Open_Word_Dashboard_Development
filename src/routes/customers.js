@@ -905,7 +905,7 @@ function formatDuration(minutes) {
 router.get('/:id/credits', async (req, res) => {
   try {
     const { id } = req.params;
-    const CHARS_PER_CREDIT = 23000;
+    const CHARS_PER_CREDIT = 21000; // was 23000 - stale rate, real rate matches db/credits.js in the Control Panel repo
 
     // Get credit balance
     const { data: balance, error: balanceError } = await supabase

@@ -249,21 +249,11 @@
     </div>
   </div>
 
-  <!-- Usage Modal -->
-  <div class="modal-overlay" id="usageModal">
-    <div class="modal" style="max-width: 800px;">
-      <div class="modal-header">
-        <h3 id="usageModalTitle">Customer Usage</h3>
-        <button class="modal-close" onclick="closeUsageModal()">&times;</button>
-      </div>
-      <div class="modal-body" id="usageModalBody">
-        Loading...
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeUsageModal()">Close</button>
-      </div>
-    </div>
-  </div>
+  <!-- Usage Modal removed 2026-08-27: folded into the Customer Details modal's
+       "Activity & Streaming Stats" section instead - this modal was fully built
+       (API + rendering) but had zero call sites anywhere in the page, so it was
+       unreachable dead code. See viewCustomer()'s usage fetch and the "Characters
+       This Month" / "🔊 AI Voice" stat cards below. -->
 
   <!-- Discount Modal -->
   <div class="modal-overlay" id="discountModal">
@@ -871,6 +861,10 @@
                   ? '<span class="badge" style="margin-left: 4px; font-size: 9px; background: #8b5cf6; color: white;">Enterprise</span>'
                   : ''
                 }
+                ${customer.ai_audio_enabled
+                  ? '<span class="badge" style="margin-left: 4px; font-size: 9px; background: #0ea5e9; color: white;" title="AI Voice enabled">🔊 AI Voice</span>'
+                  : ''
+                }
                 ${customer.charity_verified
                   ? '<span class="badge badge-success" style="margin-left: 4px; font-size: 9px;">Charity</span>'
                   : customer.charity_review_requested
@@ -981,14 +975,15 @@
       document.getElementById('modalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
 
       try {
-        // Fetch customer details, session stats, and credits in parallel
-        const [customerResponse, sessionResponse, creditsResponse, enterpriseResponse, emailsResponse, supportResponse] = await Promise.all([
+        // Fetch customer details, session stats, credits, and usage in parallel
+        const [customerResponse, sessionResponse, creditsResponse, enterpriseResponse, emailsResponse, supportResponse, usageResponse] = await Promise.all([
           fetch(`/api/customers/${id}`),
           fetch(`/api/customers/${id}/session-stats`),
           fetch(`/api/customers/${id}/credits`),
           fetch(`/api/customers/${id}/enterprise-info`),
           fetch(`/api/customers/${id}/emails`),
-          fetch(`/api/support/customer/${id}`)
+          fetch(`/api/support/customer/${id}`),
+          fetch(`/api/customers/${id}/usage?period=month`)
         ]);
 
         const customerData = await customerResponse.json();
@@ -997,6 +992,7 @@
         const enterpriseData = await enterpriseResponse.json();
         const emailsData = await emailsResponse.json();
         const supportData = await supportResponse.json();
+        const usageData = await usageResponse.json();
 
         if (!customerData.success) throw new Error(customerData.error);
 
@@ -1006,6 +1002,7 @@
         const enterprise = enterpriseData.success ? enterpriseData.data : null;
         const emails = emailsData.success ? emailsData.data : [];
         const supportRequests = supportData.success ? supportData.data : [];
+        const usage = usageData.success ? usageData.data : null;
 
         document.getElementById('modalTitle').textContent = customer.name || 'Customer Details';
 
@@ -1033,7 +1030,7 @@
           <!-- Activity Stats Section -->
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-200);">
             <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Activity & Streaming Stats</h4>
-            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
               <div class="stat-card" style="padding: 15px;">
                 <div class="label" style="font-size: 0.7rem;">Last Active</div>
                 <div class="value" style="font-size: 0.9rem; color: ${sessionStats?.lastLogin ? (isRecentlyActive(sessionStats.lastLogin) ? 'var(--success, #10b981)' : '#9ca3af') : 'inherit'};">${sessionStats?.lastLogin ? formatDateTime(sessionStats.lastLogin) : 'Never'} ${sessionStats?.lastLogin ? `<span class="badge ${isRecentlyActive(sessionStats.lastLogin) ? 'badge-success' : 'badge-gray'}" style="margin-left: 6px; font-size: 9px;">${isRecentlyActive(sessionStats.lastLogin) ? 'Active' : 'Inactive'}</span>` : ''}</div>
@@ -1048,7 +1045,30 @@
                 <div class="value" style="font-size: 0.9rem;">${sessionStats?.sessionStats?.avgSessionDurationFormatted || '0 min'}</div>
                 <div style="font-size: 0.7rem; color: var(--gray-500);">${sessionStats?.sessionStats?.totalSessions || 0} total sessions</div>
               </div>
+              <div class="stat-card" style="padding: 15px;">
+                <div class="label" style="font-size: 0.7rem;">Characters This Month</div>
+                <div class="value" style="font-size: 0.9rem;">${formatNumber(usage?.totalCharacters || 0)}</div>
+                <div style="font-size: 0.7rem; color: var(--gray-500);">${formatNumber(usage?.transcriptionChars || 0)} transcribed &middot; ${formatNumber(usage?.translationChars || 0)} translated</div>
+              </div>
+              ${usage?.totalTtsCharacters > 0 ? `
+                <div class="stat-card" style="padding: 15px;">
+                  <div class="label" style="font-size: 0.7rem;">🔊 AI Voice This Month</div>
+                  <div class="value" style="font-size: 0.9rem;">${formatNumber(usage.totalTtsCharacters)}</div>
+                </div>
+              ` : ''}
             </div>
+            ${usage?.byLanguageTts && Object.keys(usage.byLanguageTts).length > 0 ? `
+              <div style="margin-top: 15px;">
+                <h5 style="margin-bottom: 10px; color: var(--gray-500); font-size: 0.7rem; text-transform: uppercase;">🔊 AI Voice by Language (This Month)</h5>
+                <div class="grid grid-3" style="gap: 10px;">
+                  ${Object.entries(usage.byLanguageTts).map(([lang, chars]) => `
+                    <div style="padding: 10px; background: var(--gray-50); border-radius: 8px; font-size: 0.85rem;">
+                      <strong>${lang}</strong>: ${formatNumber(chars)}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
             ${sessionStats?.sessionStats?.last10Sessions?.length > 0 ? `
               <div style="margin-top: 15px;">
                 <h5 style="margin-bottom: 10px; color: var(--gray-500); font-size: 0.7rem; text-transform: uppercase;">Recent Sessions</h5>
@@ -1428,99 +1448,6 @@
         console.error('Error loading customer:', error);
         document.getElementById('modalBody').innerHTML =
           `<div class="alert alert-danger">Error loading customer: ${error.message}</div>`;
-      }
-    }
-
-    // View usage
-    async function viewUsage(id, name) {
-      document.getElementById('usageModal').classList.add('active');
-      document.getElementById('usageModalTitle').textContent = `Usage: ${name || 'Customer'}`;
-      document.getElementById('usageModalBody').innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
-
-      try {
-        const response = await fetch(`/api/customers/${id}/usage?period=month`);
-        const data = await response.json();
-
-        if (!data.success) throw new Error(data.error);
-
-        const usage = data.data;
-
-        document.getElementById('usageModalBody').innerHTML = `
-          <div class="stats-grid" style="margin-bottom: 20px;">
-            <div class="stat-card">
-              <div class="label">Total Characters</div>
-              <div class="value">${formatNumber(usage.totalCharacters)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="label">Estimated Cost</div>
-              <div class="value">${formatCurrency(usage.totalCost)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="label">Transcription</div>
-              <div class="value">${formatNumber(usage.transcriptionChars)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="label">Translation</div>
-              <div class="value">${formatNumber(usage.translationChars)}</div>
-            </div>
-            ${usage.totalTtsCharacters > 0 ? `
-              <div class="stat-card">
-                <div class="label">🔊 AI Voice</div>
-                <div class="value">${formatNumber(usage.totalTtsCharacters)}</div>
-              </div>
-            ` : ''}
-          </div>
-
-          <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Usage by Language</h4>
-          <div class="grid grid-3" style="margin-bottom: 20px;">
-            ${Object.entries(usage.byLanguage).map(([lang, chars]) => `
-              <div style="padding: 10px; background: var(--gray-50); border-radius: 8px;">
-                <strong>${lang}</strong>: ${formatNumber(chars)}
-              </div>
-            `).join('') || '<div class="text-muted">No language data</div>'}
-          </div>
-
-          ${usage.byLanguageTts && Object.keys(usage.byLanguageTts).length > 0 ? `
-            <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">🔊 AI Voice by Language</h4>
-            <div class="grid grid-3" style="margin-bottom: 20px;">
-              ${Object.entries(usage.byLanguageTts).map(([lang, chars]) => `
-                <div style="padding: 10px; background: var(--gray-50); border-radius: 8px;">
-                  <strong>${lang}</strong>: ${formatNumber(chars)}
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-
-          <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Daily Usage</h4>
-          <div class="table-container" style="max-height: 200px; overflow-y: auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Characters</th>
-                  <th>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Object.entries(usage.byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => `
-                  <tr>
-                    <td>${formatDate(date)}</td>
-                    <td>${formatNumber(data.characters)}</td>
-                    <td>${formatCurrency(data.cost)}</td>
-                  </tr>
-                `).join('') || '<tr><td colspan="3" class="text-center text-muted">No daily data</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="mt-4 text-muted text-center">
-            Period: ${usage.period} | Records: ${usage.records}
-          </div>
-        `;
-      } catch (error) {
-        console.error('Error loading usage:', error);
-        document.getElementById('usageModalBody').innerHTML =
-          `<div class="alert alert-danger">Error loading usage: ${error.message}</div>`;
       }
     }
 
@@ -2320,10 +2247,6 @@
     // Close modals
     function closeModal() {
       document.getElementById('customerModal').classList.remove('active');
-    }
-
-    function closeUsageModal() {
-      document.getElementById('usageModal').classList.remove('active');
     }
 
     // Logout
