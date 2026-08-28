@@ -45,6 +45,9 @@ const issueTracker = {
   lastDbCheck: null,
   consecutiveSlowResponses: 0,
   lastResponseTime: null,
+  azureSpeechDown: false,
+  consecutiveAzureSpeechFailures: 0,
+  lastAzureSpeechCheck: null,
   lastAlertSent: {},
   lastNewCustomerCheck: null,
   knownOrganisationIds: new Set(),
@@ -425,6 +428,85 @@ async function checkDatabaseHealth() {
 }
 
 /**
+ * Check Azure Speech (AI Voice / TTS) reachability.
+ *
+ * Azure Speech has no free "ping" endpoint separate from actually synthesizing
+ * audio (which costs money and would run on every 5-minute poll). The standard,
+ * free way to validate a subscription key/region without synthesizing anything
+ * is Azure Cognitive Services' token-issuance endpoint - every real synthesis
+ * call in src/services/tts.js (Control Panel repo) goes through the same
+ * key/region pair, so a failure here means AI Voice synthesis is failing for
+ * real customers too, not just this check.
+ */
+async function checkAzureSpeechHealth() {
+  const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
+  const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION;
+
+  if (!AZURE_SPEECH_KEY || !AZURE_SPEECH_REGION) {
+    // Not configured is a valid state (AI Voice is opt-in per environment), not
+    // a failure - don't alert or count toward the failure streak.
+    return { healthy: null, configured: false };
+  }
+
+  const attemptTokenFetch = async () => withTimeout((async () => {
+    const response = await fetch(
+      `https://${AZURE_SPEECH_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`,
+      { method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY, 'Content-Length': '0' } }
+    );
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`Azure Speech token endpoint returned ${response.status}${body ? `: ${body}` : ''}`);
+    }
+    return true;
+  })(), PERFORMANCE_CRITICAL_THRESHOLD, 'Azure Speech token endpoint');
+
+  try {
+    // One immediate retry to absorb a momentary blip, matching checkDatabaseHealth().
+    try {
+      await attemptTokenFetch();
+    } catch (firstError) {
+      await attemptTokenFetch();
+    }
+
+    if (issueTracker.azureSpeechDown) {
+      await sendWarningAlert(
+        'Azure Speech (AI Voice) Recovered',
+        `<p>Azure Speech is reachable again after ${issueTracker.consecutiveAzureSpeechFailures} failed checks.</p>`
+      );
+    }
+    issueTracker.azureSpeechDown = false;
+    issueTracker.consecutiveAzureSpeechFailures = 0;
+    issueTracker.lastAzureSpeechCheck = new Date();
+
+    return { healthy: true, configured: true };
+  } catch (error) {
+    issueTracker.consecutiveAzureSpeechFailures++;
+    issueTracker.lastAzureSpeechCheck = new Date();
+
+    // Same 3-consecutive-failure gate as checkDatabaseHealth() - avoids paging
+    // on a single transient blip.
+    if (issueTracker.consecutiveAzureSpeechFailures >= 3 && !issueTracker.azureSpeechDown) {
+      issueTracker.azureSpeechDown = true;
+
+      if (!issueTracker.lastAlertSent.azureSpeech ||
+          (Date.now() - issueTracker.lastAlertSent.azureSpeech) > 30 * 60 * 1000) { // 30 minutes
+        await sendCriticalAlert(
+          'Azure Speech (AI Voice) Unreachable',
+          `<p>Unable to reach Azure Speech Services - AI Voice synthesis is likely failing for customers using it.</p>
+           <p>Error: ${error.message}</p>
+           <p>Failed checks: ${issueTracker.consecutiveAzureSpeechFailures}</p>
+           <p style="color: #666;">AI Voice fails silently by design (src/services/tts.js returns null rather than breaking
+           translation delivery), so customers won't see an error - they'll just stop receiving synthesized speech.</p>`
+        );
+        issueTracker.lastAlertSent.azureSpeech = Date.now();
+      }
+    }
+
+    return { healthy: false, configured: true, error: error.message, consecutiveAzureSpeechFailures: issueTracker.consecutiveAzureSpeechFailures };
+  }
+}
+
+/**
  * Check for pending charity review requests
  * Uses database flag (charity_review_notified_at) for reliable tracking that survives restarts
  */
@@ -735,6 +817,7 @@ export async function runAllChecks() {
     server: await checkServerHealth(),
     performance: await checkServerPerformance(),
     database: await checkDatabaseHealth(),
+    azureSpeech: await checkAzureSpeechHealth(),
     paymentIssues: await checkPaymentIssues(),
     stripePaymentErrors: await checkStripePaymentErrors(),
     newRegistrations: await checkNewRegistrations(),

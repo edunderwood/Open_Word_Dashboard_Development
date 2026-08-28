@@ -11,6 +11,7 @@ import { getRenderAnalytics } from '../services/render-analytics.js';
 import { getGoogleAnalytics } from '../services/google-analytics.js';
 import { getVercelAnalytics } from '../services/vercel-analytics.js';
 import { getSupabaseAnalytics } from '../services/supabase-analytics.js';
+import { getAzureAnalytics } from '../services/azure-analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,6 +117,22 @@ router.get('/supabase', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /analytics/azure - Get Azure Speech (AI Voice) usage analytics
+ */
+router.get('/azure', requireAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const analytics = await getAzureAnalytics(days);
+    res.json(analytics);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /analytics/all - Get all analytics in one call
  */
 router.get('/all', requireAuth, async (req, res) => {
@@ -123,11 +140,12 @@ router.get('/all', requireAuth, async (req, res) => {
     const days = parseInt(req.query.days) || 7;
 
     // Fetch all analytics in parallel
-    const [deepgram, render, google, vercel] = await Promise.all([
+    const [deepgram, render, google, vercel, azure] = await Promise.all([
       getDeepgramAnalytics(days).catch(e => ({ success: false, error: e.message })),
       getRenderAnalytics().catch(e => ({ success: false, error: e.message })),
       getGoogleAnalytics(days).catch(e => ({ success: false, error: e.message })),
       getVercelAnalytics().catch(e => ({ success: false, error: e.message })),
+      getAzureAnalytics(days).catch(e => ({ success: false, error: e.message })),
     ]);
 
     res.json({
@@ -137,6 +155,7 @@ router.get('/all', requireAuth, async (req, res) => {
         render,
         google,
         vercel,
+        azure,
       },
     });
   } catch (error) {
