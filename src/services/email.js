@@ -63,7 +63,24 @@ export async function sendAlert(subject, message, priority = 'info') {
     info: 'ℹ️ INFO: '
   };
 
-  const fullSubject = `${prefixes[priority] || ''}OpenWord Dashboard - ${subject}`;
+  // Tag the subject with which environment this Dashboard is monitoring - dev
+  // and prod alerts previously looked identical in the inbox list ("OpenWord
+  // Dashboard - <subject>"), so there was no way to tell them apart without
+  // opening the email. Derived from OPENWORD_SERVER_URL (already differs per
+  // environment) rather than a new env var, so nothing new needs configuring.
+  const monitoredServerUrl = process.env.OPENWORD_SERVER_URL || 'https://openword.onrender.com';
+  const envTag = (() => {
+    try {
+      const host = new URL(monitoredServerUrl).hostname;
+      if (host.includes('development')) return 'DEV';
+      if (host === 'server.openword.live' || host === 'openword.onrender.com') return 'PROD';
+      return host;
+    } catch {
+      return monitoredServerUrl;
+    }
+  })();
+
+  const fullSubject = `${prefixes[priority] || ''}OpenWord Dashboard [${envTag}] - ${subject}`;
 
   const htmlBody = `
     <!DOCTYPE html>
@@ -85,7 +102,8 @@ export async function sendAlert(subject, message, priority = 'info') {
         <div class="content">
           ${message}
           <div class="footer">
-            <p>This is an automated alert from OpenWord Dashboard</p>
+            <p>This is an automated alert from OpenWord Dashboard [${envTag}]</p>
+            <p>Monitored server: ${monitoredServerUrl}</p>
             <p>Time: ${new Date().toISOString()}</p>
           </div>
         </div>
