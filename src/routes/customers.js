@@ -1217,6 +1217,7 @@ router.post('/:id/cancel-subscription', async (req, res) => {
             <p>Hi ${customer.name || 'there'},</p>
             ${reasonText}
             <p>${whenText}</p>
+            <p>We'd genuinely appreciate knowing why - whether it was cost, a missing feature, a technical issue, or anything else. Just reply to this email and let us know; it helps us improve Open Word for everyone.</p>
             <p>If this wasn't expected, or you'd like to resubscribe, please reply to this email or contact <a href="mailto:support@openword.live">support@openword.live</a>.</p>
           `;
           await sendCustomerEmail(customerEmail, 'Your Open Word subscription has been cancelled', emailBody, customer.name);
