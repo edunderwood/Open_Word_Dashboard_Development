@@ -1017,6 +1017,11 @@
               <p><strong>Key:</strong> <code>${customer.organisation_key || '-'}</code></p>
               <p><strong>Started:</strong> ${formatDate(customer.registered_at || customer.created_at)}</p>
               <p><strong>User ID:</strong> <code style="font-size: 0.75rem;">${customer.user_id || '-'}</code></p>
+              <p><strong>Contact:</strong> ${customer.contact_name || '-'}</p>
+              <p><strong>Email:</strong> ${customer.contact_email || customer.email
+                ? `<a href="mailto:${customer.contact_email || customer.email}">${customer.contact_email || customer.email}</a>`
+                : '-'}</p>
+              <p><strong>Phone:</strong> ${customer.contact_phone || '-'}</p>
             </div>
             <div>
               <h4 style="margin-bottom: 15px; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase;">Subscription</h4>
@@ -1433,7 +1438,7 @@
         // state for a non-paying customer, not 'past_due'/'unpaid' - missed on the
         // first pass of this fix, confirmed live against a real suspended customer.
         if (customer.stripe_subscription_id && ['active', 'past_due', 'unpaid', 'suspended'].includes(customer.subscription_status)) {
-          leftButtons.push(`<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>`);
+          leftButtons.push(`<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}', '${customer.subscription_status}')">Cancel Subscription</button>`);
         }
 
         document.getElementById('modalFooter').innerHTML = `
@@ -1581,7 +1586,7 @@
     }
 
     // Cancel subscription
-    async function cancelSubscription(id) {
+    async function cancelSubscription(id, subscriptionStatus) {
       // First confirmation
       if (!confirm('Are you sure you want to CANCEL this subscription?\n\nThis action cannot be easily undone and will affect the customer\'s billing.')) {
         return;
@@ -1594,8 +1599,17 @@
         return;
       }
 
-      // Ask about timing
-      const immediately = confirm('Cancel IMMEDIATELY?\n\n• Click OK to cancel immediately (customer loses access now)\n• Click Cancel to cancel at end of billing period (customer keeps access until then)');
+      // Ask about timing - worded differently for a customer already suspended/
+      // past_due/unpaid, where "at period end" doesn't protect anything they've
+      // paid for and just means Stripe keeps sending payment-failure dunning
+      // emails until the period naturally ends. Confirmed live 2026-09-02: an
+      // admin picked "at period end" for exactly this case because the neutral
+      // wording didn't make the consequence obvious, and the customer kept
+      // getting non-payment emails as a result.
+      const isNonPayment = ['past_due', 'unpaid', 'suspended'].includes(subscriptionStatus);
+      const immediately = isNonPayment
+        ? confirm('This customer is already suspended/unpaid for the CURRENT period.\n\nCancelling at "end of period" will NOT stop further payment-failure emails - Stripe keeps trying to collect until the period ends naturally.\n\nRecommended: cancel IMMEDIATELY.\n\n• Click OK to cancel immediately (recommended)\n• Click Cancel to schedule for end of period anyway (not recommended - more failed-payment emails likely)')
+        : confirm('Cancel IMMEDIATELY?\n\n• Click OK to cancel immediately (customer loses access now)\n• Click Cancel to cancel at end of billing period (customer keeps access until then)');
 
       try {
         const response = await fetch(`/api/customers/${id}/cancel-subscription`, {
