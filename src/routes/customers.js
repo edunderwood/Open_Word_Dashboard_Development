@@ -1167,14 +1167,34 @@ router.post('/:id/cancel-subscription', async (req, res) => {
     const wasNonPayment = ['past_due', 'unpaid', 'suspended'].includes(customer.subscription_status);
 
     let subscription;
-    if (immediately) {
-      // Cancel immediately
-      subscription = await stripe.subscriptions.cancel(customer.stripe_subscription_id);
-    } else {
-      // Cancel at period end
-      subscription = await stripe.subscriptions.update(customer.stripe_subscription_id, {
-        cancel_at_period_end: true,
-      });
+    let stripeRecordAlreadyGone = false;
+    try {
+      if (immediately) {
+        // Cancel immediately
+        subscription = await stripe.subscriptions.cancel(customer.stripe_subscription_id);
+      } else {
+        // Cancel at period end
+        subscription = await stripe.subscriptions.update(customer.stripe_subscription_id, {
+          cancel_at_period_end: true,
+        });
+      }
+    } catch (stripeError) {
+      if (stripeError.code === 'resource_missing') {
+        // Stripe has no record of this subscription at all (404) - it's already
+        // gone on Stripe's side (e.g. Stripe's own dunning/retry process gave up
+        // and deleted it weeks ago), our database just never got the memo.
+        // Confirmed live 2026-09-02: a genuinely suspended customer with a real,
+        // months-stale unpaid period couldn't be cancelled at all here - Stripe
+        // correctly rejected the cancel call, but the admin only ever saw a
+        // generic "Failed to cancel subscription" with no way to resolve it.
+        // Treat this the same as an already-cancelled subscription rather than
+        // a hard failure, so the admin can still clean up our own record.
+        console.log(`ℹ️ Stripe subscription ${customer.stripe_subscription_id} not found (already gone) - marking cancelled locally`);
+        subscription = { status: 'cancelled', cancel_at: null };
+        stripeRecordAlreadyGone = true;
+      } else {
+        throw stripeError;
+      }
     }
 
     // Update local database. cancellation_reason is set to a technical marker
@@ -1190,6 +1210,12 @@ router.post('/:id/cancel-subscription', async (req, res) => {
       .update({
         subscription_status: subscription.status,
         cancellation_reason: 'admin_cancelled_via_dashboard',
+        // No customer.subscription.deleted webhook will ever fire for a
+        // subscription Stripe already had no record of, so this is the only
+        // place that will ever clear the now-confirmed-dead ID - left in place
+        // it would just cause the same resource_missing error on any future
+        // action that references it.
+        ...(stripeRecordAlreadyGone ? { stripe_subscription_id: null } : {}),
       })
       .eq('id', id);
 
@@ -1237,7 +1263,10 @@ router.post('/:id/cancel-subscription', async (req, res) => {
     });
   } catch (error) {
     console.error('Error cancelling subscription:', error);
-    res.status(500).json({ error: 'Failed to cancel subscription' });
+    // Surface the real reason (Stripe's own message, when this was a Stripe
+    // error) instead of a bare generic message - previously an admin hitting
+    // this had no way to diagnose it without pulling server logs.
+    res.status(500).json({ error: error.message ? `Failed to cancel subscription: ${error.message}` : 'Failed to cancel subscription' });
   }
 });
 
