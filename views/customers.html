@@ -1422,7 +1422,10 @@
         if (customer.subscription_status === 'trialing') {
           leftButtons.push(`<button class="btn btn-warning" onclick="endTrial('${customer.id}')">End Trial</button>`);
         }
-        if (customer.stripe_subscription_id && customer.subscription_status === 'active') {
+        // Also offered for past_due/unpaid (suspended for non-payment) - previously
+        // only 'active' showed this button, leaving no way to cancel a non-paying
+        // customer from the Dashboard at all (Stripe itself was the only path).
+        if (customer.stripe_subscription_id && ['active', 'past_due', 'unpaid'].includes(customer.subscription_status)) {
           leftButtons.push(`<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>`);
         }
 
