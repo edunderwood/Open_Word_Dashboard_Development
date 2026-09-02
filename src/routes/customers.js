@@ -1164,7 +1164,7 @@ router.post('/:id/cancel-subscription', async (req, res) => {
       return res.status(400).json({ error: 'Customer has no active subscription' });
     }
 
-    const wasNonPayment = ['past_due', 'unpaid'].includes(customer.subscription_status);
+    const wasNonPayment = ['past_due', 'unpaid', 'suspended'].includes(customer.subscription_status);
 
     let subscription;
     if (immediately) {

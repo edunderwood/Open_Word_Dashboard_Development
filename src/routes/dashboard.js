@@ -97,10 +97,13 @@ router.get('/summary', async (req, res) => {
       .select('*', { count: 'exact', head: true })
       .eq('is_paused', true);
 
+    // 'suspended' is this app's own terminal non-payment status (Control Panel
+    // sets it once payment_failure_count reaches 3) - excluding it undercounted
+    // the most severe payment-issue customers on this stat.
     const { count: paymentIssues } = await supabase
       .from('organisations')
       .select('*', { count: 'exact', head: true })
-      .in('subscription_status', ['past_due', 'unpaid']);
+      .in('subscription_status', ['past_due', 'unpaid', 'suspended']);
 
     // Get trial customers
     const { count: trialCustomers } = await supabase

@@ -144,6 +144,7 @@
             <option value="cancelling">Cancelling</option>
             <option value="past_due">Past Due</option>
             <option value="unpaid">Unpaid</option>
+            <option value="suspended">Suspended</option>
             <option value="canceled">Cancelled</option>
           </select>
           <select id="planFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
@@ -683,7 +684,9 @@
         trialing: '<span class="badge badge-info">Trial</span>',
         past_due: '<span class="badge badge-warning">Past Due</span>',
         unpaid: '<span class="badge badge-danger">Unpaid</span>',
+        suspended: '<span class="badge badge-danger">Suspended</span>',
         canceled: '<span class="badge badge-gray">Cancelled</span>',
+        cancelled: '<span class="badge badge-gray">Cancelled</span>',
       };
       return badges[status] || `<span class="badge badge-gray">${status || 'Unknown'}</span>`;
     }
@@ -1422,10 +1425,14 @@
         if (customer.subscription_status === 'trialing') {
           leftButtons.push(`<button class="btn btn-warning" onclick="endTrial('${customer.id}')">End Trial</button>`);
         }
-        // Also offered for past_due/unpaid (suspended for non-payment) - previously
-        // only 'active' showed this button, leaving no way to cancel a non-paying
-        // customer from the Dashboard at all (Stripe itself was the only path).
-        if (customer.stripe_subscription_id && ['active', 'past_due', 'unpaid'].includes(customer.subscription_status)) {
+        // Also offered for past_due/unpaid/suspended (suspended for non-payment) -
+        // previously only 'active' showed this button, leaving no way to cancel a
+        // non-paying customer from the Dashboard at all (Stripe itself was the
+        // only path). 'suspended' is this app's own status (src/server.js sets it,
+        // not Stripe) once payment_failure_count reaches 3 - the actual terminal
+        // state for a non-paying customer, not 'past_due'/'unpaid' - missed on the
+        // first pass of this fix, confirmed live against a real suspended customer.
+        if (customer.stripe_subscription_id && ['active', 'past_due', 'unpaid', 'suspended'].includes(customer.subscription_status)) {
           leftButtons.push(`<button class="btn btn-danger" onclick="cancelSubscription('${customer.id}')">Cancel Subscription</button>`);
         }
 

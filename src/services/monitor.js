@@ -227,7 +227,12 @@ async function checkPaymentIssues() {
     const { data: orgs, error } = await supabase
       .from('organisations')
       .select('id, name, stripe_customer_id, subscription_status')
-      .in('subscription_status', ['past_due', 'unpaid']);
+      // 'suspended' is this app's own status (Control Panel sets it once
+      // payment_failure_count reaches 3 - see src/server.js) - the actual
+      // terminal non-payment state, not Stripe's 'past_due'/'unpaid'. Missing
+      // it here meant the most urgent payment-issue customers never appeared
+      // in this digest at all.
+      .in('subscription_status', ['past_due', 'unpaid', 'suspended']);
 
     if (error) throw error;
 
