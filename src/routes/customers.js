@@ -1154,7 +1154,7 @@ router.post('/:id/cancel-subscription', async (req, res) => {
     // Get customer's Stripe subscription ID
     const { data: customer, error: custError } = await supabase
       .from('organisations')
-      .select('stripe_subscription_id, name')
+      .select('stripe_subscription_id, name, user_id, subscription_status')
       .eq('id', id)
       .single();
 
@@ -1163,6 +1163,8 @@ router.post('/:id/cancel-subscription', async (req, res) => {
     if (!customer?.stripe_subscription_id) {
       return res.status(400).json({ error: 'Customer has no active subscription' });
     }
+
+    const wasNonPayment = ['past_due', 'unpaid'].includes(customer.subscription_status);
 
     let subscription;
     if (immediately) {
@@ -1175,15 +1177,54 @@ router.post('/:id/cancel-subscription', async (req, res) => {
       });
     }
 
-    // Update local database
+    // Update local database. cancellation_reason is set to a technical marker
+    // (distinct from the human-readable strings the customer's own self-service
+    // cancel flow stores here, e.g. "Too expensive") so the Control Panel's
+    // customer.subscription.deleted webhook can recognise this cancellation was
+    // already notified by the admin email below and skip sending its own
+    // conditional payment-failure notice - without this, an admin cancelling a
+    // customer with 3+ recorded payment failures (the common case for this
+    // button) would trigger BOTH emails.
     await supabase
       .from('organisations')
       .update({
         subscription_status: subscription.status,
+        cancellation_reason: 'admin_cancelled_via_dashboard',
       })
       .eq('id', id);
 
     console.log(`❌ Subscription cancelled for: ${customer.name} (${id}) - ${immediately ? 'immediately' : 'at period end'}`);
+
+    // Unconditional customer notification - previously this depended on the
+    // Control Panel's own webhook logic guessing whether this looked like a
+    // payment-failure cancellation (payment_failure_count >= 3), so an admin
+    // cancelling a customer with fewer recorded failures sent no notice at
+    // all. An admin explicitly cancelling via this button should always
+    // result in the customer being told, regardless of why.
+    if (customer.user_id) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(customer.user_id);
+        const customerEmail = authUser?.user?.email;
+        if (customerEmail) {
+          const whenText = immediately
+            ? 'Your access has ended immediately.'
+            : `Your access will continue until the end of your current billing period (${subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toLocaleDateString() : 'shown in your account'}), with no further charges after that.`;
+          const reasonText = wasNonPayment
+            ? '<p>This was cancelled by Open Word support due to a failed payment on your account.</p>'
+            : '<p>This was cancelled by Open Word support at your request.</p>';
+          const emailBody = `
+            <h2>Your Open Word subscription has been cancelled</h2>
+            <p>Hi ${customer.name || 'there'},</p>
+            ${reasonText}
+            <p>${whenText}</p>
+            <p>If this wasn't expected, or you'd like to resubscribe, please reply to this email or contact <a href="mailto:support@openword.live">support@openword.live</a>.</p>
+          `;
+          await sendCustomerEmail(customerEmail, 'Your Open Word subscription has been cancelled', emailBody, customer.name);
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send admin-cancellation email:', emailError.message);
+      }
+    }
 
     res.json({
       success: true,
