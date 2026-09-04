@@ -2049,6 +2049,14 @@ router.post('/create-enterprise', async (req, res) => {
       enterprise_trial_days: trial,
       enterprise_setup_complete: false,
       max_concurrent_sessions: 99,
+      // Explicit NULL, not omitted - organisations.ai_audio_enabled has DEFAULT
+      // false, so leaving this key out entirely means Postgres silently writes a
+      // literal false, which permanently overrides the enterprise tier's
+      // aiAudioEnabled: true (org.ai_audio_enabled ?? tierConfig.aiAudioEnabled
+      // fallback, used everywhere this is read) - this was reproducing, for every
+      // newly admin-created enterprise customer, the exact bug found live
+      // 2026-09-04 affecting every pre-existing organisations row.
+      ai_audio_enabled: null,
       contact_name: contactName,
       contact_email: contactEmail,
       contact_phone: contactPhone || null,
