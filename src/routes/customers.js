@@ -1190,7 +1190,14 @@ router.post('/:id/cancel-subscription', async (req, res) => {
         // Treat this the same as an already-cancelled subscription rather than
         // a hard failure, so the admin can still clean up our own record.
         console.log(`ℹ️ Stripe subscription ${customer.stripe_subscription_id} not found (already gone) - marking cancelled locally`);
-        subscription = { status: 'cancelled', cancel_at: null };
+        // 'canceled' (single L) - matches Stripe's own real status spelling AND the
+        // organisations_subscription_status_check CHECK constraint, which does NOT
+        // allow 'cancelled' (double L). Using the wrong spelling here silently fails
+        // the update below (see the error check now added there) while this log line
+        // and the customer email still fire - confirmed live 2026-09-02/09-04 on a
+        // real customer (Irina F) whose account stayed stuck 'suspended' through two
+        // cancel attempts, each falsely reporting success and re-emailing her.
+        subscription = { status: 'canceled', cancel_at: null };
         stripeRecordAlreadyGone = true;
       } else {
         throw stripeError;
@@ -1205,7 +1212,7 @@ router.post('/:id/cancel-subscription', async (req, res) => {
     // conditional payment-failure notice - without this, an admin cancelling a
     // customer with 3+ recorded payment failures (the common case for this
     // button) would trigger BOTH emails.
-    await supabase
+    const { error: updateError } = await supabase
       .from('organisations')
       .update({
         subscription_status: subscription.status,
@@ -1218,6 +1225,13 @@ router.post('/:id/cancel-subscription', async (req, res) => {
         ...(stripeRecordAlreadyGone ? { stripe_subscription_id: null } : {}),
       })
       .eq('id', id);
+
+    // Previously unchecked - a rejected update (e.g. the constraint violation that
+    // caused Irina F's account to stay stuck 'suspended' through two cancel
+    // attempts) failed completely silently: the success log below and the
+    // customer email still fired regardless. Throw so the outer catch surfaces
+    // the real reason to the admin instead of falsely reporting success.
+    if (updateError) throw updateError;
 
     console.log(`❌ Subscription cancelled for: ${customer.name} (${id}) - ${immediately ? 'immediately' : 'at period end'}`);
 
