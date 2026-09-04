@@ -92,7 +92,17 @@ const requireAuth = (req, res, next) => {
   if (req.session && req.session.authenticated) {
     return next();
   }
-  if (req.xhr || req.headers.accept?.includes('application/json')) {
+  // req.originalUrl (not req.path, which can be mount-relative) reliably
+  // identifies every /api/* call regardless of which router it's dispatched
+  // through - a far more robust signal than req.xhr/Accept, which many
+  // fetch() calls across this app's views don't reliably set (they set
+  // Content-Type for the request body, not Accept for the desired response
+  // type). Without this, an expired session on any such call got silently
+  // redirected to the HTML /login page instead of a clean 401 JSON - the
+  // frontend's response.json() then threw "Unexpected token '<' ... is not
+  // valid JSON" trying to parse the login page's HTML, a confusing error
+  // with no indication the real problem was just being logged out.
+  if (req.originalUrl.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   res.redirect('/login');
