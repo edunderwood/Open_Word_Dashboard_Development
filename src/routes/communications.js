@@ -16,10 +16,13 @@ const router = express.Router();
  */
 router.get('/customers', async (req, res) => {
     try {
-        // Get all organisations with user IDs
+        // Get all organisations with user IDs. Excludes canceled customers -
+        // they shouldn't be selectable (or emailable) as bulk-communication
+        // recipients at all.
         const { data: orgs, error: orgsError } = await supabase
             .from('organisations')
             .select('id, name, subscription_tier, subscription_status, email_opt_out, user_id, created_at')
+            .neq('subscription_status', 'canceled')
             .order('name');
 
         if (orgsError) throw orgsError;
@@ -83,11 +86,14 @@ router.post('/send-bulk', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Email body is required' });
         }
 
-        // Get customer details
+        // Get customer details. Re-excludes canceled customers here too (not
+        // just in GET /customers above) so a stale client-side recipient list
+        // can never result in an email actually reaching a canceled org.
         const { data: orgs, error: orgsError } = await supabase
             .from('organisations')
             .select('id, name, user_id')
-            .in('id', customerIds);
+            .in('id', customerIds)
+            .neq('subscription_status', 'canceled');
 
         if (orgsError) throw orgsError;
 
