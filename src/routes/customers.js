@@ -238,6 +238,19 @@ router.get('/', async (req, res) => {
       console.error('Bulk auth listUsers failed, last-sign-in may be missing:', err.message);
     }
 
+    // organisations.ai_audio_enabled is frequently NULL by design (see
+    // 2026-09-04 fix) so it can correctly inherit from the tier via the same
+    // `org.ai_audio_enabled ?? tierConfig.aiAudioEnabled` fallback the app
+    // itself uses (db/tiers.js) - a raw truthy check on the column alone
+    // (as the "🔊 AI Voice" badge below does) shows nothing for those orgs
+    // even though AI Voice is genuinely active for them. Compute the same
+    // effective value here so the list matches reality.
+    const { data: tierRows } = await supabase
+      .from('pricing_tiers')
+      .select('id, ai_audio_enabled');
+    const tierAiVoiceMap = {};
+    tierRows?.forEach(t => { tierAiVoiceMap[t.id] = t.ai_audio_enabled; });
+
     const customersWithLogin = customers.map((customer) => {
       const lastSignIn = customer.user_id ? (authSignInMap[customer.user_id] || null) : null;
       const lastStreaming = lastStreamingMap[customer.id] || null;
@@ -248,7 +261,8 @@ router.get('/', async (req, res) => {
       return {
         ...customer,
         last_login: lastActive,
-        credit_balance: creditMap[customer.id] ?? 0
+        credit_balance: creditMap[customer.id] ?? 0,
+        ai_audio_enabled: customer.ai_audio_enabled ?? tierAiVoiceMap[customer.subscription_tier] ?? false
       };
     });
 
