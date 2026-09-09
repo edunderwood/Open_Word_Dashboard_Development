@@ -41,7 +41,12 @@ const EARLY_WARNING_WINDOW_MIN_DAYS = 2;
 const EARLY_WARNING_WINDOW_MAX_DAYS = 3;
 const FINAL_WARNING_WINDOW_MIN_DAYS = 14;
 const FINAL_WARNING_WINDOW_MAX_DAYS = 15;
-const DELETE_AFTER_DAYS = 18;
+// Exported so the customer list (src/routes/customers.js) can show unused
+// 10-min trials' real scheduled deletion date in the "Trial Ends" column
+// (organisations.trial_ends_at is never set for this tier - it's only
+// populated by the 30-day Stripe trial flow) without hardcoding this number
+// a second time in a different file and risking the two drifting apart.
+export const DELETE_AFTER_DAYS = 18;
 
 function daysAgoIso(days) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();

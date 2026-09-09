@@ -885,7 +885,11 @@
               <td>${getPaymentStatusBadge(customer)}</td>
               <td>${customer.registered_at ? formatDate(customer.registered_at) : customer.created_at ? formatDate(customer.created_at) : '<span class="text-muted">-</span>'}</td>
               <td>${getLastActiveHtml(customer)}</td>
-              <td>${customer.trial_ends_at ? formatDate(customer.trial_ends_at) : '<span class="text-muted">-</span>'}</td>
+              <td>${customer.trial_ends_at
+                ? (customer.subscription_tier === 'free_trial'
+                    ? `<span title="Unused 10-min trial - auto-deletes on this date if still never streamed">🗑️ ${formatDate(customer.trial_ends_at)}</span>`
+                    : formatDate(customer.trial_ends_at))
+                : '<span class="text-muted">-</span>'}</td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="viewCustomer('${customer.id}')">View/Edit</button>
                 ${customer.is_paused

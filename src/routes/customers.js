@@ -8,6 +8,7 @@ import supabase from '../services/supabase.js';
 import stripe from '../services/stripe.js';
 import { sendCustomerEmail } from '../services/email.js';
 import { deleteFreeTrialOrganisation } from '../services/free-trial-cleanup.js';
+import { DELETE_AFTER_DAYS } from '../services/free-trial-cleanup-scheduler.js';
 
 const router = express.Router();
 
@@ -270,11 +271,29 @@ router.get('/', async (req, res) => {
       const lastActive = candidates.length
         ? candidates.reduce((a, b) => (a > b ? a : b))
         : null;
+
+      // organisations.trial_ends_at is only ever set by the 30-day Stripe
+      // trial flow - the 10-min free trial never touches it, so it's always
+      // null for that tier. For an unused (never-streamed) free_trial org,
+      // derive the real date it'll be auto-deleted by the cleanup scheduler
+      // (registered_at + DELETE_AFTER_DAYS) so the "Trial Ends" column shows
+      // something meaningful instead of always blank. Once a customer has
+      // actually streamed, the scheduler never touches them again (see
+      // free-trial-cleanup-scheduler.js) - no deletion date applies, so this
+      // deliberately stays null in that case, same as before.
+      let trialEndsAt = customer.trial_ends_at;
+      if (!trialEndsAt && customer.subscription_tier === 'free_trial' && !customer.last_streaming_at && customer.registered_at) {
+        trialEndsAt = new Date(
+          new Date(customer.registered_at).getTime() + DELETE_AFTER_DAYS * 24 * 60 * 60 * 1000
+        ).toISOString();
+      }
+
       return {
         ...customer,
         last_login: lastActive,
         credit_balance: creditMap[customer.id] ?? 0,
-        ai_audio_enabled: customer.ai_audio_enabled ?? tierAiVoiceMap[customer.subscription_tier] ?? false
+        ai_audio_enabled: customer.ai_audio_enabled ?? tierAiVoiceMap[customer.subscription_tier] ?? false,
+        trial_ends_at: trialEndsAt
       };
     });
 
