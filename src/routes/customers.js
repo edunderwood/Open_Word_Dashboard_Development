@@ -129,8 +129,20 @@ router.get('/', async (req, res) => {
         // 10-min instant trial: subscription_tier='free_trial' (status is 'active')
         query = query.eq('subscription_tier', 'free_trial');
       } else if (status === 'trialing_extended') {
-        // 30-day extended trial: subscription_tier='extended_trial'
-        query = query.eq('subscription_tier', 'extended_trial');
+        // 30-day trial: implemented as a real Stripe subscription with
+        // trial_period_days on the customer's actual chosen plan (see
+        // registration-routes.js create-trial-checkout), NOT a separate
+        // 'extended_trial' organisations.subscription_tier value - that literal
+        // string is never actually written to a real signup's subscription_tier
+        // anywhere in the Control Panel (confirmed live 2026-09-09: this filter
+        // showed zero customers despite real ones being on the 30-day trial).
+        // The real, correct signal is Stripe's own 'trialing' subscription
+        // status (customer.subscription.created/updated webhook writes this
+        // verbatim to subscription_status) - which the 10-min free trial never
+        // reaches at all (that flow sets subscription_status='active' directly,
+        // per the trialing_short branch's own comment above), so this correctly
+        // excludes it with no extra condition needed.
+        query = query.eq('subscription_status', 'trialing');
       } else {
         query = query.eq('subscription_status', status);
       }
