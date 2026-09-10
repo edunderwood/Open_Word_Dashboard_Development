@@ -441,7 +441,7 @@ router.get('/revenue', async (req, res) => {
     let revenueThisMonth = 0;
     chargesThisMonth.data.forEach(charge => {
       if (charge.status === 'succeeded') {
-        revenueThisMonth += charge.amount;
+        revenueThisMonth += charge.amount - (charge.amount_refunded || 0);
       }
     });
 
@@ -454,7 +454,7 @@ router.get('/revenue', async (req, res) => {
     let revenueLastMonth = 0;
     chargesLastMonth.data.forEach(charge => {
       if (charge.status === 'succeeded') {
-        revenueLastMonth += charge.amount;
+        revenueLastMonth += charge.amount - (charge.amount_refunded || 0);
       }
     });
 
