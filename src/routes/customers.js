@@ -1831,7 +1831,19 @@ router.post('/:id/enable-enterprise', async (req, res) => {
         organisation_key: orgKey,
         enterprise_included_credits: credits,
         enterprise_overage_rate_pence: overage,
-        enterprise_billing_day: billing
+        enterprise_billing_day: billing,
+        // Explicit NULL, not omitted - these columns have DEFAULT false/1, so
+        // leaving them out entirely means Postgres silently writes those
+        // defaults, which permanently overrides the enterprise tier's
+        // canCustomizeBranding/canReceiveFeedback/aiAudioEnabled: true and
+        // maxConcurrentSessions: 99 (org.X ?? tierConfig.X fallback, used
+        // everywhere these are read) - the same class of bug found for
+        // ai_audio_enabled on 2026-09-04, missed here because this is a
+        // separate "convert an existing customer" code path.
+        can_customize_branding: null,
+        can_receive_feedback: null,
+        ai_audio_enabled: null,
+        max_concurrent_sessions: null
       })
       .eq('id', id);
 
@@ -2094,14 +2106,16 @@ router.post('/create-enterprise', async (req, res) => {
       enterprise_trial_days: trial,
       enterprise_setup_complete: false,
       max_concurrent_sessions: 99,
-      // Explicit NULL, not omitted - organisations.ai_audio_enabled has DEFAULT
-      // false, so leaving this key out entirely means Postgres silently writes a
-      // literal false, which permanently overrides the enterprise tier's
-      // aiAudioEnabled: true (org.ai_audio_enabled ?? tierConfig.aiAudioEnabled
-      // fallback, used everywhere this is read) - this was reproducing, for every
-      // newly admin-created enterprise customer, the exact bug found live
-      // 2026-09-04 affecting every pre-existing organisations row.
+      // Explicit NULL, not omitted - organisations.ai_audio_enabled/can_customize_branding/
+      // can_receive_feedback all have DEFAULT false, so leaving these keys out entirely
+      // means Postgres silently writes a literal false, which permanently overrides the
+      // enterprise tier's aiAudioEnabled/canCustomizeBranding/canReceiveFeedback: true
+      // (org.X ?? tierConfig.X fallback, used everywhere these are read) - this was
+      // reproducing, for every newly admin-created enterprise customer, the exact bug
+      // found live 2026-09-04 affecting every pre-existing organisations row.
       ai_audio_enabled: null,
+      can_customize_branding: null,
+      can_receive_feedback: null,
       contact_name: contactName,
       contact_email: contactEmail,
       contact_phone: contactPhone || null,
