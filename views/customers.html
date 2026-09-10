@@ -672,7 +672,12 @@
       // Check if subscription is cancelled (takes priority)
       if (customer.subscription_cancelled_at) {
         const expiresAt = customer.tier_expires_at ? new Date(customer.tier_expires_at) : null;
-        const isExpired = expiresAt && expiresAt < new Date();
+        // subscription_status === 'canceled' covers an admin cancel via this
+        // Dashboard, which terminates immediately and never sets
+        // tier_expires_at at all (confirmed live 2026-09-10, customer "IFL") -
+        // relying on tier_expires_at alone left a fully-cancelled customer
+        // permanently mislabeled "Cancelling" instead of "Cancelled".
+        const isExpired = customer.subscription_status === 'canceled' || (expiresAt && expiresAt < new Date());
         if (isExpired) {
           return '<span class="badge badge-gray">Cancelled</span>';
         }
@@ -732,7 +737,7 @@
       if (c.is_paused) return 'paused';
       if (c.subscription_cancelled_at) {
         const exp = c.tier_expires_at ? new Date(c.tier_expires_at) : null;
-        return (exp && exp < new Date()) ? 'cancelled' : 'cancelling';
+        return (c.subscription_status === 'canceled' || (exp && exp < new Date())) ? 'cancelled' : 'cancelling';
       }
       return (c.subscription_status || 'unknown').toLowerCase();
     }
