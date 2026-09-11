@@ -781,6 +781,57 @@ router.post('/:id/reset-pin', async (req, res) => {
 });
 
 /**
+ * POST /api/customers/:id/change-email
+ * Admin-triggered login email change for the organisation owner's auth
+ * account. email_confirm:true is used here (unlike the customer's own
+ * self-service change in control.html, which correctly requires confirming
+ * the new address) since this is an admin directly setting an already-known,
+ * verified value on the customer's behalf - e.g. when a customer is locked
+ * out or asks support to correct a typo.
+ */
+router.post('/:id/change-email', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ error: 'A valid email address is required' });
+    }
+
+    const { data: customer, error: custError } = await supabase
+      .from('organisations')
+      .select('id, name, user_id')
+      .eq('id', id)
+      .single();
+
+    if (custError) throw custError;
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    if (!customer.user_id) return res.status(400).json({ error: 'Customer has no linked auth user' });
+
+    const { error: authError } = await supabase.auth.admin.updateUserById(customer.user_id, {
+      email,
+      email_confirm: true
+    });
+
+    if (authError) {
+      const msg = authError.message || '';
+      const isDuplicate = authError.code === 'email_exists' || authError.status === 422 || /already registered|already exists|duplicate/i.test(msg);
+      return res.status(400).json({
+        error: isDuplicate ? 'That email address is already in use by another account.' : (msg || 'Failed to update email')
+      });
+    }
+
+    console.log(`✉️ Admin changed login email for ${customer.name} (${id}) to ${email}`);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error changing customer email:', error);
+    res.status(500).json({ error: 'Failed to change customer email' });
+  }
+});
+
+/**
  * GET /api/customers/:id/session-stats
  * Get customer session/streaming statistics from streaming_sessions table
  */

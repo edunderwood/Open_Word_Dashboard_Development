@@ -1027,9 +1027,12 @@
               <p><strong>Started:</strong> ${formatDate(customer.registered_at || customer.created_at)}</p>
               <p><strong>User ID:</strong> <code style="font-size: 0.75rem;">${customer.user_id || '-'}</code></p>
               <p><strong>Contact:</strong> ${customer.contact_name || '-'}</p>
-              <p><strong>Email:</strong> ${customer.contact_email || customer.email
-                ? `<a href="mailto:${customer.contact_email || customer.email}">${customer.contact_email || customer.email}</a>`
-                : '-'}</p>
+              <p><strong>Login Email:</strong> ${customer.email
+                ? `<a href="mailto:${customer.email}">${customer.email}</a>`
+                : '-'}
+                <button class="btn btn-sm btn-outline" style="margin-left: 8px; padding: 2px 8px;" title="Change login email" onclick="changeCustomerEmail('${customer.id}', '${(customer.email || '').replace(/'/g, "\\'")}')">✏️ Edit</button>
+              </p>
+              ${customer.contact_email && customer.contact_email !== customer.email ? `<p><strong>Contact Email:</strong> <a href="mailto:${customer.contact_email}">${customer.contact_email}</a></p>` : ''}
               <p><strong>Phone:</strong> ${customer.contact_phone || '-'}</p>
             </div>
             <div>
@@ -1571,6 +1574,37 @@
         alert(data.message || 'PIN reset email sent');
       } catch (error) {
         alert('Error sending PIN reset: ' + error.message);
+      }
+    }
+
+    // Change a customer's login email (admin-initiated, e.g. locked out or a typo)
+    async function changeCustomerEmail(id, currentEmail) {
+      const newEmail = prompt("Enter the customer's new LOGIN email (used to sign in):", currentEmail || '');
+      if (newEmail === null) return;
+
+      const trimmed = newEmail.trim();
+      if (!trimmed) { alert('Email cannot be empty'); return; }
+      if (trimmed === currentEmail) return;
+
+      if (!confirm(`Change this customer's login email to ${trimmed}?\n\nThis takes effect immediately - no confirmation email is sent, unlike the customer's own self-service email change.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/customers/${id}/change-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: trimmed }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Request failed');
+
+        alert('Email updated successfully');
+        await viewCustomer(id);
+        loadCustomers();
+      } catch (error) {
+        alert('Error changing email: ' + error.message);
       }
     }
 
