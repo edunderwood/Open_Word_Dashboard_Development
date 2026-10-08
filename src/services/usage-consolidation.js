@@ -14,12 +14,47 @@ import supabase from './supabase.js';
 const CONSOLIDATION_AGE_DAYS = 60;
 const BATCH_SIZE = 50; // Process 50 sessions at a time
 
+// PostgREST limits (see Open_Word_Control_Panel/db/supabase-pagination.js):
+// reads return at most 1000 rows per request, and an `.in('id', ...)` with
+// hundreds of UUIDs makes a URL the gateway rejects (400). Found 2026-10-08:
+// every session with >~300 rows failed to consolidate, nightly.
+const PAGE_SIZE = 1000;
+const ID_CHUNK_SIZE = 100;
+const MAX_SESSIONS_SCANNED = 2000; // per run - bounds the work of one night
+const MAX_CONSECUTIVE_FAILURES = 3;  // a systemic error (e.g. schema change) stops the run
+
+async function fetchAllRows(buildQuery) {
+  const all = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    if (data && data.length) all.push(...data);
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return { data: all, error: null };
+}
+
+function aggregateByLanguage(rows) {
+  const aggregates = {};
+  for (const row of rows) {
+    const lang = row.language || 'unknown';
+    if (!aggregates[lang]) {
+      aggregates[lang] = { character_count: 0, max_client_count: 0, row_count: 0 };
+    }
+    aggregates[lang].character_count += row.character_count || 0;
+    aggregates[lang].max_client_count = Math.max(aggregates[lang].max_client_count, row.client_count || 0);
+    aggregates[lang].row_count++;
+  }
+  return aggregates;
+}
+
 /**
  * Consolidate translation_usage rows for old sessions
  * Groups rows by language and creates single summary rows
  */
 async function consolidateOldSessions() {
   const startTime = Date.now();
+
   console.log('\n========================================');
   console.log('📦 USAGE CONSOLIDATION - Starting');
   console.log(`   Age threshold: ${CONSOLIDATION_AGE_DAYS} days`);
@@ -33,134 +68,158 @@ async function consolidateOldSessions() {
 
     console.log(`📅 Cutoff date: ${cutoffDate.toLocaleDateString()}`);
 
-    // Find completed sessions older than cutoff that have unconsolidated usage data
-    const { data: sessionsToConsolidate, error: sessionsError } = await supabase
-      .from('streaming_sessions')
-      .select('id, organisation_id, started_at')
-      .in('status', ['completed', 'recovered'])
-      .lt('started_at', cutoffISO)
-      .limit(BATCH_SIZE);
-
-    if (sessionsError) {
-      console.error('❌ Error fetching sessions:', sessionsError);
-      throw sessionsError;
-    }
-
-    if (!sessionsToConsolidate || sessionsToConsolidate.length === 0) {
-      console.log('✅ No sessions to consolidate');
-      console.log('========================================\n');
-      return { consolidated: 0, rowsRemoved: 0, rowsCreated: 0 };
-    }
-
-    console.log(`📋 Found ${sessionsToConsolidate.length} sessions to check\n`);
-
     let totalConsolidated = 0;
+    let sessionsAttempted = 0;
+    let consecutiveFailures = 0;
     let totalRowsRemoved = 0;
     let totalRowsCreated = 0;
+    let sessionsScanned = 0;
 
-    for (const session of sessionsToConsolidate) {
-      try {
-        // Check if this session has unconsolidated rows
-        const { data: unconsolidatedRows, error: checkError } = await supabase
-          .from('translation_usage')
-          .select('id, language, character_count, client_count, date, created_at')
-          .eq('session_id', session.id)
-          .eq('is_consolidated', false);
+    // Page through old completed sessions (oldest first) until BATCH_SIZE
+    // sessions have actually been consolidated. Previously only the first 50
+    // sessions were ever looked at, so once those were done nothing moved on.
+    for (let from = 0; sessionsAttempted < BATCH_SIZE && sessionsScanned < MAX_SESSIONS_SCANNED && consecutiveFailures < MAX_CONSECUTIVE_FAILURES; from += BATCH_SIZE) {
+      const { data: sessionsPage, error: sessionsError } = await supabase
+        .from('streaming_sessions')
+        .select('id, organisation_id, service_id, started_at')
+        .in('status', ['completed', 'recovered'])
+        .lt('started_at', cutoffISO)
+        .order('started_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + BATCH_SIZE - 1);
 
-        if (checkError) {
-          console.error(`   ❌ Error checking session ${session.id}:`, checkError.message);
-          continue;
-        }
-
-        if (!unconsolidatedRows || unconsolidatedRows.length <= 5) {
-          // Already consolidated or too few rows to bother
-          continue;
-        }
-
-        console.log(`   🔄 Consolidating session ${session.id}`);
-        console.log(`      Rows to consolidate: ${unconsolidatedRows.length}`);
-
-        // Aggregate by language
-        const languageAggregates = {};
-        let sessionDate = null;
-        let earliestCreatedAt = null;
-
-        for (const row of unconsolidatedRows) {
-          const lang = row.language || 'unknown';
-
-          if (!languageAggregates[lang]) {
-            languageAggregates[lang] = {
-              character_count: 0,
-              max_client_count: 0,
-              row_count: 0
-            };
-          }
-
-          languageAggregates[lang].character_count += row.character_count || 0;
-          languageAggregates[lang].max_client_count = Math.max(
-            languageAggregates[lang].max_client_count,
-            row.client_count || 0
-          );
-          languageAggregates[lang].row_count++;
-
-          // Track date and earliest timestamp
-          if (!sessionDate && row.date) sessionDate = row.date;
-          if (!earliestCreatedAt || row.created_at < earliestCreatedAt) {
-            earliestCreatedAt = row.created_at;
-          }
-        }
-
-        // Create consolidated rows (one per language)
-        const consolidatedRows = Object.entries(languageAggregates).map(([lang, agg]) => ({
-          organisation_id: session.organisation_id,
-          session_id: session.id,
-          language: lang,
-          character_count: agg.character_count,
-          client_count: agg.max_client_count,
-          date: sessionDate || session.started_at.split('T')[0],
-          created_at: earliestCreatedAt || session.started_at,
-          is_consolidated: true
-        }));
-
-        // Delete old granular rows
-        const rowIdsToDelete = unconsolidatedRows.map(r => r.id);
-        const { error: deleteError } = await supabase
-          .from('translation_usage')
-          .delete()
-          .in('id', rowIdsToDelete);
-
-        if (deleteError) {
-          console.error(`      ❌ Error deleting rows:`, deleteError.message);
-          continue;
-        }
-
-        // Insert consolidated rows
-        const { error: insertError } = await supabase
-          .from('translation_usage')
-          .insert(consolidatedRows);
-
-        if (insertError) {
-          console.error(`      ❌ Error inserting consolidated rows:`, insertError.message);
-          // Note: We've already deleted rows, so this is a problem
-          // In production, you'd want to use a transaction
-          continue;
-        }
-
-        console.log(`      ✅ Consolidated: ${unconsolidatedRows.length} → ${consolidatedRows.length} rows`);
-
-        totalConsolidated++;
-        totalRowsRemoved += unconsolidatedRows.length;
-        totalRowsCreated += consolidatedRows.length;
-
-      } catch (sessionError) {
-        console.error(`   ❌ Error processing session ${session.id}:`, sessionError.message);
+      if (sessionsError) {
+        console.error('❌ Error fetching sessions:', sessionsError);
+        throw sessionsError;
       }
+      if (!sessionsPage || sessionsPage.length === 0) break;
+      sessionsScanned += sessionsPage.length;
+
+      for (const session of sessionsPage) {
+        if (sessionsAttempted >= BATCH_SIZE || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
+        try {
+          // All unconsolidated rows for this session (paged)
+          const { data: unconsolidatedRows, error: checkError } = await fetchAllRows(() => supabase
+            .from('translation_usage')
+            .select('id, service_id, language, character_count, client_count, date, created_at')
+            .eq('session_id', session.id)
+            .eq('is_consolidated', false)
+            .order('id'));
+
+          if (checkError) {
+            console.error(`   ❌ Error checking session ${session.id}:`, checkError.message);
+            continue;
+          }
+
+          if (!unconsolidatedRows || unconsolidatedRows.length <= 5) {
+            // Already consolidated or too few rows to bother
+            continue;
+          }
+
+          console.log(`   🔄 Consolidating session ${session.id}`);
+          console.log(`      Rows to consolidate: ${unconsolidatedRows.length}`);
+          sessionsAttempted++;
+
+          const serviceId = session.service_id || unconsolidatedRows.find(r => r.service_id)?.service_id;
+          if (!serviceId) {
+            console.error(`      ❌ No service_id for session ${session.id} - skipping (translation_usage.service_id is NOT NULL)`);
+            consecutiveFailures++;
+            continue;
+          }
+
+          let sessionDate = null;
+          let earliestCreatedAt = null;
+          for (const row of unconsolidatedRows) {
+            if (!sessionDate && row.date) sessionDate = row.date;
+            if (!earliestCreatedAt || row.created_at < earliestCreatedAt) earliestCreatedAt = row.created_at;
+          }
+          const buildSummary = (rows) => Object.entries(aggregateByLanguage(rows)).map(([lang, agg]) => ({
+            organisation_id: session.organisation_id,
+            service_id: serviceId,
+            session_id: session.id,
+            language: lang,
+            character_count: agg.character_count,
+            client_count: agg.max_client_count,
+            date: sessionDate || session.started_at.split('T')[0],
+            created_at: earliestCreatedAt || session.started_at,
+            is_consolidated: true,
+            // These sessions are past the billing window (no back-billing), so
+            // reconciliation must never pick summary rows up as new usage.
+            credited: true
+          }));
+
+          // 1. Save the summary FIRST. If this fails nothing has been deleted,
+          //    so no usage history can be lost (the old delete-then-insert
+          //    order silently lost rows whenever the insert failed).
+          const consolidatedRows = buildSummary(unconsolidatedRows);
+          const { data: insertedSummary, error: insertError } = await supabase
+            .from('translation_usage')
+            .insert(consolidatedRows)
+            .select('id, language');
+
+          if (insertError) {
+            console.error(`      ❌ Error inserting consolidated rows for session ${session.id} (nothing deleted):`, insertError.message);
+            consecutiveFailures++;
+            continue;
+          }
+
+          // 2. Delete the granular rows in chunks (a single .in() with
+          //    hundreds of ids is rejected by the gateway).
+          const undeletedRows = [];
+          for (let i = 0; i < unconsolidatedRows.length; i += ID_CHUNK_SIZE) {
+            const chunk = unconsolidatedRows.slice(i, i + ID_CHUNK_SIZE);
+            const { error: deleteError } = await supabase
+              .from('translation_usage')
+              .delete()
+              .in('id', chunk.map(r => r.id));
+            if (deleteError) {
+              console.error(`      ❌ Error deleting rows (chunk ${i / ID_CHUNK_SIZE + 1}):`, deleteError.message);
+              undeletedRows.push(...chunk);
+            }
+          }
+
+          // 3. If some granular rows couldn't be deleted, shrink the summary to
+          //    cover only the rows that WERE deleted, so nothing is counted twice.
+          if (undeletedRows.length > 0) {
+            const undeletedIds = new Set(undeletedRows.map(r => r.id));
+            const deletedOnly = aggregateByLanguage(unconsolidatedRows.filter(r => !undeletedIds.has(r.id)));
+            for (const summaryRow of insertedSummary || []) {
+              const agg = deletedOnly[summaryRow.language];
+              const fix = agg
+                ? supabase.from('translation_usage').update({ character_count: agg.character_count, client_count: agg.max_client_count }).eq('id', summaryRow.id)
+                : supabase.from('translation_usage').delete().eq('id', summaryRow.id);
+              const { error: fixError } = await fix;
+              if (fixError) {
+                console.error(`      ⚠️ Could not correct summary row ${summaryRow.id} for session ${session.id} - ${undeletedRows.length} rows may be counted twice:`, fixError.message);
+              }
+            }
+            console.warn(`      ⚠️ ${undeletedRows.length} rows left granular after delete errors (summary adjusted to match)`);
+          }
+
+          const removed = unconsolidatedRows.length - undeletedRows.length;
+          console.log(`      ✅ Consolidated: ${removed} → ${consolidatedRows.length} rows`);
+
+          consecutiveFailures = 0;
+          totalConsolidated++;
+          totalRowsRemoved += removed;
+          totalRowsCreated += consolidatedRows.length;
+
+        } catch (sessionError) {
+          console.error(`   ❌ Error processing session ${session.id}:`, sessionError.message);
+        }
+      }
+
+      if (sessionsPage.length < BATCH_SIZE) break;
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log('\n========================================');
     console.log('📦 USAGE CONSOLIDATION - Complete');
+    console.log(`   Sessions scanned: ${sessionsScanned}`);
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.error(`   🛑 Stopped early after ${consecutiveFailures} consecutive failures`);
+    }
     console.log(`   Sessions consolidated: ${totalConsolidated}`);
     console.log(`   Rows removed: ${totalRowsRemoved}`);
     console.log(`   Rows created: ${totalRowsCreated}`);
