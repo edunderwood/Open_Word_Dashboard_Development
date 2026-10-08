@@ -9,6 +9,7 @@ import supabase from './supabase.js';
 import stripe from './stripe.js';
 import { sendCriticalAlert, sendWarningAlert } from './email.js';
 import dotenv from 'dotenv';
+import { fetchAllRows } from './pagination.js';
 
 dotenv.config();
 
@@ -267,10 +268,12 @@ async function checkUsageAnomalies() {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Get usage in last 24 hours
-    const { data: recentUsage, error } = await supabase
+    // Paged - a busy Sunday is ~12k rows; one request stops at 1000
+    const { data: recentUsage, error } = await fetchAllRows(() => supabase
       .from('translation_usage')
       .select('organisation_id, character_count')
-      .gte('created_at', oneDayAgo);
+      .gte('created_at', oneDayAgo)
+      .order('id'));
 
     if (error) throw error;
 

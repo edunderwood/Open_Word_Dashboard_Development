@@ -8,6 +8,7 @@ import { getDeepgramAnalytics } from './deepgram-analytics.js';
 import { getGoogleAnalytics } from './google-analytics.js';
 import stripe from './stripe.js';
 import supabase from './supabase.js';
+import { fetchAllRows } from './pagination.js';
 
 // USD to GBP exchange rate (approximate - could be fetched from API for accuracy)
 const USD_TO_GBP = 0.79;
@@ -72,11 +73,13 @@ async function getGoogleTranslateCosts() {
 
     try {
       // Note: language='transcript' for transcriptions, other values are actual translations
-      const { data: usageData, error: usageError } = await supabase
+      // Paged - a month is tens of thousands of rows; one request stops at 1000
+      const { data: usageData, error: usageError } = await fetchAllRows(() => supabase
         .from('translation_usage')
         .select('character_count, language')
         .gte('created_at', startOfMonth.toISOString())
-        .neq('language', 'transcript'); // Only count translations, not transcripts
+        .neq('language', 'transcript') // Only count translations, not transcripts
+        .order('id'));
 
       if (!usageError && usageData) {
         usageData.forEach(record => {
@@ -619,10 +622,11 @@ async function getMonthlyRevenue() {
     });
 
     // Get usage-based revenue estimate from Supabase
-    const { data: usageData } = await supabase
+    const { data: usageData } = await fetchAllRows(() => supabase
       .from('translation_usage')
       .select('estimated_cost')
-      .gte('created_at', startOfMonth.toISOString());
+      .gte('created_at', startOfMonth.toISOString())
+      .order('id'));
 
     let usageRevenue = 0;
     usageData?.forEach(u => {

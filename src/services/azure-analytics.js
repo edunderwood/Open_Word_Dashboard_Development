@@ -16,6 +16,7 @@
  */
 
 import { supabase } from './supabase.js';
+import { fetchAllRows } from './pagination.js';
 
 // AI Voice is billed at the same rate as text translation (1 credit per
 // 21,000 characters - see db/credits.js CHARS_PER_CREDIT in the Control
@@ -33,12 +34,13 @@ export async function getAzureAnalytics(days = 30) {
 
   try {
     const [usageResult, recentUsageResult, orgsResult] = await Promise.all([
-      supabase.from('tts_usage')
+      fetchAllRows(() => supabase.from('tts_usage')
         .select('organisation_id, language, character_count, created_at')
-        .gte('created_at', startDate),
+        .gte('created_at', startDate)
+        .order('id')),
 
       supabase.from('tts_usage')
-        .select('id, created_at')
+        .select('id', { count: 'exact', head: true })
         .gte('created_at', last24h),
 
       // ai_audio_enabled is nullable - NULL means "use the tier default", not
@@ -79,8 +81,7 @@ export async function getAzureAnalytics(days = 30) {
       .slice(0, 10)
       .map(([lang, chars]) => ({ language: lang, characters: chars }));
 
-    const recentUsage = recentUsageResult.data || [];
-    const last24hRecords = recentUsage.length;
+    const last24hRecords = recentUsageResult.count || 0;
 
     const activeOrgsWithUsage = byOrg.size;
 

@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase.js';
+import { fetchAllRows } from './pagination.js';
 
 /**
  * Get Supabase database analytics
@@ -30,13 +31,15 @@ export async function getSupabaseAnalytics(days = 30) {
 
       // Usage statistics for period
       // Note: 'language' field = 'transcript' for transcriptions, or actual language code (e.g., 'es') for translations
-      supabase.from('translation_usage')
+      // Paged: ~38k rows a month - a single request stops at 1000
+      fetchAllRows(() => supabase.from('translation_usage')
         .select('character_count, language, created_at')
-        .gte('created_at', startDate),
+        .gte('created_at', startDate)
+        .order('id')),
 
-      // Recent usage (last 24 hours) for activity check
+      // Recent usage (last 24 hours) for activity check - count only
       supabase.from('translation_usage')
-        .select('id, created_at')
+        .select('id', { count: 'exact', head: true })
         .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
 
       // Sessions count
@@ -83,8 +86,7 @@ export async function getSupabaseAnalytics(days = 30) {
       .map(([lang, chars]) => ({ language: lang, characters: chars }));
 
     // Recent activity
-    const recentUsage = recentUsageResult.data || [];
-    const last24hRecords = recentUsage.length;
+    const last24hRecords = recentUsageResult.count || 0;
 
     // Sessions
     const totalSessions = sessionsResult.count || 0;

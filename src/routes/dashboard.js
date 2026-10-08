@@ -5,6 +5,7 @@
 import express from 'express';
 import supabase from '../services/supabase.js';
 import stripe from '../services/stripe.js';
+import { fetchAllRows, chunkArray } from '../services/pagination.js';
 
 const router = express.Router();
 
@@ -78,17 +79,19 @@ router.get('/summary', async (req, res) => {
     const startOfLastMonthDate = startOfLastMonth.split('T')[0];
     const endOfLastMonthDate = endOfLastMonth.split('T')[0];
 
-    const { data: ttsThisMonth } = await supabase
+    const { data: ttsThisMonth } = await fetchAllRows(() => supabase
       .from('tts_usage')
       .select('character_count')
-      .gte('date', startOfMonthDate);
+      .gte('date', startOfMonthDate)
+      .order('id'));
     const totalTtsCharactersThisMonth = (ttsThisMonth || []).reduce((sum, r) => sum + (r.character_count || 0), 0);
 
-    const { data: ttsLastMonth } = await supabase
+    const { data: ttsLastMonth } = await fetchAllRows(() => supabase
       .from('tts_usage')
       .select('character_count')
       .gte('date', startOfLastMonthDate)
-      .lte('date', endOfLastMonthDate);
+      .lte('date', endOfLastMonthDate)
+      .order('id'));
     const totalTtsCharactersLastMonth = (ttsLastMonth || []).reduce((sum, r) => sum + (r.character_count || 0), 0);
 
     // Get customers with issues
@@ -195,10 +198,17 @@ router.get('/recent-activity', async (req, res) => {
     const sessionIds = (recentSessions || []).map(s => s.id).filter(Boolean);
     let ttsBySessionId = {};
     if (sessionIds.length > 0) {
-      const { data: ttsRows, error: ttsError } = await supabase
-        .from('tts_usage')
-        .select('session_id, character_count')
-        .in('session_id', sessionIds);
+      let ttsRows = [];
+      let ttsError = null;
+      for (const idChunk of chunkArray(sessionIds)) {
+        const { data, error } = await fetchAllRows(() => supabase
+          .from('tts_usage')
+          .select('session_id, character_count')
+          .in('session_id', idChunk)
+          .order('id'));
+        if (error) { ttsError = error; break; }
+        ttsRows.push(...data);
+      }
 
       if (ttsError) {
         console.error('Error fetching tts_usage for recent activity:', ttsError);

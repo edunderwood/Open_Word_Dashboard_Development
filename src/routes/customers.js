@@ -9,6 +9,7 @@ import stripe from '../services/stripe.js';
 import { sendCustomerEmail } from '../services/email.js';
 import { deleteFreeTrialOrganisation } from '../services/free-trial-cleanup.js';
 import { DELETE_AFTER_DAYS } from '../services/free-trial-cleanup-scheduler.js';
+import { fetchAllRows, chunkArray } from '../services/pagination.js';
 
 const router = express.Router();
 
@@ -218,11 +219,19 @@ router.get('/', async (req, res) => {
     // Persisted "Remember Me" sessions mean auth.users.last_sign_in_at can lag
     // weeks behind real activity — pair it with the last streaming session so
     // "Last Active" reflects when we actually last saw the customer.
-    const { data: recentSessions } = await supabase
-      .from('streaming_sessions')
-      .select('organisation_id, started_at')
-      .in('organisation_id', customerIds)
-      .order('started_at', { ascending: false });
+    // Paged + chunked: reads every session for every customer (650+ and
+    // growing), and customerIds can be long enough to overflow the URL.
+    const recentSessions = [];
+    for (const idChunk of chunkArray(customerIds)) {
+      const { data } = await fetchAllRows(() => supabase
+        .from('streaming_sessions')
+        .select('organisation_id, started_at')
+        .in('organisation_id', idChunk)
+        .order('started_at', { ascending: false })
+        .order('id', { ascending: true }));
+      if (data) recentSessions.push(...data);
+    }
+    recentSessions.sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
 
     const lastStreamingMap = {};
     recentSessions?.forEach(s => {
@@ -484,13 +493,12 @@ router.get('/:id/usage', async (req, res) => {
     let totalTtsCharacters = 0;
     const byLanguageTts = {};
     try {
-      let ttsQuery = supabase
+      const { data: ttsRows, error: ttsError } = await fetchAllRows(() => supabase
         .from('tts_usage')
         .select('language, character_count')
         .eq('organisation_id', id)
-        .gte('date', startDate.toISOString().split('T')[0]);
-
-      const { data: ttsRows, error: ttsError } = await ttsQuery;
+        .gte('date', startDate.toISOString().split('T')[0])
+        .order('id'));
       if (ttsError) throw ttsError;
 
       (ttsRows || []).forEach(row => {

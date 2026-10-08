@@ -10,29 +10,17 @@
 
 import cron from 'node-cron';
 import supabase from './supabase.js';
+import { fetchAllRows, ID_CHUNK_SIZE } from './pagination.js';
 
 const CONSOLIDATION_AGE_DAYS = 60;
 const BATCH_SIZE = 50; // Process 50 sessions at a time
 
-// PostgREST limits (see Open_Word_Control_Panel/db/supabase-pagination.js):
-// reads return at most 1000 rows per request, and an `.in('id', ...)` with
-// hundreds of UUIDs makes a URL the gateway rejects (400). Found 2026-10-08:
-// every session with >~300 rows failed to consolidate, nightly.
-const PAGE_SIZE = 1000;
-const ID_CHUNK_SIZE = 100;
+// PostgREST limits (see ./pagination.js): reads return at most 1000 rows per
+// request, and an `.in('id', ...)` with hundreds of UUIDs makes a URL the
+// gateway rejects (400). Found 2026-10-08: every session with >~300 rows
+// failed to consolidate, nightly.
 const MAX_SESSIONS_SCANNED = 2000; // per run - bounds the work of one night
 const MAX_CONSECUTIVE_FAILURES = 3;  // a systemic error (e.g. schema change) stops the run
-
-async function fetchAllRows(buildQuery) {
-  const all = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
-    if (error) return { data: null, error };
-    if (data && data.length) all.push(...data);
-    if (!data || data.length < PAGE_SIZE) break;
-  }
-  return { data: all, error: null };
-}
 
 function aggregateByLanguage(rows) {
   const aggregates = {};
