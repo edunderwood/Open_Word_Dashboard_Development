@@ -5,6 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard - Open Word Admin</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    #weeklyUsageCard { --wu-transcribed: #2a78d6; --wu-translated: #eb6834; }
+    .wu-legend { display: flex; gap: 16px; font-size: 0.85rem; color: var(--gray-600, #4b5563); }
+    .wu-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .wu-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+    .wu-chart { position: relative; width: 100%; }
+    .wu-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .wu-tooltip { position: absolute; pointer-events: none; background: #fff; border: 1px solid var(--gray-200, #e5e7eb);
+      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 8px 10px; font-size: 0.8rem;
+      color: var(--gray-800, #1f2937); white-space: nowrap; display: none; z-index: 2; }
+    .wu-tooltip .row { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+    .wu-tooltip .row i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+    .wu-tooltip .val { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .wu-table { margin-top: 8px; font-size: 0.85rem; }
+    .wu-table summary { cursor: pointer; color: var(--gray-500, #6b7280); }
+    .wu-table table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .wu-table th, .wu-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--gray-100, #f3f4f6); font-variant-numeric: tabular-nums; }
+    .wu-table th:first-child, .wu-table td:first-child { text-align: left; }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -245,6 +264,27 @@
             <div style="font-size: 1.5rem; font-weight: 700;" id="usageTtsChars">-</div>
           </div>
         </div>
+      </div>
+
+      <!-- Weekly Usage chart -->
+      <div class="card" id="weeklyUsageCard">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0;">Weekly Usage - last 5 months</h3>
+            <div class="text-muted" style="font-size: 0.85rem; margin-top: 4px;" id="weeklyUsageSubtitle">Characters per week (weeks start Monday)</div>
+          </div>
+          <div class="wu-legend" aria-hidden="true">
+            <span><i style="background: var(--wu-transcribed);"></i>Transcribed</span>
+            <span><i style="background: var(--wu-translated);"></i>Translated</span>
+          </div>
+        </div>
+        <div id="weeklyUsageChart" class="wu-chart" role="img" aria-label="Line chart of weekly characters transcribed and translated over the last 5 months">
+          <div class="text-muted" style="padding: 40px; text-align: center;">Loading…</div>
+        </div>
+        <details class="wu-table">
+          <summary>Show as table</summary>
+          <div style="overflow-x: auto;"><table id="weeklyUsageTable"></table></div>
+        </details>
       </div>
 
       <!-- Credit System Stats -->
@@ -824,8 +864,125 @@
       }
     }
 
+    // ---- Weekly usage line chart (plain SVG, no library) ----
+    function wuCompact(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k';
+      return String(n);
+    }
+    function wuNiceMax(v) {
+      if (v <= 0) return 1000;
+      const p = Math.pow(10, Math.floor(Math.log10(v)));
+      for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p;
+      return 10 * p;
+    }
+    function wuDateLabel(iso, withYear) {
+      const d = new Date(iso + 'T00:00:00Z');
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+    }
+
+    function renderWeeklyUsage(weeks) {
+      const box = document.getElementById('weeklyUsageChart');
+      const css = getComputedStyle(document.getElementById('weeklyUsageCard'));
+      const colours = { transcribed: css.getPropertyValue('--wu-transcribed').trim(), translated: css.getPropertyValue('--wu-translated').trim() };
+      const W = 900, H = 280, m = { top: 16, right: 92, bottom: 30, left: 52 };
+      const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+      const maxV = wuNiceMax(Math.max(1, ...weeks.map((w) => Math.max(w.transcribed, w.translated))));
+      const x = (i) => m.left + (weeks.length === 1 ? iw / 2 : (i * iw) / (weeks.length - 1));
+      const y = (v) => m.top + ih - (v / maxV) * ih;
+      const ns = 'http://www.w3.org/2000/svg';
+      const el = (tag, attrs, text) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+
+      const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
+      // recessive grid + y labels
+      for (let t = 0; t <= 4; t++) {
+        const v = (maxV / 4) * t, yy = y(v);
+        svg.appendChild(el('line', { x1: m.left, x2: W - m.right, y1: yy, y2: yy, stroke: t === 0 ? '#d1d5db' : '#eef0f3', 'stroke-width': 1 }));
+        svg.appendChild(el('text', { x: m.left - 8, y: yy + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6b7280' }, wuCompact(v)));
+      }
+      // x labels: about every 4 weeks, year on the first label
+      const step = Math.max(1, Math.round(weeks.length / 6));
+      weeks.forEach((w, i) => {
+        if (i % step !== 0 && i !== weeks.length - 1) return;
+        if (i !== weeks.length - 1 && weeks.length - 1 - i < step / 2) return;
+        svg.appendChild(el('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280' }, wuDateLabel(w.weekStart, i === 0)));
+      });
+      // lines (2px), current partial week drawn dashed
+      const keys = ['transcribed', 'translated'];
+      keys.forEach((k) => {
+        const full = weeks.slice(0, -1).map((w, i) => `${x(i)},${y(w[k])}`).join(' ');
+        if (weeks.length > 1) svg.appendChild(el('polyline', { points: full, fill: 'none', stroke: colours[k], 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+        const n = weeks.length - 1;
+        if (n >= 1) svg.appendChild(el('line', { x1: x(n - 1), y1: y(weeks[n - 1][k]), x2: x(n), y2: y(weeks[n][k]), stroke: colours[k], 'stroke-width': 2, 'stroke-dasharray': '4 4', 'stroke-linecap': 'round' }));
+      });
+      // direct labels at the right end (nudged apart if they collide)
+      const last = weeks[weeks.length - 1];
+      let ly = { transcribed: y(last.transcribed), translated: y(last.translated) };
+      if (Math.abs(ly.transcribed - ly.translated) < 14) {
+        const mid = (ly.transcribed + ly.translated) / 2, up = last.transcribed >= last.translated ? 'transcribed' : 'translated';
+        ly[up] = mid - 7; ly[up === 'transcribed' ? 'translated' : 'transcribed'] = mid + 7;
+      }
+      keys.forEach((k) => svg.appendChild(el('text', { x: W - m.right + 8, y: ly[k] + 4, 'font-size': 11, fill: '#374151' }, k === 'transcribed' ? 'Transcribed' : 'Translated')));
+
+      // hover layer: crosshair + markers + tooltip
+      const cross = el('line', { y1: m.top, y2: m.top + ih, stroke: '#9ca3af', 'stroke-width': 1, visibility: 'hidden' });
+      svg.appendChild(cross);
+      const dots = {};
+      keys.forEach((k) => { dots[k] = el('circle', { r: 4.5, fill: colours[k], stroke: '#fff', 'stroke-width': 2, visibility: 'hidden' }); svg.appendChild(dots[k]); });
+      const hit = el('rect', { x: m.left, y: m.top, width: iw, height: ih, fill: 'transparent' });
+      svg.appendChild(hit);
+
+      box.innerHTML = '';
+      box.appendChild(svg);
+      const tip = document.createElement('div');
+      tip.className = 'wu-tooltip';
+      box.appendChild(tip);
+
+      const show = (evt) => {
+        const r = svg.getBoundingClientRect();
+        const sx = ((evt.clientX - r.left) / r.width) * W;
+        const i = Math.max(0, Math.min(weeks.length - 1, Math.round(((sx - m.left) / iw) * (weeks.length - 1))));
+        const w = weeks[i];
+        cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+        keys.forEach((k) => { dots[k].setAttribute('cx', x(i)); dots[k].setAttribute('cy', y(w[k])); dots[k].setAttribute('visibility', 'visible'); });
+        tip.innerHTML = `<div style="font-weight:600;">Week of ${wuDateLabel(w.weekStart, true)}${w.partial ? ' (so far)' : ''}</div>` +
+          keys.map((k) => `<div class="row"><i style="background:${colours[k]}"></i>${k === 'transcribed' ? 'Transcribed' : 'Translated'}<span class="val">${w[k].toLocaleString()}</span></div>`).join('');
+        tip.style.display = 'block';
+        const px = (x(i) / W) * r.width, tw = tip.offsetWidth;
+        tip.style.left = Math.min(Math.max(0, px + 12 + tw > r.width ? px - tw - 12 : px + 12), r.width - tw) + 'px';
+        tip.style.top = '8px';
+      };
+      const hide = () => { cross.setAttribute('visibility', 'hidden'); keys.forEach((k) => dots[k].setAttribute('visibility', 'hidden')); tip.style.display = 'none'; };
+      hit.addEventListener('mousemove', show);
+      hit.addEventListener('mouseleave', hide);
+      hit.addEventListener('touchstart', (e) => show(e.touches[0]), { passive: true });
+
+      // table view + subtitle totals
+      const totT = weeks.reduce((a, w) => a + w.transcribed, 0), totX = weeks.reduce((a, w) => a + w.translated, 0);
+      document.getElementById('weeklyUsageSubtitle').textContent =
+        `Characters per week (weeks start Monday) · ${weeks.length} weeks: ${totT.toLocaleString()} transcribed, ${totX.toLocaleString()} translated`;
+      document.getElementById('weeklyUsageTable').innerHTML =
+        '<thead><tr><th>Week of</th><th>Transcribed</th><th>Translated</th></tr></thead><tbody>' +
+        weeks.slice().reverse().map((w) => `<tr><td>${wuDateLabel(w.weekStart, true)}${w.partial ? ' (so far)' : ''}</td><td>${w.transcribed.toLocaleString()}</td><td>${w.translated.toLocaleString()}</td></tr>`).join('') +
+        '</tbody>';
+    }
+
+    async function loadWeeklyUsage() {
+      const box = document.getElementById('weeklyUsageChart');
+      try {
+        const response = await fetch('/api/dashboard/weekly-usage?weeks=22');
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Failed to load');
+        renderWeeklyUsage(result.data.weeks);
+      } catch (error) {
+        console.error('Error loading weekly usage:', error);
+        box.innerHTML = `<div class="text-muted" style="padding: 40px; text-align: center;">Could not load weekly usage: ${String(error.message || error).replace(/</g, '&lt;')}</div>`;
+      }
+    }
+
     // Refresh all data
     function refreshData() {
+      loadWeeklyUsage();
       loadSummary();
       loadRevenue();
       loadCredits();

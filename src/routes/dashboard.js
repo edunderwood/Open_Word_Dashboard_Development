@@ -154,6 +154,50 @@ router.get('/summary', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/weekly-usage?weeks=22
+ * Weekly totals of characters transcribed and translated (default: last
+ * 22 weeks, ~5 months, including the current partial week). Summed in
+ * Postgres by weekly_usage_totals() (migrations/add-weekly-usage-totals-
+ * function.sql in the Control Panel repo) - translation_usage is ~38k rows a
+ * month, too many to download, and streaming_sessions totals under-count
+ * long sessions. Weeks start Monday (UTC); empty weeks are returned as zero.
+ */
+router.get('/weekly-usage', async (req, res) => {
+  try {
+    const weeks = Math.min(Math.max(parseInt(req.query.weeks, 10) || 22, 4), 52);
+    const { data, error } = await supabase.rpc('weekly_usage_totals', { p_weeks: weeks });
+    if (error) {
+      const missing = /weekly_usage_totals/.test(error.message || '') && /(not find|does not exist)/i.test(error.message || '');
+      throw new Error(missing ? 'Database function weekly_usage_totals() is missing - run migrations/add-weekly-usage-totals-function.sql' : error.message);
+    }
+
+    const byWeek = new Map((data || []).map((r) => [String(r.week_start).slice(0, 10), r]));
+    const now = new Date();
+    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+
+    const series = [];
+    for (let i = weeks - 1; i >= 0; i--) {
+      const d = new Date(monday);
+      d.setUTCDate(d.getUTCDate() - i * 7);
+      const key = d.toISOString().slice(0, 10);
+      const row = byWeek.get(key);
+      series.push({
+        weekStart: key,
+        transcribed: Number(row?.characters_transcribed || 0),
+        translated: Number(row?.characters_translated || 0),
+        partial: i === 0
+      });
+    }
+
+    res.json({ success: true, data: { weeks: series } });
+  } catch (error) {
+    console.error('Error fetching weekly usage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/dashboard/recent-activity
  * Get recent customer activity
  */
