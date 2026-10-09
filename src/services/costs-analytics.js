@@ -165,8 +165,11 @@ async function getSupabaseCosts() {
       };
     }
 
-    // Query Supabase Management API for organization subscription
-    const response = await fetch(`https://api.supabase.com/v1/organizations/${SUPABASE_ORG_ID}/billing/subscription`, {
+    // Supabase Management API: GET /v1/organizations/{slug} returns the plan.
+    // (There is no public /billing/subscription endpoint - it always 404'd.)
+    // SUPABASE_ORG_ID must be the ORGANISATION id/slug (Supabase dashboard >
+    // Organization settings), not the project ref - a project ref gives 404.
+    const response = await fetch(`https://api.supabase.com/v1/organizations/${SUPABASE_ORG_ID}`, {
       headers: {
         'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
         'Content-Type': 'application/json'
@@ -174,37 +177,13 @@ async function getSupabaseCosts() {
     });
 
     if (!response.ok) {
-      // Try alternative endpoint
-      const orgResponse = await fetch(`https://api.supabase.com/v1/organizations/${SUPABASE_ORG_ID}`, {
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (orgResponse.ok) {
-        const orgData = await orgResponse.json();
-        const plan = orgData.subscription_tier || orgData.plan || 'free';
-        const planCostUSD = SUPABASE_PLAN_COSTS[plan.toLowerCase()] || 0;
-
-        return {
-          cost: planCostUSD * USD_TO_GBP,
-          costUSD: planCostUSD,
-          tier: plan.charAt(0).toUpperCase() + plan.slice(1),
-          details: {
-            orgId: SUPABASE_ORG_ID,
-            orgName: orgData.name || 'Unknown',
-            totalOrganisations: totalOrgs || 0,
-            totalUsageRecords: totalUsageRecords || 0
-          }
-        };
-      }
-
-      throw new Error(`Supabase API error: ${response.status}`);
+      throw new Error(response.status === 404
+        ? 'Supabase API error: 404 - check SUPABASE_ORG_ID is the organisation ID, not the project ref'
+        : `Supabase API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const plan = data.tier || data.plan || 'free';
+    const orgData = await response.json();
+    const plan = orgData.plan || orgData.subscription_tier || 'free';
     const planCostUSD = SUPABASE_PLAN_COSTS[plan.toLowerCase()] || 0;
 
     return {
@@ -213,6 +192,7 @@ async function getSupabaseCosts() {
       tier: plan.charAt(0).toUpperCase() + plan.slice(1),
       details: {
         orgId: SUPABASE_ORG_ID,
+        orgName: orgData.name || 'Unknown',
         plan: plan,
         totalOrganisations: totalOrgs || 0,
         totalUsageRecords: totalUsageRecords || 0
