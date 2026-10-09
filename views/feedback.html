@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feedback - Open Word Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .fb-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+    .fb-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #4b5563; }
+    .fb-filters select, .fb-filters input { padding: 8px 10px; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; font-size: 14px; min-width: 180px; background: #fff; }
+    .fb-filters input { min-width: 220px; }
+    .fb-summary { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .fb-text { white-space: pre-wrap; line-height: 1.5; max-width: 560px; }
+    .fb-lang { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #eef2ff; color: #4338ca; font-weight: 600; white-space: nowrap; }
+    .fb-org { font-weight: 600; }
+    .fb-date { white-space: nowrap; color: #4b5563; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Open Word</h1>
+        <p>Admin Dashboard</p>
+      </div>
+      <nav>
+        <ul class="sidebar-nav">
+          <li><a href="/dashboard"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>Dashboard</a></li>
+          <li><a href="/customers"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Customers</a></li>
+          <li><a href="/pricing"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Pricing</a></li>
+          <li><a href="/price-migration"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>Price Migration</a></li>
+          <li><a href="/costs"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>Costs</a></li>
+          <li><a href="/charity-registers"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>Charity Registers</a></li>
+          <li><a href="/communications"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Communications</a></li>
+          <li><a href="/notifications"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>Notifications</a></li>
+          <li><a href="/support"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Support</a></li>
+          <li><a href="/feedback" class="active"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>Feedback</a></li>
+          <li><a href="/monitoring"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Monitoring</a></li>
+          <li><a href="/analytics"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>Analytics</a></li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>Participant Feedback</h2>
+        <p>Messages participants send from the Feedback option in the participant app, across all customers</p>
+      </div>
+
+      <div class="card">
+        <div class="fb-filters">
+          <label>Customer
+            <select id="orgFilter" onchange="loadFeedback()"><option value="">All customers</option></select>
+          </label>
+          <label>Period
+            <select id="daysFilter" onchange="loadFeedback()">
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365" selected>Last 12 months</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
+          <label>Search
+            <input id="searchFilter" type="search" placeholder="Search feedback text…" oninput="debouncedLoad()">
+          </label>
+        </div>
+        <div class="fb-summary" id="fbSummary"></div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Language</th>
+                <th>Feedback</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackBody">
+              <tr><td colspan="4" class="text-center"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function logout() { window.location.href = '/logout'; }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function fmt(ts) {
+      if (!ts) return '-';
+      try { return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+      catch (e) { return ts; }
+    }
+
+    let orgOptionsLoaded = false;
+    let debounceTimer = null;
+    function debouncedLoad() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(loadFeedback, 300);
+    }
+
+    async function loadFeedback() {
+      const body = document.getElementById('feedbackBody');
+      const params = new URLSearchParams();
+      const org = document.getElementById('orgFilter').value;
+      const days = document.getElementById('daysFilter').value;
+      const q = document.getElementById('searchFilter').value.trim();
+      if (org) params.set('org', org);
+      params.set('days', days);
+      if (q) params.set('q', q);
+
+      try {
+        const response = await fetch('/api/feedback?' + params.toString());
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Failed to load feedback');
+        const { feedback, organisations, total } = result.data;
+
+        if (!orgOptionsLoaded) {
+          const select = document.getElementById('orgFilter');
+          organisations.forEach((o) => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = `${o.name} (${o.count})`;
+            select.appendChild(opt);
+          });
+          orgOptionsLoaded = true;
+        }
+
+        document.getElementById('fbSummary').textContent =
+          `Showing ${feedback.length} of ${total} feedback message${total === 1 ? '' : 's'}`;
+
+        if (feedback.length === 0) {
+          body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No feedback matches these filters</td></tr>';
+          return;
+        }
+        body.innerHTML = feedback.map((f) => `
+          <tr>
+            <td class="fb-date">${esc(fmt(f.createdAt))}</td>
+            <td class="fb-org">${esc(f.organisationName)}${f.serviceId ? `<div class="text-muted" style="font-weight: 400; font-size: 12px;">Service ${esc(f.serviceId)}</div>` : ''}</td>
+            <td>${f.language ? `<span class="fb-lang" title="${esc(f.language)}">${esc(f.languageName || f.language)}</span>` : '<span class="text-muted">-</span>'}</td>
+            <td><div class="fb-text">${esc(f.text)}</div></td>
+          </tr>`).join('');
+      } catch (error) {
+        console.error('Error loading feedback:', error);
+        body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Could not load feedback: ${esc(error.message)}</td></tr>`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadFeedback);
+  </script>
+</body>
+</html>
