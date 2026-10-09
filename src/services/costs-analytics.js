@@ -177,9 +177,15 @@ async function getSupabaseCosts() {
     });
 
     if (!response.ok) {
+      // Name the id actually in use (not secret) so a wrong/stale env value is
+      // obvious from the page; never include the token.
+      const usedId = JSON.stringify(SUPABASE_ORG_ID);
+      const tokenHint = `token ${SUPABASE_ACCESS_TOKEN.slice(0, 8)}…`;
       throw new Error(response.status === 404
-        ? 'Supabase API error: 404 - check SUPABASE_ORG_ID is the organisation ID, not the project ref'
-        : `Supabase API error: ${response.status}`);
+        ? `Supabase API error: 404 for SUPABASE_ORG_ID=${usedId} (${tokenHint}) - must be the organisation ID (Supabase > Organization settings), not the project ref, and the access token must belong to an account in that organisation`
+        : response.status === 401 || response.status === 403
+          ? `Supabase API error: ${response.status} - SUPABASE_ACCESS_TOKEN (${tokenHint}) is invalid or lacks access`
+          : `Supabase API error: ${response.status}`);
     }
 
     const orgData = await response.json();
