@@ -46,7 +46,8 @@ export async function getSupabaseAnalytics(days = 30) {
       supabase.from('sessions').select('id', { count: 'exact' }),
 
       // Feedback count
-      supabase.from('feedback').select('id, rating, created_at', { count: 'exact' })
+      // feedback has no rating column - selecting one made this query fail (400)
+      supabase.from('feedback').select('id, created_at', { count: 'exact' })
         .gte('created_at', startDate)
     ]);
 
@@ -94,9 +95,7 @@ export async function getSupabaseAnalytics(days = 30) {
     // Feedback
     const feedback = feedbackResult.data || [];
     const totalFeedback = feedbackResult.count || 0;
-    const avgRating = feedback.length > 0
-      ? (feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / feedback.length).toFixed(1)
-      : 'N/A';
+    const avgRating = null; // feedback is free text; there is no rating to average
 
     // Calculate daily averages
     const avgDailyCharacters = Math.round(totalCharacters / days);

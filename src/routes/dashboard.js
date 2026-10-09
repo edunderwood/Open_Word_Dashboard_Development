@@ -31,18 +31,6 @@ router.get('/summary', async (req, res) => {
       .select('*', { count: 'exact', head: true })
       .in('subscription_status', ['active', 'trialing']);
 
-    // Get customers by plan
-    const { data: planBreakdown, error: planError } = await supabase
-      .from('organisations')
-      .select('subscription_plan')
-      .not('subscription_plan', 'is', null);
-
-    const planCounts = {};
-    planBreakdown?.forEach(org => {
-      const plan = org.subscription_plan || 'pay_as_you_go';
-      planCounts[plan] = (planCounts[plan] || 0) + 1;
-    });
-
     // Get usage this month from streaming_sessions (faster than translation_usage)
     const { data: sessionsThisMonth, error: usageError } = await supabase
       .from('streaming_sessions')
@@ -131,7 +119,6 @@ router.get('/summary', async (req, res) => {
           paymentIssues: paymentIssues || 0,
           newThisMonth: newCustomersThisMonth || 0,
         },
-        planBreakdown: planCounts,
         usage: {
           thisMonth: {
             characters: totalCharactersThisMonth,

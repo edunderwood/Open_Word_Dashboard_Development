@@ -910,12 +910,12 @@
                                 <span class="metric-label">Total Feedback</span>
                                 <span class="metric-value">${data.summary.totalFeedback}</span>
                             </div>
-                            <div class="metric-row">
+                            ${data.summary.avgRating != null ? `<div class="metric-row">
                                 <span class="metric-label">Avg Rating</span>
                                 <span class="metric-value ${parseFloat(data.summary.avgRating) >= 4 ? 'success' : parseFloat(data.summary.avgRating) >= 3 ? 'warning' : 'error'}">
                                     ${data.summary.avgRating}/5
                                 </span>
-                            </div>
+                            </div>` : ''}
                         </div>
                     ` : ''}
                     ${data.warnings && data.warnings.length > 0 ? `

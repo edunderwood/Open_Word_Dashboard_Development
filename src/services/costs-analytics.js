@@ -601,17 +601,11 @@ async function getMonthlyRevenue() {
       });
     });
 
-    // Get usage-based revenue estimate from Supabase
-    const { data: usageData } = await fetchAllRows(() => supabase
-      .from('translation_usage')
-      .select('estimated_cost')
-      .gte('created_at', startOfMonth.toISOString())
-      .order('id'));
-
-    let usageRevenue = 0;
-    usageData?.forEach(u => {
-      usageRevenue += parseFloat(u.estimated_cost) || 0;
-    });
+    // No separate usage revenue: customers prepay for credits through Stripe,
+    // so that money is already in the Stripe totals above (adding usage would
+    // double-count). The old query read translation_usage.estimated_cost, a
+    // column that doesn't exist, so it always failed (400) and gave 0.
+    const usageRevenue = 0;
 
     return {
       totalRevenue: totalRevenue / 100, // Convert pence to pounds

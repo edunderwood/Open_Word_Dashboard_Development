@@ -476,7 +476,7 @@
 
         if (!data.success) throw new Error(data.error);
 
-        const { customers, planBreakdown, usage } = data.data;
+        const { customers, usage } = data.data;
 
         // Update customer stats
         document.getElementById('totalCustomers').textContent = customers.total;
