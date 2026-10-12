@@ -13,7 +13,8 @@ import supabase from './supabase.js';
 import { fetchAllRows, ID_CHUNK_SIZE } from './pagination.js';
 
 const CONSOLIDATION_AGE_DAYS = 60;
-const BATCH_SIZE = 50; // Process 50 sessions at a time
+const BATCH_SIZE = 50; // Sessions read per page
+const SESSIONS_PER_RUN = 60; // Sessions consolidated per nightly run
 
 // PostgREST limits (see ./pagination.js): reads return at most 1000 rows per
 // request, and an `.in('id', ...)` with hundreds of UUIDs makes a URL the
@@ -63,10 +64,10 @@ async function consolidateOldSessions() {
     let totalRowsCreated = 0;
     let sessionsScanned = 0;
 
-    // Page through old completed sessions (oldest first) until BATCH_SIZE
+    // Page through old completed sessions (oldest first) until SESSIONS_PER_RUN
     // sessions have actually been consolidated. Previously only the first 50
     // sessions were ever looked at, so once those were done nothing moved on.
-    for (let from = 0; sessionsAttempted < BATCH_SIZE && sessionsScanned < MAX_SESSIONS_SCANNED && consecutiveFailures < MAX_CONSECUTIVE_FAILURES; from += BATCH_SIZE) {
+    for (let from = 0; sessionsAttempted < SESSIONS_PER_RUN && sessionsScanned < MAX_SESSIONS_SCANNED && consecutiveFailures < MAX_CONSECUTIVE_FAILURES; from += BATCH_SIZE) {
       const { data: sessionsPage, error: sessionsError } = await supabase
         .from('streaming_sessions')
         .select('id, organisation_id, service_id, started_at')
@@ -84,7 +85,7 @@ async function consolidateOldSessions() {
       sessionsScanned += sessionsPage.length;
 
       for (const session of sessionsPage) {
-        if (sessionsAttempted >= BATCH_SIZE || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
+        if (sessionsAttempted >= SESSIONS_PER_RUN || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
         try {
           // All unconsolidated rows for this session (paged)
           const { data: unconsolidatedRows, error: checkError } = await fetchAllRows(() => supabase
