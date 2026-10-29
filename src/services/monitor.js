@@ -49,6 +49,8 @@ const issueTracker = {
   azureSpeechDown: false,
   consecutiveAzureSpeechFailures: 0,
   lastAzureSpeechCheck: null,
+  deepgramBalanceLevel: 'ok',   // ok | low | critical - last level alerted on
+  lastDeepgramBalance: null,     // { checkedAt, totalUsd } - cached between hourly checks
   lastAlertSent: {},
   lastNewCustomerCheck: null,
   knownOrganisationIds: new Set(),
@@ -515,6 +517,89 @@ async function checkAzureSpeechHealth() {
 }
 
 /**
+ * Check the Deepgram prepaid balance.
+ *
+ * Prod runs on Deepgram Pay As You Go (prepaid credit). If the balance runs
+ * out, live transcription stops for EVERY customer at once, so this warns
+ * well before that. The balance changes slowly, so Deepgram is only asked once
+ * an hour; the 5-minute monitor runs reuse that result. Emails go out when the
+ * balance first drops into a level (and again every 24h / 6h while it stays
+ * there), plus once when it's topped back up.
+ *
+ * Thresholds (US dollars, Render env): DEEPGRAM_BALANCE_WARNING_USD (default
+ * 50), DEEPGRAM_BALANCE_CRITICAL_USD (default 15).
+ */
+const DEEPGRAM_BALANCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+async function checkDeepgramBalance() {
+  const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+  const DEEPGRAM_PROJECT_ID = process.env.DEEPGRAM_PROJECT_ID;
+  if (!DEEPGRAM_API_KEY || !DEEPGRAM_PROJECT_ID) {
+    return { healthy: null, configured: false };
+  }
+
+  const warningUsd = parseFloat(process.env.DEEPGRAM_BALANCE_WARNING_USD || '50');
+  const criticalUsd = parseFloat(process.env.DEEPGRAM_BALANCE_CRITICAL_USD || '15');
+
+  const cached = issueTracker.lastDeepgramBalance;
+  if (cached && Date.now() - cached.checkedAt < DEEPGRAM_BALANCE_CHECK_INTERVAL_MS) {
+    return { ...cached.result, cached: true };
+  }
+
+  let totalUsd;
+  try {
+    totalUsd = await withTimeout((async () => {
+      const response = await fetch(
+        `https://api.deepgram.com/v1/projects/${DEEPGRAM_PROJECT_ID}/balances`,
+        { headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` } }
+      );
+      if (!response.ok) throw new Error(`Deepgram balances returned ${response.status}`);
+      const json = await response.json();
+      // A project can hold several balances (each top-up / promotional credit)
+      return (json.balances || [])
+        .filter(b => (b.units || 'usd').toLowerCase() === 'usd')
+        .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+    })(), PERFORMANCE_CRITICAL_THRESHOLD, 'Deepgram balances');
+  } catch (error) {
+    // A failed lookup isn't a low balance - report it, don't alert. Retry next run.
+    return { healthy: null, configured: true, error: error.message };
+  }
+
+  const level = totalUsd < criticalUsd ? 'critical' : totalUsd < warningUsd ? 'low' : 'ok';
+  const amount = `$${totalUsd.toFixed(2)}`;
+  const previous = issueTracker.deepgramBalanceLevel;
+  const sinceLast = (key) => Date.now() - (issueTracker.lastAlertSent[key] || 0);
+
+  if (level === 'critical' && (previous !== 'critical' || sinceLast('deepgramBalance') > 6 * 60 * 60 * 1000)) {
+    await sendCriticalAlert(
+      'Deepgram Balance Critically Low',
+      `<p>The Deepgram prepaid balance is <strong>${amount}</strong> (critical below $${criticalUsd}).</p>
+       <p>When it runs out, live transcription stops for <strong>every</strong> customer. Top up now in the
+       Deepgram console (Billing), or turn on auto-recharge.</p>`
+    );
+    issueTracker.lastAlertSent.deepgramBalance = Date.now();
+  } else if (level === 'low' && (previous === 'ok' || sinceLast('deepgramBalance') > 24 * 60 * 60 * 1000)) {
+    await sendWarningAlert(
+      'Deepgram Balance Low',
+      `<p>The Deepgram prepaid balance is <strong>${amount}</strong> (warning below $${warningUsd}).</p>
+       <p>Top up in the Deepgram console (Billing), or turn on auto-recharge, before it reaches zero -
+       at that point live transcription stops for every customer.</p>`
+    );
+    issueTracker.lastAlertSent.deepgramBalance = Date.now();
+  } else if (level === 'ok' && previous !== 'ok') {
+    await sendWarningAlert(
+      'Deepgram Balance Restored',
+      `<p>The Deepgram prepaid balance is back to <strong>${amount}</strong>.</p>`
+    );
+  }
+  issueTracker.deepgramBalanceLevel = level;
+
+  const result = { healthy: level === 'ok', configured: true, balanceUsd: Number(totalUsd.toFixed(2)), level, warningUsd, criticalUsd };
+  issueTracker.lastDeepgramBalance = { checkedAt: Date.now(), result };
+  return result;
+}
+
+/**
  * Check for pending charity review requests
  * Uses database flag (charity_review_notified_at) for reliable tracking that survives restarts
  */
@@ -826,6 +911,7 @@ export async function runAllChecks() {
     performance: await checkServerPerformance(),
     database: await checkDatabaseHealth(),
     azureSpeech: await checkAzureSpeechHealth(),
+    deepgramBalance: await checkDeepgramBalance(),
     paymentIssues: await checkPaymentIssues(),
     stripePaymentErrors: await checkStripePaymentErrors(),
     newRegistrations: await checkNewRegistrations(),
