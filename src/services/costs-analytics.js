@@ -123,6 +123,42 @@ async function getGoogleTranslateCosts() {
 }
 
 /**
+ * Get Azure Speech (AI Voice) costs for the current month.
+ *
+ * Azure's own cost reporting needs the Cost Management API and an Azure AD
+ * app we don't have (see azure-analytics.js), so - like Google Translate
+ * above - this is derived from our own records: every synthesis is logged in
+ * tts_usage. Characters x Azure's Standard Neural voice price. The price is
+ * an env setting (AZURE_TTS_COST_PER_MILLION_USD, default 15) so it can be
+ * corrected without a code change if Azure's list price differs.
+ */
+async function getAzureTtsCosts() {
+  try {
+    const { startOfMonth } = getCurrentMonthRange();
+    const { data, error } = await fetchAllRows(() => supabase
+      .from('tts_usage')
+      .select('character_count')
+      .gte('created_at', startOfMonth.toISOString())
+      .order('id'));
+    if (error) throw error;
+
+    const characters = (data || []).reduce((sum, r) => sum + (r.character_count || 0), 0);
+    const perMillionUSD = parseFloat(process.env.AZURE_TTS_COST_PER_MILLION_USD || '15');
+    const costUSD = (characters / 1000000) * perMillionUSD;
+
+    return {
+      cost: costUSD * USD_TO_GBP,
+      costUSD,
+      characters,
+      tier: `Standard Neural voices, $${perMillionUSD} per 1M characters`,
+      details: { source: 'tts_usage (characters sent to Azure)', syntheses: (data || []).length }
+    };
+  } catch (error) {
+    return { error: error.message, cost: 0, costUSD: 0 };
+  }
+}
+
+/**
  * Get Supabase costs by querying the Management API
  * Returns organization subscription plan information
  */
@@ -636,9 +672,10 @@ async function getMonthlyRevenue() {
 export async function getCostsAnalytics() {
   try {
     // Fetch all costs in parallel
-    const [deepgram, googleTranslate, supabaseCosts, render, vercel, revenue, usageStats] = await Promise.all([
+    const [deepgram, googleTranslate, azureTts, supabaseCosts, render, vercel, revenue, usageStats] = await Promise.all([
       getDeepgramCosts(),
       getGoogleTranslateCosts(),
+      getAzureTtsCosts(),
       getSupabaseCosts(),
       getRenderCosts(),
       getVercelCosts(),
@@ -650,6 +687,7 @@ export async function getCostsAnalytics() {
     const totalCostsGBP =
       (deepgram.cost || 0) +
       (googleTranslate.cost || 0) +
+      (azureTts.cost || 0) +
       (supabaseCosts.cost || 0) +
       (render.cost || 0) +
       (vercel.cost || 0);
@@ -657,6 +695,7 @@ export async function getCostsAnalytics() {
     const totalCostsUSD =
       (deepgram.costUSD || 0) +
       (googleTranslate.costUSD || 0) +
+      (azureTts.costUSD || 0) +
       (supabaseCosts.costUSD || 0) +
       (render.costUSD || 0) +
       (vercel.costUSD || 0);
@@ -682,6 +721,13 @@ export async function getCostsAnalytics() {
             costUSD: googleTranslate.costUSD || 0,
             currency: 'GBP',
             ...googleTranslate
+          },
+          azureTts: {
+            name: 'Azure Speech (AI Voice)',
+            cost: azureTts.cost || 0,
+            costUSD: azureTts.costUSD || 0,
+            currency: 'GBP',
+            ...azureTts
           },
           supabase: {
             name: 'Supabase (Database)',
@@ -736,6 +782,7 @@ export async function getCostsAnalytics() {
         errors: {
           deepgram: deepgram.error,
           googleTranslate: googleTranslate.error,
+          azureTts: azureTts.error,
           supabase: supabaseCosts.error,
           render: render.error,
           vercel: vercel.error,

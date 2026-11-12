@@ -460,6 +460,7 @@
       const services = [
         costs.deepgram,
         costs.googleTranslate,
+        costs.azureTts,
         costs.supabase,
         costs.render,
         costs.vercel
@@ -467,7 +468,7 @@
 
       let html = '';
 
-      services.forEach(service => {
+      services.filter(Boolean).forEach(service => {
         const usdAmount = service.costUSD ? ` ($${service.costUSD.toFixed(2)})` : '';
         html += `
           <div class="cost-item">
@@ -477,6 +478,7 @@
                 ${service.tier ? `<strong>Plan:</strong> ${service.tier}` : ''}
                 ${service.hours ? ` | Hours: ${service.hours}` : ''}
                 ${service.requests ? ` | Requests: ${formatNumber(service.requests)}` : ''}
+                ${service.characters ? ` | Characters: ${formatNumber(service.characters)}` : ''}
                 ${service.error ? `<br><span style="color: var(--danger);">Error: ${service.error}</span>` : ''}
               </div>
             </div>
