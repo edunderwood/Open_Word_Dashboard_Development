@@ -38,6 +38,7 @@ import { startTrialWinbackScheduler } from './services/trial-winback-scheduler.j
 import { startAutoTopupReconcileScheduler } from './services/auto-topup-reconcile-scheduler.js';
 import { startFreeTrialCleanupScheduler } from './services/free-trial-cleanup-scheduler.js';
 import { startCancellationWarningScheduler } from './services/cancellation-warning-scheduler.js';
+import { startFeedbackRetentionScheduler } from './services/feedback-retention-scheduler.js';
 
 dotenv.config();
 
@@ -235,6 +236,7 @@ app.listen(PORT, () => {
   startAutoTopupReconcileScheduler();
   startFreeTrialCleanupScheduler();
   startCancellationWarningScheduler();
+  startFeedbackRetentionScheduler();
 });
 
 export default app;
