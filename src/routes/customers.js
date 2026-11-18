@@ -186,6 +186,15 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Referral filter: 'any' = signed up with any referral code, otherwise an
+    // exact code (codes are stored upper-case by the registration flow)
+    const referral = (req.query.referral || '').trim();
+    if (referral === 'any') {
+      query = query.not('referred_by_code', 'is', null);
+    } else if (referral) {
+      query = query.eq('referred_by_code', referral.toUpperCase());
+    }
+
     // Get total count first
     const { count: totalCount } = await query;
 
@@ -323,6 +332,37 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching customers:', error);
     res.status(500).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+/**
+ * GET /api/customers/referral-codes
+ * Referral codes that customers have actually signed up with, with counts -
+ * populates the Customers page's referral filter. Must stay above '/:id'.
+ */
+router.get('/referral-codes', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('organisations')
+      .select('referred_by_code')
+      .not('referred_by_code', 'is', null);
+
+    if (error) throw error;
+
+    const counts = {};
+    (data || []).forEach(({ referred_by_code: code }) => {
+      counts[code] = (counts[code] || 0) + 1;
+    });
+
+    res.json({
+      success: true,
+      data: Object.entries(counts)
+        .map(([code, count]) => ({ code, count }))
+        .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code))
+    });
+  } catch (error) {
+    console.error('Error fetching referral codes:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch referral codes' });
   }
 });
 

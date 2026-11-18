@@ -173,6 +173,10 @@
             <option value="claimed">Claims Charity</option>
             <option value="none">No Discount</option>
           </select>
+          <select id="referralFilter" class="form-input" style="width: auto;" onchange="loadCustomers()">
+            <option value="">All Referrals</option>
+            <option value="any">Any Referral Code</option>
+          </select>
         </div>
       </div>
 
@@ -822,6 +826,7 @@
       const status = document.getElementById('statusFilter').value;
       const plan = document.getElementById('planFilter').value;
       const charity = document.getElementById('charityFilter').value;
+      const referral = document.getElementById('referralFilter').value;
 
       try {
         // Load the full filtered set; sorting + pagination happen client-side.
@@ -830,6 +835,7 @@
         if (status) params.append('status', status);
         if (plan) params.append('plan', plan);
         if (charity) params.append('charity', charity);
+        if (referral) params.append('referral', referral);
 
         const response = await fetch(`/api/customers?${params}`);
         const data = await response.json();
@@ -886,6 +892,10 @@
                   : customer.charity_review_requested
                     ? '<span class="badge badge-warning" style="margin-left: 4px; font-size: 9px;">Charity Review</span>'
                     : ''
+                }
+                ${customer.referred_by_code
+                  ? `<span class="badge" style="margin-left: 4px; font-size: 9px; background: #f59e0b; color: white;" title="Signed up with referral code ${escapeHtml(customer.referred_by_code)}">📎 ${escapeHtml(customer.referred_by_code)}</span>`
+                  : ''
                 }
               </td>
               <td><code>${customer.organisation_key || '-'}</code></td>
@@ -1033,6 +1043,9 @@
               <p><strong>Name:</strong> ${customer.name || '-'}</p>
               <p><strong>Key:</strong> <code>${customer.organisation_key || '-'}</code></p>
               <p><strong>Started:</strong> ${formatDate(customer.registered_at || customer.created_at)}</p>
+              <p><strong>Referral Code Used:</strong> ${customer.referred_by_code
+                ? `<span class="badge" style="background: #f59e0b; color: white;">📎 ${escapeHtml(customer.referred_by_code)}</span>`
+                : '<span class="text-muted">None</span>'}</p>
               <p><strong>User ID:</strong> <code style="font-size: 0.75rem;">${customer.user_id || '-'}</code></p>
               <p><strong>Contact:</strong> ${customer.contact_name || '-'}</p>
               <p><strong>Login Email:</strong> ${customer.email
@@ -2373,8 +2386,28 @@
       });
     });
 
+    // Adds an option per referral code customers have actually signed up with,
+    // e.g. "CTTDAY (3)", below the fixed All / Any options
+    async function loadReferralCodes() {
+      try {
+        const response = await fetch('/api/customers/referral-codes');
+        const data = await response.json();
+        if (!data.success) return;
+        const select = document.getElementById('referralFilter');
+        data.data.forEach(({ code, count }) => {
+          const option = document.createElement('option');
+          option.value = code;
+          option.textContent = `${code} (${count})`;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading referral codes:', error);
+      }
+    }
+
     // Load customers on page load
     document.addEventListener('DOMContentLoaded', async () => {
+      loadReferralCodes();
       await loadCustomers();
 
       // Auto-open modal if view parameter present (from redirect)
