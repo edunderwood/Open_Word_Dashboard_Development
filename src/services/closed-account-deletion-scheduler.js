@@ -3,7 +3,9 @@
  *
  * An account is "closed" 30 days after its cancelled subscription expires
  * (organisations.tier_expires_at); the privacy policy and DPA promise to
- * delete it then. Daily at 05:00 UTC:
+ * delete it then. Cancelling during a free trial records no
+ * tier_expires_at, so for those the plan is treated as ending on the trial
+ * end date or the cancellation date, whichever is later. Daily at 05:00 UTC:
  *   - from 23 days after expiry: email a warning ("your account will be deleted
  *     on <date>"), once (account_deletion_warning_sent_at);
  *   - once 30 days have passed since expiry AND at least 7 days since the
@@ -29,13 +31,21 @@ const MIN_NOTICE_DAYS = 7;
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@openword.live';
 const LOGIN_URL = (process.env.OPENWORD_SERVER_URL || 'https://server.openword.live') + '/login';
 
+// When the plan actually ended: tier_expires_at, or for trial cancellations
+// (which record none) the later of the trial end and the cancellation date
+export function planEndDate(org) {
+  if (org.tier_expires_at) return new Date(org.tier_expires_at).getTime();
+  const dates = [org.trial_ends_at, org.subscription_cancelled_at].filter(Boolean).map(d => new Date(d).getTime());
+  return dates.length ? Math.max(...dates) : null;
+}
+
 const longDate = (d) => new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 function buildWarningBody({ name, deleteOn, credits }) {
   return `
     <p>Hi ${name || 'there'},</p>
     <p>Your Open Word subscription ended on its cancellation date. As set out in our privacy policy, we delete closed accounts so we don't keep your data longer than we need to.</p>
-    <p><strong>Your account and its data will be permanently deleted on ${longDate(deleteOn)}.</strong> This includes your organisation settings, session history and usage records.${credits > 0 ? ` Your remaining <strong>${credits.toFixed(1)} credits</strong> will also be lost.` : ''}</p>
+    <p><strong>Your account and its data will be permanently deleted on ${longDate(deleteOn)}.</strong> This includes your organisation settings, session history and usage records.${credits > 0 ? ` Your remaining <strong>${credits.toFixed(1)} credits</strong> will expire when your account is deleted.` : ''}</p>
     <p>If you'd like to keep using Open Word, just log in and choose a plan before then:</p>
     <p style="text-align: center;">
       <a href="${LOGIN_URL}" class="button">Keep my Open Word account</a>
@@ -77,10 +87,8 @@ export async function processClosedAccounts({ dryRun = false } = {}) {
     const now = Date.now();
     const { data: orgs, error } = await supabase
       .from('organisations')
-      .select('id, name, user_id, subscription_tier, subscription_status, is_enterprise, subscription_cancelled_at, tier_expires_at, account_deletion_warning_sent_at')
-      .not('subscription_cancelled_at', 'is', null)
-      .not('tier_expires_at', 'is', null)
-      .lte('tier_expires_at', new Date(now - WARN_AFTER_EXPIRY_DAYS * DAY_MS).toISOString());
+      .select('id, name, user_id, subscription_tier, subscription_status, is_enterprise, subscription_cancelled_at, tier_expires_at, trial_ends_at, account_deletion_warning_sent_at')
+      .not('subscription_cancelled_at', 'is', null);
     if (error) throw error;
 
     // The Dashboard admin's own organisation is never deleted, so never warned either
@@ -94,7 +102,9 @@ export async function processClosedAccounts({ dryRun = false } = {}) {
         continue;
       }
 
-      const deleteDue = new Date(org.tier_expires_at).getTime() + DELETE_AFTER_EXPIRY_DAYS * DAY_MS;
+      const endedAt = planEndDate(org);
+      if (!endedAt || endedAt > now - WARN_AFTER_EXPIRY_DAYS * DAY_MS) continue; // not yet due for a warning
+      const deleteDue = endedAt + DELETE_AFTER_EXPIRY_DAYS * DAY_MS;
 
       if (!org.account_deletion_warning_sent_at) {
         const deleteOn = Math.max(deleteDue, now + MIN_NOTICE_DAYS * DAY_MS);
