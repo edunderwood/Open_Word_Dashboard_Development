@@ -39,6 +39,7 @@ import { startAutoTopupReconcileScheduler } from './services/auto-topup-reconcil
 import { startFreeTrialCleanupScheduler } from './services/free-trial-cleanup-scheduler.js';
 import { startCancellationWarningScheduler } from './services/cancellation-warning-scheduler.js';
 import { startFeedbackRetentionScheduler } from './services/feedback-retention-scheduler.js';
+import { startSetupReminderScheduler } from './services/setup-reminder-scheduler.js';
 
 dotenv.config();
 
@@ -237,6 +238,7 @@ app.listen(PORT, () => {
   startFreeTrialCleanupScheduler();
   startCancellationWarningScheduler();
   startFeedbackRetentionScheduler();
+  startSetupReminderScheduler();
 });
 
 export default app;
