@@ -40,6 +40,7 @@ import { startFreeTrialCleanupScheduler } from './services/free-trial-cleanup-sc
 import { startCancellationWarningScheduler } from './services/cancellation-warning-scheduler.js';
 import { startFeedbackRetentionScheduler } from './services/feedback-retention-scheduler.js';
 import { startSetupReminderScheduler } from './services/setup-reminder-scheduler.js';
+import { startClosedAccountDeletionScheduler } from './services/closed-account-deletion-scheduler.js';
 
 dotenv.config();
 
@@ -239,6 +240,7 @@ app.listen(PORT, () => {
   startCancellationWarningScheduler();
   startFeedbackRetentionScheduler();
   startSetupReminderScheduler();
+  startClosedAccountDeletionScheduler();
 });
 
 export default app;

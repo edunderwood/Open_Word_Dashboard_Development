@@ -1466,6 +1466,7 @@
             ${leftButtons.join('')}
           </div>
           <div style="display: flex; gap: 12px;">
+            ${customer.subscription_tier !== 'free_trial' ? `<button class="btn btn-danger" onclick="deleteCustomerAccount('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">Delete account</button>` : ''}
             <button class="btn btn-warning" onclick="resetPurchasePin('${customer.id}', '${(customer.name || '').replace(/'/g, "\\'")}')">
               Reset PIN
             </button>
@@ -1562,6 +1563,35 @@
         loadCustomers();
       } catch (error) {
         alert('Error deleting trial account: ' + error.message);
+      }
+    }
+
+    // Delete a customer's account at their request (privacy policy: an account
+    // is closed when the customer asks). Same type-the-name safeguard as trial
+    // deletion; the server checks the name again and refuses the Dashboard
+    // admin's own organisation.
+    async function deleteCustomerAccount(id, name) {
+      if (!confirm(`Permanently DELETE the account "${name}" at the customer's request?\n\nThis removes the organisation, its logins (including enterprise team members), usage history, support requests and email history. Stripe keeps its own invoice records. The customer is emailed a confirmation. This CANNOT be undone.`)) {
+        return;
+      }
+      const typed = prompt(`To confirm, type the account name exactly:\n\n${name}`);
+      if (typed !== name) {
+        alert('Name did not match - deletion cancelled.');
+        return;
+      }
+      try {
+        const response = await fetch(`/api/customers/${id}/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmName: typed })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Request failed');
+        alert('Account deleted. The customer has been emailed a confirmation.');
+        closeModal();
+        loadCustomers();
+      } catch (error) {
+        alert('Error deleting account: ' + error.message);
       }
     }
 

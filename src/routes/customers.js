@@ -8,6 +8,8 @@ import supabase from '../services/supabase.js';
 import stripe from '../services/stripe.js';
 import { sendCustomerEmail } from '../services/email.js';
 import { deleteFreeTrialOrganisation } from '../services/free-trial-cleanup.js';
+import { deleteOrganisationAccount } from '../services/account-deletion.js';
+import { sendDeletionConfirmation } from '../services/closed-account-deletion-scheduler.js';
 import { DELETE_AFTER_DAYS } from '../services/free-trial-cleanup-scheduler.js';
 import { fetchAllRows, chunkArray } from '../services/pagination.js';
 
@@ -689,6 +691,37 @@ router.post('/:id/delete-trial', async (req, res) => {
   } catch (error) {
     console.error('Error deleting trial customer:', error);
     res.status(500).json({ success: false, error: 'Failed to delete trial customer' });
+  }
+});
+
+/**
+ * POST /api/customers/:id/delete-account
+ * Delete a customer's account at their request (privacy policy: "closed when
+ * the customer asks for deletion"). Requires the organisation's exact name in
+ * the body as confirmation. Enterprise accounts are allowed here because an
+ * admin is acting on an explicit request; the Dashboard admin's own
+ * organisation is always refused (see account-deletion.js).
+ */
+router.post('/:id/delete-account', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmName } = req.body || {};
+    const { data: org, error } = await supabase.from('organisations').select('id, name').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!org) return res.status(404).json({ success: false, error: 'Customer not found' });
+    if (!confirmName || confirmName !== org.name) {
+      return res.status(400).json({ success: false, error: 'Confirmation name did not match' });
+    }
+
+    const result = await deleteOrganisationAccount(org.id, { reason: 'customer_request', allowEnterprise: true });
+    if (!result.success) return res.status(400).json({ success: false, error: result.error });
+
+    await sendDeletionConfirmation({ email: result.ownerEmail, name: org.name, reason: 'customer_request' });
+    console.log(`🗑️ Account deleted at customer request by admin: ${org.name} (${id})`);
+    res.json({ success: true, message: 'Account deleted' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete account' });
   }
 });
 
